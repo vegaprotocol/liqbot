@@ -1,19 +1,17 @@
-// Command liqbot runs one application instance which may contain many bots that
-// provide liquidity. Each bot connects to one Vega node and submits orders to
-// one market.
-//
-//     $ make install
-//     $ $GOPATH/bin/liqbot -config=config.yml
 package main
 
 import (
 	"flag"
 	"fmt"
 	"math/rand"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"code.vegaprotocol.io/liqbot/config"
+	"code.vegaprotocol.io/liqbot/service"
 
 	"github.com/jinzhu/configor"
 	log "github.com/sirupsen/logrus"
@@ -28,8 +26,6 @@ var (
 )
 
 func main() {
-	rand.Seed(time.Now().UnixNano())
-
 	var configName string
 	var configVersion bool
 	flag.StringVar(&configName, "config", "", "Configuration YAML file")
@@ -40,6 +36,8 @@ func main() {
 		fmt.Printf("version %v (%v)\n", Version, VersionHash)
 		return
 	}
+
+	rand.Seed(time.Now().UnixNano())
 
 	var cfg config.Config
 	err := configor.Load(&cfg, configName)
@@ -68,5 +66,26 @@ func main() {
 		"hash":    VersionHash,
 	}).Info("Version")
 
-	// TODO: Instantiate service
+	var s *service.Service
+	s, err = service.NewService(cfg, nil, nil)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"error": err.Error(),
+		}).Fatal("Failed to create service")
+	}
+
+	go func() {
+		err := s.Start()
+		if err != nil && err.Error() != "http: Server closed" {
+			log.WithFields(log.Fields{
+				"listen": cfg.Server.Listen,
+				"error":  err.Error(),
+			}).Fatal("Could not listen")
+		}
+	}()
+	c := make(chan os.Signal, 2)
+	signal.Notify(c, syscall.SIGINT)
+	signal.Notify(c, syscall.SIGTERM)
+	<-c
+	s.Stop()
 }

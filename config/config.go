@@ -8,10 +8,12 @@ import (
 	"net/url"
 	"time"
 
+	"code.vegaprotocol.io/liqbot/core"
+
 	log "github.com/sirupsen/logrus"
 )
 
-// ServerConfig describes the settings for running the price proxy.
+// ServerConfig describes the settings for running the liquidity bot.
 type ServerConfig struct {
 	Env       string
 	Listen    string
@@ -19,11 +21,23 @@ type ServerConfig struct {
 	LogLevel  string
 }
 
+// NodeConfig describes the settings for contacting Vega nodes.
+type NodeConfig struct {
+	Name    string
+	Address *url.URL
+}
+
+// PricingConfig describes the settings for contacting the price proxy.
+type PricingConfig struct {
+	Address *url.URL `yaml:"address"`
+}
+
 // BotConfig specifies the configuration parameters for one bot, which talks to one market on one
 // Vega node.
 type BotConfig struct {
-	// WalletID is the name of the bot. It is *not* a public key seen by Vega.
-	WalletID string `yaml:"marketID"`
+	// Name is the name of the bot. It is also used as the wallet name.
+	// It is *not* a public key seen by Vega.
+	Name string `yaml:"name"`
 
 	// NodeAddress specifies the URL of the Vega node to connect to.
 	// e.g. REST node:
@@ -36,19 +50,30 @@ type BotConfig struct {
 	//        scheme: grpc
 	//        host: node.example.com:1234
 	NodeAddress *url.URL `yaml:"nodeAddress"`
-	// node core.Node
+	node        core.Node
 
 	// Strategy specifies which algorithm the bot is to use.
-	Strategy string
+	Strategy string `yaml:"strategy"`
 
-	// ConfigDetails contains the parameters needed by the strategy algorithm
-	ConfigDetails map[string]string
+	// StrategyDetails contains the parameters needed by the strategy algorithm
+	StrategyDetails map[string]string `yaml:"strategyDetails"`
+}
+
+// WalletConfig describes the settings for running an internal wallet server
+type WalletConfig struct {
+	RootPath    string `yaml:"rootPath"`
+	TokenExpiry int    `yaml:"tokenExpiry"`
 }
 
 // Config describes the top level config file format.
 type Config struct {
 	Server *ServerConfig `yaml:"server"`
-	Bots   []BotConfig   `yaml:"bots"`
+
+	Nodes   []NodeConfig   `yaml:"nodes"`
+	Pricing *PricingConfig `yaml:"pricing"`
+	Wallet  *WalletConfig  `yaml:"wallet"`
+
+	Bots []BotConfig `yaml:"bots"`
 }
 
 var (
@@ -70,6 +95,15 @@ func CheckConfig(cfg *Config) error {
 
 	if cfg.Server == nil {
 		return fmt.Errorf("%s: %s", ErrMissingEmptyConfigSection.Error(), "server")
+	}
+	if cfg.Nodes == nil || len(cfg.Nodes) == 0 {
+		return fmt.Errorf("%s: %s", ErrMissingEmptyConfigSection.Error(), "nodes")
+	}
+	if cfg.Pricing == nil {
+		return fmt.Errorf("%s: %s", ErrMissingEmptyConfigSection.Error(), "pricing")
+	}
+	if cfg.Wallet == nil {
+		return fmt.Errorf("%s: %s", ErrMissingEmptyConfigSection.Error(), "wallet")
 	}
 	if cfg.Bots == nil || len(cfg.Bots) == 0 {
 		return fmt.Errorf("%s: %s", ErrMissingEmptyConfigSection.Error(), "bots")
