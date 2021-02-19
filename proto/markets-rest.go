@@ -3,7 +3,7 @@ package proto
 import (
 	"strconv"
 
-	p "code.vegaprotocol.io/vega/proto"
+	p "github.com/vegaprotocol/api-clients/go/generated/code.vegaprotocol.io/vega/proto"
 )
 
 // RESTInstrumentMetadata is a RESTified InstrumentMetadata.

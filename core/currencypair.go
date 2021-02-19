@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	ppconfig "code.vegaprotocol.io/priceproxy/config"
-	"code.vegaprotocol.io/vega/proto"
+	"github.com/vegaprotocol/api-clients/go/generated/code.vegaprotocol.io/vega/proto"
 )
 
 var currencyPairBaseTags = []string{

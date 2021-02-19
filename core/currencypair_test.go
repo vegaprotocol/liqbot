@@ -5,8 +5,8 @@ import (
 
 	"code.vegaprotocol.io/liqbot/core"
 
-	"code.vegaprotocol.io/vega/proto"
 	"github.com/stretchr/testify/assert"
+	"github.com/vegaprotocol/api-clients/go/generated/code.vegaprotocol.io/vega/proto"
 )
 
 func TestMarketToPriceConfig(t *testing.T) {

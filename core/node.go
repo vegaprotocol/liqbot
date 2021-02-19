@@ -9,9 +9,9 @@ import (
 	"runtime"
 	"time"
 
-	"code.vegaprotocol.io/vega/proto"
-	"code.vegaprotocol.io/vega/proto/api"
 	log "github.com/sirupsen/logrus"
+	"github.com/vegaprotocol/api-clients/go/generated/code.vegaprotocol.io/vega/proto"
+	"github.com/vegaprotocol/api-clients/go/generated/code.vegaprotocol.io/vega/proto/api"
 )
 
 var (

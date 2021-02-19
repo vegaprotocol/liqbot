@@ -3,9 +3,9 @@ package bot
 import (
 	"code.vegaprotocol.io/liqbot/config"
 
+	"code.vegaprotocol.io/go-wallet/wallet"
 	ppconfig "code.vegaprotocol.io/priceproxy/config"
 	ppservice "code.vegaprotocol.io/priceproxy/service"
-	tcwallet "code.vegaprotocol.io/vega/wallet"
 )
 
 // PricingEngine is the source of price information from the price proxy.
@@ -18,11 +18,11 @@ type PricingEngine interface {
 type LiqBot struct {
 	config        config.BotConfig
 	pricingEngine PricingEngine
-	walletServer  tcwallet.WalletHandler
+	walletServer  wallet.WalletHandler
 }
 
 // New returns a new instance of LiqBot.
-func New(config config.BotConfig, pe PricingEngine, ws tcwallet.WalletHandler) *LiqBot {
+func New(config config.BotConfig, pe PricingEngine, ws wallet.WalletHandler) *LiqBot {
 	lb := LiqBot{
 		config:        config,
 		pricingEngine: pe,

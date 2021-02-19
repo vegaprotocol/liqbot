@@ -9,9 +9,9 @@ import (
 
 	"code.vegaprotocol.io/liqbot/core"
 
-	"code.vegaprotocol.io/vega/proto"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+	"github.com/vegaprotocol/api-clients/go/generated/code.vegaprotocol.io/vega/proto"
 )
 
 type subtest func(t *testing.T, n core.Node)

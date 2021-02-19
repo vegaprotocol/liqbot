@@ -5,8 +5,8 @@ import (
 
 	proto1 "code.vegaprotocol.io/liqbot/proto"
 
-	p "code.vegaprotocol.io/vega/proto"
-	pa "code.vegaprotocol.io/vega/proto/api"
+	p "github.com/vegaprotocol/api-clients/go/generated/code.vegaprotocol.io/vega/proto"
+	pa "github.com/vegaprotocol/api-clients/go/generated/code.vegaprotocol.io/vega/proto/api"
 )
 
 // RESTMarketDepthResponse is a RESTified MarketDepthResponse.

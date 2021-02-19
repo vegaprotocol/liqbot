@@ -8,8 +8,6 @@ import (
 	"net/url"
 	"time"
 
-	"code.vegaprotocol.io/liqbot/core"
-
 	log "github.com/sirupsen/logrus"
 )
 
@@ -23,8 +21,19 @@ type ServerConfig struct {
 
 // NodeConfig describes the settings for contacting Vega nodes.
 type NodeConfig struct {
-	Name    string
-	Address *url.URL
+	Name string `yaml:"name"`
+
+	// Address specifies the URL of the Vega node to connect to.
+	// e.g. REST node:
+	//      address:
+	//        scheme: https
+	//        host: node.example.com:8443
+	//        path: /
+	// e.g. gRPC node:
+	//      address:
+	//        scheme: grpc
+	//        host: node.example.com:1234
+	Address *url.URL `yaml:"address"`
 }
 
 // PricingConfig describes the settings for contacting the price proxy.
@@ -39,18 +48,8 @@ type BotConfig struct {
 	// It is *not* a public key seen by Vega.
 	Name string `yaml:"name"`
 
-	// NodeAddress specifies the URL of the Vega node to connect to.
-	// e.g. REST node:
-	//      nodeAddress:
-	//        scheme: https
-	//        host: node.example.com:8443
-	//        path: /
-	// e.g. gRPC node:
-	//      nodeAddress:
-	//        scheme: grpc
-	//        host: node.example.com:1234
-	NodeAddress *url.URL `yaml:"nodeAddress"`
-	node        core.Node
+	// Location is the name of a Node defined above
+	Location string `yaml:"location"`
 
 	// Strategy specifies which algorithm the bot is to use.
 	Strategy string `yaml:"strategy"`
