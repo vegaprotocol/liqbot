@@ -176,7 +176,18 @@ func (s *Service) initBots() error {
 	for _, botcfg := range s.config.Bots {
 		b := bot.New(botcfg, s.pricingEngine, s.walletServer)
 		s.bots[botcfg.Name] = b
+		log.WithFields(log.Fields{
+			"name": botcfg.Name,
+		}).Info("Initialised bot")
 	}
+
+	for _, b := range s.bots {
+		err := b.Start()
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
