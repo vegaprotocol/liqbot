@@ -30,6 +30,7 @@ func NewEngine(cfg config.PricingConfig) *Engine {
 	return &e
 }
 
+// GetPrice fetches a live/recent price from the price proxy.
 func (e *Engine) GetPrice(pricecfg ppconfig.PriceConfig) (pi ppservice.PriceResponse, err error) {
 	v := url.Values{}
 	if pricecfg.Source != "" {

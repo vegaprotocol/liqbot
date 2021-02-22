@@ -114,6 +114,7 @@ func (n *RESTNode) GetMarketDepth(marketID string) (proto.MarketDepth, error) {
 	return md, nil
 }
 
+// GetMarketDepths gets the market depth for all of the node's Markets.
 func (n *RESTNode) GetMarketDepths() (map[string]proto.MarketDepth, error) {
 	if n == nil {
 		return nil, ErrNil
@@ -160,6 +161,7 @@ func (n *RESTNode) GetTime() (time.Time, error) {
 	return t, nil
 }
 
+// PrepareSubmitOrder prepares a SubmitOrder request so it can be sined and submitted to SubmitTransaction.
 func (n *RESTNode) PrepareSubmitOrder(req *api.PrepareSubmitOrderRequest) (*api.PrepareSubmitOrderResponse, error) {
 	if n == nil {
 		return nil, ErrNil

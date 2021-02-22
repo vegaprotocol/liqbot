@@ -150,6 +150,7 @@ func (n *GRPCNode) GetTime() (time.Time, error) {
 	return t, nil
 }
 
+// PrepareSubmitOrder prepares a SubmitOrder request so it can be sined and submitted to SubmitTransaction.
 func (n *GRPCNode) PrepareSubmitOrder(req *api.PrepareSubmitOrderRequest) (*api.PrepareSubmitOrderResponse, error) {
 	if n == nil {
 		return nil, ErrNil
