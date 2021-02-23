@@ -2,7 +2,7 @@ package bot
 
 import (
 	"encoding/hex"
-	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -12,6 +12,7 @@ import (
 	"code.vegaprotocol.io/go-wallet/wallet"
 	ppconfig "code.vegaprotocol.io/priceproxy/config"
 	ppservice "code.vegaprotocol.io/priceproxy/service"
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -53,7 +54,7 @@ func (lb *LiqBot) Start() error {
 	err := lb.setupWallet()
 	if err != nil {
 		lb.mu.Unlock()
-		return err
+		return errors.Wrap(err, "failed to start bot")
 	}
 
 	lb.active = true
@@ -68,12 +69,12 @@ func (lb *LiqBot) Start() error {
 // Stop stops the liquidity bot goroutine(s).
 func (lb *LiqBot) Stop() {
 	lb.mu.Lock()
-	if !lb.active {
-		lb.mu.Unlock()
+	active := lb.active
+	lb.mu.Unlock()
+
+	if !active {
 		return
 	}
-	lb.active = false
-	lb.mu.Unlock()
 
 	// Do not send data to lb.stop while lb.mu is held. It would cause deadlock.
 	// This goroutine would be trying to send on a channel while the lock is
@@ -95,12 +96,14 @@ func (lb *LiqBot) run() {
 	for {
 		select {
 		case <-lb.stop:
+			lb.active = false
 			return
 
 		default:
 			sublog.Debug("Sleeping...")
 			err := doze(time.Second, lb.stop)
 			if err != nil {
+				lb.active = false
 				return
 			}
 		}
@@ -116,16 +119,14 @@ func (lb *LiqBot) setupWallet() (err error) {
 	if lb.walletToken == "" {
 		lb.walletToken, err = lb.walletServer.LoginWallet(lb.config.Name, lb.walletPassphrase)
 		if err != nil {
-			if err.Error() == wallet.ErrWalletDoesNotExists.Error() {
+			if err == wallet.ErrWalletDoesNotExists {
 				lb.walletToken, err = lb.walletServer.CreateWallet(lb.config.Name, lb.walletPassphrase)
 				if err != nil {
-					sublog.WithFields(log.Fields{"err": err.Error()}).Warning("Failed to create wallet")
-					return
+					return errors.Wrap(err, "failed to create wallet")
 				}
 				sublog.Debug("Created and logged into wallet")
 			} else {
-				sublog.WithFields(log.Fields{"err": err.Error()}).Warning("Failed to log in to wallet")
-				return err
+				return errors.Wrap(err, "failed to log in to wallet")
 			}
 		} else {
 			sublog.Debug("Logged into wallet")
@@ -136,14 +137,12 @@ func (lb *LiqBot) setupWallet() (err error) {
 		var keys []wallet.Keypair
 		keys, err = lb.walletServer.ListPublicKeys(lb.walletToken)
 		if err != nil {
-			sublog.WithFields(log.Fields{"err": err.Error()}).Debug("Failed to list public keys")
-			return
+			return errors.Wrap(err, "failed to list public keys")
 		}
 		if len(keys) == 0 {
 			lb.walletPubKeyHex, err = lb.walletServer.GenerateKeypair(lb.walletToken, lb.walletPassphrase)
 			if err != nil {
-				sublog.WithFields(log.Fields{"err": err.Error()}).Warning("Failed to generate keypair")
-				return
+				return errors.Wrap(err, "failed to generate keypair")
 			}
 			sublog.WithFields(log.Fields{"pubKey": lb.walletPubKeyHex}).Debug("Created keypair")
 		} else {
@@ -153,12 +152,9 @@ func (lb *LiqBot) setupWallet() (err error) {
 
 		lb.walletPubKeyRaw, err = hexToRaw([]byte(lb.walletPubKeyHex))
 		if err != nil {
+			lb.walletPubKeyHex = ""
 			lb.walletPubKeyRaw = nil
-			sublog.WithFields(log.Fields{
-				"err":       err.Error(),
-				"pubKeyHex": lb.walletPubKeyHex,
-			}).Warning("Failed to decode hex pubkey")
-			return
+			return errors.Wrap(err, "failed to decode hex pubkey")
 		}
 	}
 	return
@@ -180,15 +176,14 @@ func doze(d time.Duration, stop chan bool) error {
 	return nil
 }
 
-func hexToRaw(hexBytes []byte) (raw []byte, err error) {
-	raw = make([]byte, hex.DecodedLen(len(hexBytes)))
-	var n int
-	n, err = hex.Decode(raw, hexBytes)
+func hexToRaw(hexBytes []byte) ([]byte, error) {
+	raw := make([]byte, hex.DecodedLen(len(hexBytes)))
+	n, err := hex.Decode(raw, hexBytes)
 	if err != nil {
-		return
+		return nil, errors.Wrap(err, "failed to decode hex")
 	}
 	if n != len(raw) {
-		err = errors.New("failed to decode hex")
+		return nil, fmt.Errorf("failed to decode hex: decoded %d bytes, expected to decode %d bytes", n, len(raw))
 	}
-	return
+	return raw, nil
 }

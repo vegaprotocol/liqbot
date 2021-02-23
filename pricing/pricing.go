@@ -36,15 +36,13 @@ func (e *Engine) GetPrice(pricecfg ppconfig.PriceConfig) (pi ppservice.PriceResp
 	if pricecfg.Source != "" {
 		v.Set("source", pricecfg.Source)
 	}
-	if pricecfg.Source != "" {
+	if pricecfg.Base != "" {
 		v.Set("base", pricecfg.Base)
 	}
-	if pricecfg.Source != "" {
+	if pricecfg.Quote != "" {
 		v.Set("quote", pricecfg.Quote)
 	}
-	if pricecfg.Source != "" {
-		v.Set("wander", fmt.Sprintf("%v", pricecfg.Wander))
-	}
+	v.Set("wander", fmt.Sprintf("%v", pricecfg.Wander))
 	relativeURL := &url.URL{RawQuery: v.Encode()}
 	fullURL := e.config.Address.ResolveReference(relativeURL).String()
 	req, _ := http.NewRequest(http.MethodGet, fullURL, nil)
