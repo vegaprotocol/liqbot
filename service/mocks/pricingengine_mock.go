@@ -5,36 +5,37 @@
 package mocks
 
 import (
+	reflect "reflect"
+
 	config "code.vegaprotocol.io/priceproxy/config"
 	service "code.vegaprotocol.io/priceproxy/service"
 	gomock "github.com/golang/mock/gomock"
-	reflect "reflect"
 )
 
-// MockPricingEngine is a mock of PricingEngine interface
+// MockPricingEngine is a mock of PricingEngine interface.
 type MockPricingEngine struct {
 	ctrl     *gomock.Controller
 	recorder *MockPricingEngineMockRecorder
 }
 
-// MockPricingEngineMockRecorder is the mock recorder for MockPricingEngine
+// MockPricingEngineMockRecorder is the mock recorder for MockPricingEngine.
 type MockPricingEngineMockRecorder struct {
 	mock *MockPricingEngine
 }
 
-// NewMockPricingEngine creates a new mock instance
+// NewMockPricingEngine creates a new mock instance.
 func NewMockPricingEngine(ctrl *gomock.Controller) *MockPricingEngine {
 	mock := &MockPricingEngine{ctrl: ctrl}
 	mock.recorder = &MockPricingEngineMockRecorder{mock}
 	return mock
 }
 
-// EXPECT returns an object that allows the caller to indicate expected use
+// EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockPricingEngine) EXPECT() *MockPricingEngineMockRecorder {
 	return m.recorder
 }
 
-// GetPrice mocks base method
+// GetPrice mocks base method.
 func (m *MockPricingEngine) GetPrice(arg0 config.PriceConfig) (service.PriceResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetPrice", arg0)
@@ -43,7 +44,7 @@ func (m *MockPricingEngine) GetPrice(arg0 config.PriceConfig) (service.PriceResp
 	return ret0, ret1
 }
 
-// GetPrice indicates an expected call of GetPrice
+// GetPrice indicates an expected call of GetPrice.
 func (mr *MockPricingEngineMockRecorder) GetPrice(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPrice", reflect.TypeOf((*MockPricingEngine)(nil).GetPrice), arg0)

@@ -3,10 +3,8 @@ package service
 import (
 	"context"
 	"encoding/json"
-	// "io/ioutil"
-	"net/http"
-	// "net/url"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,7 +13,6 @@ import (
 
 	"code.vegaprotocol.io/liqbot/bot"
 	"code.vegaprotocol.io/liqbot/config"
-	"code.vegaprotocol.io/liqbot/core"
 	"code.vegaprotocol.io/liqbot/pricing"
 
 	"code.vegaprotocol.io/go-wallet/wallet"
@@ -50,9 +47,6 @@ type Service struct {
 
 	bots   map[string]*bot.LiqBot
 	botsMu sync.Mutex
-
-	nodes   map[string]core.Node
-	nodesMu sync.Mutex
 
 	pricingEngine PricingEngine
 	server        *http.Server
@@ -108,13 +102,8 @@ func NewService(config config.Config, pe PricingEngine, ws wallet.WalletHandler)
 
 		config:        config,
 		bots:          make(map[string]*bot.LiqBot),
-		nodes:         make(map[string]core.Node),
 		pricingEngine: pe,
 		walletServer:  ws,
-	}
-
-	if err := s.initNodes(); err != nil {
-		return nil, fmt.Errorf("failed to initialise nodes: %s", err.Error())
 	}
 
 	if err := s.initBots(); err != nil {
@@ -188,45 +177,6 @@ func (s *Service) initBots() error {
 		}
 	}
 
-	return nil
-}
-
-func (s *Service) initNodes() error {
-	s.nodesMu.Lock()
-	defer s.nodesMu.Unlock()
-
-	var err error
-	var node core.Node
-
-	for _, nodecfg := range s.config.Nodes {
-		if nodecfg.Address == nil {
-			return core.ErrNil
-		}
-		switch nodecfg.Address.Scheme {
-		case "http":
-			fallthrough
-		case "https":
-			bg := context.Background()
-			node, err = core.NewRESTNode(bg, nodecfg.Name, *nodecfg.Address)
-		case "grpc":
-			bg := context.Background()
-			node, err = core.NewGRPCNode(bg, nodecfg.Name, *nodecfg.Address)
-		default:
-			return core.ErrUnsupportedScheme
-		}
-		if err != nil {
-			return err
-		}
-		s.nodes[nodecfg.Name] = node
-		addr, err := node.GetAddress()
-		if err != nil {
-			return err
-		}
-		log.WithFields(log.Fields{
-			"name":    nodecfg.Name,
-			"address": addr.String(),
-		}).Info("Initialised node")
-	}
 	return nil
 }
 

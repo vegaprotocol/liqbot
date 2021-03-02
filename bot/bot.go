@@ -3,18 +3,35 @@ package bot
 import (
 	"encoding/hex"
 	"fmt"
+	"net/url"
 	"sync"
 	"time"
 
 	"code.vegaprotocol.io/liqbot/config"
-	"code.vegaprotocol.io/liqbot/core"
+	e "code.vegaprotocol.io/liqbot/errors"
+	"code.vegaprotocol.io/liqbot/node"
 
 	"code.vegaprotocol.io/go-wallet/wallet"
 	ppconfig "code.vegaprotocol.io/priceproxy/config"
 	ppservice "code.vegaprotocol.io/priceproxy/service"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
+	"github.com/vegaprotocol/api-clients/go/generated/code.vegaprotocol.io/vega/proto"
+	"github.com/vegaprotocol/api-clients/go/generated/code.vegaprotocol.io/vega/proto/api"
 )
+
+// Node is a Vega gRPC node
+//go:generate go run github.com/golang/mock/mockgen -destination mocks/node_mock.go -package mocks code.vegaprotocol.io/liqbot/bot Node
+type Node interface {
+	GetAddress() (url.URL, error)
+
+	// Trading
+
+	// Trading Data
+	GetVegaTime() (time.Time, error)
+	MarketByID(req *api.MarketByIDRequest) (response *api.MarketByIDResponse, err error)
+	PartyAccounts(req *api.PartyAccountsRequest) (response *api.PartyAccountsResponse, err error)
+}
 
 // PricingEngine is the source of price information from the price proxy.
 //go:generate go run github.com/golang/mock/mockgen -destination mocks/pricingengine_mock.go -package mocks code.vegaprotocol.io/liqbot/bot PricingEngine
@@ -24,10 +41,14 @@ type PricingEngine interface {
 
 // LiqBot represents one liquidity bot.
 type LiqBot struct {
-	config        config.BotConfig
-	active        bool
-	pricingEngine PricingEngine
-	stop          chan bool
+	config          config.BotConfig
+	active          bool
+	log             *log.Entry
+	pricingEngine   PricingEngine
+	settlementAsset string
+	stop            chan bool
+	market          *proto.Market
+	node            Node
 
 	walletServer     wallet.WalletHandler
 	walletPassphrase string
@@ -41,10 +62,15 @@ type LiqBot struct {
 // New returns a new instance of LiqBot.
 func New(config config.BotConfig, pe PricingEngine, ws wallet.WalletHandler) *LiqBot {
 	lb := LiqBot{
-		config:        config,
+		config: config,
+		log: log.WithFields(log.Fields{
+			"bot":  config.Name,
+			"node": config.Location,
+		}),
 		pricingEngine: pe,
 		walletServer:  ws,
 	}
+
 	return &lb
 }
 
@@ -56,6 +82,33 @@ func (lb *LiqBot) Start() error {
 		lb.mu.Unlock()
 		return errors.Wrap(err, "failed to start bot")
 	}
+
+	lb.node, err = node.NewGRPCNode(
+		url.URL{Host: lb.config.Location},
+		time.Duration(lb.config.ConnectTimeout)*time.Millisecond,
+		time.Duration(lb.config.CallTimeout)*time.Millisecond,
+	)
+	if err != nil {
+		return errors.Wrap(err, "failed to connect to Vega gRPC node")
+	}
+	lb.log.WithFields(log.Fields{
+		"address": lb.config.Location,
+	}).Debug("Connected to Vega gRPC node")
+
+	marketResponse, err := lb.node.MarketByID(&api.MarketByIDRequest{MarketId: lb.config.MarketID})
+	if err != nil {
+		return errors.Wrap(err, fmt.Sprintf("failed to get market %s", lb.config.MarketID))
+	}
+	lb.market = marketResponse.Market
+	future := lb.market.TradableInstrument.Instrument.GetFuture()
+	if future == nil {
+		return errors.New("market is not a Futures market")
+	}
+	lb.settlementAsset = future.SettlementAsset
+	lb.log.WithFields(log.Fields{
+		"marketID":        lb.config.MarketID,
+		"settlementAsset": lb.settlementAsset,
+	}).Debug("Fetched market info")
 
 	lb.active = true
 	lb.stop = make(chan bool)
@@ -85,24 +138,43 @@ func (lb *LiqBot) Stop() {
 }
 
 func (lb *LiqBot) run() {
-	lb.mu.Lock()
-	sublog := log.WithFields(log.Fields{
-		"trader": lb.config.Name,
-		"node":   lb.config.Location,
-	})
-
-	lb.mu.Unlock()
-
 	for {
 		select {
 		case <-lb.stop:
+			lb.log.Debug("Stopping bot")
 			lb.active = false
 			return
 
 		default:
-			sublog.Debug("Sleeping...")
-			err := doze(time.Second, lb.stop)
+			blockTime, err := lb.node.GetVegaTime()
 			if err != nil {
+				lb.log.WithFields(log.Fields{"error": err.Error()}).Warning("Failed to get block time")
+			} else {
+				lb.log.WithFields(log.Fields{"blockTime": blockTime}).Debug("Got block time")
+			}
+
+			accounts, err := lb.node.PartyAccounts(&api.PartyAccountsRequest{
+				PartyId: lb.walletPubKeyHex,
+				Asset:   lb.settlementAsset,
+			})
+			if err != nil {
+				lb.log.WithFields(log.Fields{"error": err.Error()}).Warning("Failed to get accounts")
+			} else {
+				lb.log.WithFields(log.Fields{"partyID": lb.walletPubKeyHex, "accounts": len(accounts.Accounts)}).Debug("Got accounts")
+				for i, acc := range accounts.Accounts {
+					lb.log.WithFields(log.Fields{
+						"asset":   acc.Asset,
+						"balance": acc.Balance,
+						"i":       i,
+						"type":    acc.Type,
+					}).Debug("Got account")
+				}
+			}
+
+			lb.log.Debug("Sleeping...")
+			err = doze(time.Duration(5)*time.Second, lb.stop)
+			if err != nil {
+				lb.log.Debug("Stopping bot")
 				lb.active = false
 				return
 			}
@@ -112,8 +184,6 @@ func (lb *LiqBot) run() {
 
 func (lb *LiqBot) setupWallet() (err error) {
 	// no need to acquire lb.mu, it's already held.
-	sublog := log.WithFields(log.Fields{"name": lb.config.Name})
-
 	lb.walletPassphrase = "DCBAabcd1357!#&*" + lb.config.Name
 
 	if lb.walletToken == "" {
@@ -124,12 +194,12 @@ func (lb *LiqBot) setupWallet() (err error) {
 				if err != nil {
 					return errors.Wrap(err, "failed to create wallet")
 				}
-				sublog.Debug("Created and logged into wallet")
+				lb.log.Debug("Created and logged into wallet")
 			} else {
 				return errors.Wrap(err, "failed to log in to wallet")
 			}
 		} else {
-			sublog.Debug("Logged into wallet")
+			lb.log.Debug("Logged into wallet")
 		}
 	}
 
@@ -144,10 +214,10 @@ func (lb *LiqBot) setupWallet() (err error) {
 			if err != nil {
 				return errors.Wrap(err, "failed to generate keypair")
 			}
-			sublog.WithFields(log.Fields{"pubKey": lb.walletPubKeyHex}).Debug("Created keypair")
+			lb.log.WithFields(log.Fields{"pubKey": lb.walletPubKeyHex}).Debug("Created keypair")
 		} else {
 			lb.walletPubKeyHex = keys[0].Pub
-			sublog.WithFields(log.Fields{"pubKey": lb.walletPubKeyHex}).Debug("Using existing keypair")
+			lb.log.WithFields(log.Fields{"pubKey": lb.walletPubKeyHex}).Debug("Using existing keypair")
 		}
 
 		lb.walletPubKeyRaw, err = hexToRaw([]byte(lb.walletPubKeyHex))
@@ -165,7 +235,7 @@ func doze(d time.Duration, stop chan bool) error {
 	for d > interval {
 		select {
 		case <-stop:
-			return core.ErrInterrupted
+			return e.ErrInterrupted
 
 		default:
 			time.Sleep(interval)

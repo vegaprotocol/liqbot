@@ -19,23 +19,6 @@ type ServerConfig struct {
 	LogLevel  string
 }
 
-// NodeConfig describes the settings for contacting Vega nodes.
-type NodeConfig struct {
-	Name string `yaml:"name"`
-
-	// Address specifies the URL of the Vega node to connect to.
-	// e.g. REST node:
-	//      address:
-	//        scheme: https
-	//        host: node.example.com:8443
-	//        path: /
-	// e.g. gRPC node:
-	//      address:
-	//        scheme: grpc
-	//        host: node.example.com:1234
-	Address *url.URL `yaml:"address"`
-}
-
 // PricingConfig describes the settings for contacting the price proxy.
 type PricingConfig struct {
 	Address *url.URL `yaml:"address"`
@@ -48,8 +31,17 @@ type BotConfig struct {
 	// It is *not* a public key seen by Vega.
 	Name string `yaml:"name"`
 
-	// Location is the name of a Node defined above
+	// Location points to a Vega node gRPC endpoint (host:port)
 	Location string `yaml:"location"`
+
+	// ConnectTimeout is the timeout (in milliseconds) for connecting to the Vega node gRPC endpoint.
+	ConnectTimeout int `yaml:"connectTimeout"`
+
+	// CallTimeout is the per-call timeout (in milliseconds) for communicating with the Vega node gRPC endpoint.
+	CallTimeout int `yaml:"callTimeout"`
+
+	// MarketID is the Vega Market ID.
+	MarketID string `yaml:"marketID"`
 
 	// Strategy specifies which algorithm the bot is to use.
 	Strategy string `yaml:"strategy"`
@@ -68,7 +60,6 @@ type WalletConfig struct {
 type Config struct {
 	Server *ServerConfig `yaml:"server"`
 
-	Nodes   []NodeConfig   `yaml:"nodes"`
 	Pricing *PricingConfig `yaml:"pricing"`
 	Wallet  *WalletConfig  `yaml:"wallet"`
 
@@ -94,9 +85,6 @@ func CheckConfig(cfg *Config) error {
 
 	if cfg.Server == nil {
 		return fmt.Errorf("%s: %s", ErrMissingEmptyConfigSection.Error(), "server")
-	}
-	if cfg.Nodes == nil || len(cfg.Nodes) == 0 {
-		return fmt.Errorf("%s: %s", ErrMissingEmptyConfigSection.Error(), "nodes")
 	}
 	if cfg.Pricing == nil {
 		return fmt.Errorf("%s: %s", ErrMissingEmptyConfigSection.Error(), "pricing")
