@@ -47,59 +47,27 @@ func (n *GRPCNode) GetAddress() (url.URL, error) {
 	return n.address, nil
 }
 
-// // PrepareSubmitOrder prepares a SubmitOrder request so it can be sined and submitted to SubmitTransaction.
-// func (n *GRPCNode) PrepareSubmitOrder(req *api.PrepareSubmitOrderRequest) (*api.PrepareSubmitOrderResponse, error) {
-// 	if n == nil {
-// 		return nil, ErrNil
-// 	}
-
-// 	c := api.NewTradingServiceClient(n.conn)
-// 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-// 	defer cancel()
-// 	return c.PrepareSubmitOrder(ctx, req)
-// }
-
-// // SubmitTransaction submits a signed transaction
-// func (n *GRPCNode) SubmitTransaction(req *api.SubmitTransactionRequest) (resp *api.SubmitTransactionResponse, err error) {
-// 	if n == nil {
-// 		return nil, ErrNil
-// 	}
-
-// 	c := api.NewTradingServiceClient(n.conn)
-// 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-// 	defer cancel()
-// 	return c.SubmitTransaction(ctx, req)
-// }
-
-// // UpdateMarketDepths gets the latest price for each market.
-// func (n *GRPCNode) UpdateMarketDepths() error {
-// 	if n == nil {
-// 		return ErrNil
-// 	}
-
-// 	results := make(map[string]proto.MarketDepth)
-// 	c := api.NewTradingDataServiceClient(n.conn)
-// 	n.marketsMu.Lock()
-// 	defer n.marketsMu.Unlock()
-// 	for mktID := range n.markets {
-// 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-// 		defer cancel()
-
-// 		mdr, err := c.MarketDepth(ctx, &api.MarketDepthRequest{MarketId: mktID})
-// 		if err != nil {
-// 			return err
-// 		}
-
-// 		results[mktID] = *MarketDepthFromMarketDepthResponse(mdr)
-// 	}
-
-// 	n.marketDepthsMu.Lock()
-// 	n.marketDepths = results
-// 	n.marketDepthsMu.Unlock()
-// 	return nil
-// }
-
 // === Trading ===
+
+// SubmitTransaction submits a signed transaction
+func (n *GRPCNode) SubmitTransaction(req *api.SubmitTransactionRequest) (resp *api.SubmitTransactionResponse, err error) {
+	msg := "gRPC call failed: SubmitTransaction"
+	if n == nil {
+		err = errors.Wrap(e.ErrNil, msg)
+		return
+	}
+
+	c := api.NewTradingServiceClient(n.conn)
+	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
+	defer cancel()
+
+	resp, err = c.SubmitTransaction(ctx, req)
+	if err != nil {
+		err = errors.Wrap(err, msg)
+		return
+	}
+	return
+}
 
 // === Trading Data ===
 
@@ -140,6 +108,25 @@ func (n *GRPCNode) MarketByID(req *api.MarketByIDRequest) (response *api.MarketB
 	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
 	defer cancel()
 	response, err = c.MarketByID(ctx, req)
+	if err != nil {
+		err = errors.Wrap(err, msg)
+		return
+	}
+	return
+}
+
+// MarketDepth gets the depth for a market.
+func (n *GRPCNode) MarketDepth(req *api.MarketDepthRequest) (response *api.MarketDepthResponse, err error) {
+	msg := "gRPC call failed: MarketDepth"
+	if n == nil {
+		err = errors.Wrap(e.ErrNil, msg)
+		return
+	}
+
+	c := api.NewTradingDataServiceClient(n.conn)
+	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
+	defer cancel()
+	response, err = c.MarketDepth(ctx, req)
 	if err != nil {
 		err = errors.Wrap(err, msg)
 		return
