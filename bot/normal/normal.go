@@ -21,7 +21,7 @@ import (
 )
 
 // Node is a Vega gRPC node
-//go:generate go run github.com/golang/mock/mockgen -destination mocks/node_mock.go -package mocks code.vegaprotocol.io/liqbot/bot Node
+//go:generate go run github.com/golang/mock/mockgen -destination mocks/node_mock.go -package mocks code.vegaprotocol.io/liqbot/bot/normal Node
 type Node interface {
 	GetAddress() (url.URL, error)
 

@@ -39,6 +39,7 @@ gosec:
 
 .PHONY: mocks
 mocks:
+	@find -name '*_mock.go' -print0 | xargs -0r rm
 	@go generate ./...
 
 .PHONY: build
