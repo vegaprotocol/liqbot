@@ -19,9 +19,17 @@ import (
 	ppconfig "code.vegaprotocol.io/priceproxy/config"
 	ppservice "code.vegaprotocol.io/priceproxy/service"
 	"github.com/julienschmidt/httprouter"
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"go.uber.org/zap"
 )
+
+// Bot is the generic bot interface.
+//go:generate go run github.com/golang/mock/mockgen -destination mocks/bot_mock.go -package mocks code.vegaprotocol.io/liqbot/service Bot
+type Bot interface {
+	Start() error
+	Stop()
+}
 
 // PricingEngine is the source of price information from the price proxy.
 //go:generate go run github.com/golang/mock/mockgen -destination mocks/pricingengine_mock.go -package mocks code.vegaprotocol.io/liqbot/service PricingEngine
@@ -45,7 +53,7 @@ type Service struct {
 
 	config config.Config
 
-	bots   map[string]*bot.LiqBot
+	bots   map[string]Bot
 	botsMu sync.Mutex
 
 	pricingEngine PricingEngine
@@ -101,7 +109,7 @@ func NewService(config config.Config, pe PricingEngine, ws wallet.WalletHandler)
 		Router: httprouter.New(),
 
 		config:        config,
-		bots:          make(map[string]*bot.LiqBot),
+		bots:          make(map[string]Bot),
 		pricingEngine: pe,
 		walletServer:  ws,
 	}
@@ -163,7 +171,10 @@ func (s *Service) initBots() error {
 	defer s.botsMu.Unlock()
 
 	for _, botcfg := range s.config.Bots {
-		b := bot.New(botcfg, s.pricingEngine, s.walletServer)
+		b, err := bot.New(botcfg, s.pricingEngine, s.walletServer)
+		if err != nil {
+			return errors.Wrap(err, fmt.Sprintf("failed to create bot %s", botcfg.Name))
+		}
 		s.bots[botcfg.Name] = b
 		log.WithFields(log.Fields{
 			"name": botcfg.Name,
