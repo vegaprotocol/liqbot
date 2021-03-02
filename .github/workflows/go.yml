@@ -1,0 +1,118 @@
+---
+
+name: Go
+
+"on":
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+
+  build-linux:
+    name: Linux build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go: ['1.15', '1.14']
+    env:
+      GO_VER: ${{ matrix.go }}
+    steps:
+
+      - name: Set up Go ${{ matrix.go }}
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go }}
+        id: go
+
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Get dependencies
+        run: make deps
+
+      - name: Build
+        run: make build
+
+      - name: Tests
+        run: make test
+
+      - name: Lint
+        run: make lint
+
+      - name: Vet
+        run: make vet
+
+      - name: Run Gosec Security Scanner
+        uses: securego/gosec@v2.6.1
+        env:
+          GOROOT: /usr/local/go
+          GOTOOLDIR: /usr/local/go/pkg/tool/linux_amd64
+        with:
+          args: ./...
+        if: env.GO_VER == '1.15'
+
+  build-macos:
+    name: MacOS build
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        go: ['1.15', '1.14']
+    steps:
+
+      - name: Set up Go ${{ matrix.go }}
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go }}
+        id: go
+
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Get dependencies
+        run: make deps
+
+      - name: Build
+        run: make build
+
+      - name: Tests
+        run: make test
+
+      - name: Lint
+        run: make lint
+
+      - name: Vet
+        run: make vet
+
+  build-windows:
+    name: Windows Build
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        go: ['1.15', '1.14']
+    steps:
+
+      - name: Set up Go ${{ matrix.go }}
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go }}
+        id: go
+
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Get dependencies
+        run: make deps
+
+      - name: Build
+        run: make build
+
+      - name: Tests
+        run: make test
+
+      - name: Lint
+        run: make lint
+
+      - name: Vet
+        run: make vet

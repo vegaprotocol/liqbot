@@ -1,0 +1,134 @@
+---
+
+name: Release
+
+"on":
+  push:
+    # Sequence of patterns matched against refs/tags
+    tags:
+      - 'v*'  # Push events to matching v*, e.g. v1.0, v20.15.10
+
+jobs:
+
+  release-linux:
+    name: Linux release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go 1.15
+        uses: actions/setup-go@v2
+        with:
+          go-version: "1.15"
+        id: go
+
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Get dependencies
+        run: make deps
+
+      - name: Tests
+        run: make test
+
+      - name: Lint
+        run: make lint
+
+      - name: Vet
+        run: make vet
+
+      - name: Set release version
+        id: vars
+        run: echo ::set-output name=tag::${GITHUB_REF#refs/*/}
+
+      - name: Build
+        env:
+          RELEASE_VERSION: ${{ steps.vars.outputs.tag }}
+        run: make release-linux
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: build/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  release-macos:
+    name: MacOS release
+    runs-on: macos-latest
+    steps:
+      - name: Set up Go 1.15
+        uses: actions/setup-go@v2
+        with:
+          go-version: "1.15"
+        id: go
+
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Get dependencies
+        run: make deps
+
+      - name: Tests
+        run: make test
+
+      - name: Lint
+        run: make lint
+
+      - name: Vet
+        run: make vet
+
+      - name: Set release version
+        id: vars
+        run: echo ::set-output name=tag::${GITHUB_REF#refs/*/}
+
+      - name: Build
+        env:
+          RELEASE_VERSION: ${{ steps.vars.outputs.tag }}
+        run: make release-macos
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: build/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  release-windows:
+    name: Windows release
+    runs-on: windows-latest
+    steps:
+      - name: Set up Go 1.15
+        uses: actions/setup-go@v2
+        with:
+          go-version: "1.15"
+        id: go
+
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Get dependencies
+        run: make deps
+
+      - name: Tests
+        run: make test
+
+      - name: Lint
+        run: make lint
+
+      - name: Vet
+        run: make vet
+
+      - name: Set release version
+        id: vars
+        run: echo ::set-output name=tag::${GITHUB_REF#refs/*/}
+
+      - name: Build
+        env:
+          RELEASE_VERSION: ${{ steps.vars.outputs.tag }}
+        run: make release-windows
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: build/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
