@@ -39,14 +39,15 @@ type PricingEngine interface {
 	GetPrice(pricecfg ppconfig.PriceConfig) (pi ppservice.PriceResponse, err error)
 }
 
-// LiqBot represents one liquidity bot.
-type LiqBot struct {
+// Bot represents one Normal liquidity bot.
+type Bot struct {
 	config          config.BotConfig
 	active          bool
 	log             *log.Entry
 	pricingEngine   PricingEngine
 	settlementAsset string
 	stop            chan bool
+	strategy        *Strategy
 	market          *proto.Market
 	node            Node
 
@@ -59,9 +60,9 @@ type LiqBot struct {
 	mu sync.Mutex
 }
 
-// New returns a new instance of LiqBot.
-func New(config config.BotConfig, pe PricingEngine, ws wallet.WalletHandler) *LiqBot {
-	lb := LiqBot{
+// New returns a new instance of Bot.
+func New(config config.BotConfig, pe PricingEngine, ws wallet.WalletHandler) (b *Bot, err error) {
+	b = &Bot{
 		config: config,
 		log: log.WithFields(log.Fields{
 			"bot":  config.Name,
@@ -71,11 +72,20 @@ func New(config config.BotConfig, pe PricingEngine, ws wallet.WalletHandler) *Li
 		walletServer:  ws,
 	}
 
-	return &lb
+	b.strategy, err = readStrategyConfig(config.StrategyDetails)
+	if err != nil {
+		err = errors.Wrap(err, "failed to read strategy details")
+		return
+	}
+	b.log.WithFields(log.Fields{
+		"strategy": b.strategy.String(),
+	}).Debug("read strategy config")
+
+	return
 }
 
 // Start starts the liquidity bot goroutine(s).
-func (lb *LiqBot) Start() error {
+func (lb *Bot) Start() error {
 	lb.mu.Lock()
 	err := lb.setupWallet()
 	if err != nil {
@@ -120,7 +130,7 @@ func (lb *LiqBot) Start() error {
 }
 
 // Stop stops the liquidity bot goroutine(s).
-func (lb *LiqBot) Stop() {
+func (lb *Bot) Stop() {
 	lb.mu.Lock()
 	active := lb.active
 	lb.mu.Unlock()
@@ -137,7 +147,7 @@ func (lb *LiqBot) Stop() {
 	close(lb.stop)
 }
 
-func (lb *LiqBot) run() {
+func (lb *Bot) run() {
 	for {
 		select {
 		case <-lb.stop:
@@ -182,7 +192,7 @@ func (lb *LiqBot) run() {
 	}
 }
 
-func (lb *LiqBot) setupWallet() (err error) {
+func (lb *Bot) setupWallet() (err error) {
 	// no need to acquire lb.mu, it's already held.
 	lb.walletPassphrase = "DCBAabcd1357!#&*" + lb.config.Name
 
