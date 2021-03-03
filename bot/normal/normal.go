@@ -39,14 +39,16 @@ type PricingEngine interface {
 	GetPrice(pricecfg ppconfig.PriceConfig) (pi ppservice.PriceResponse, err error)
 }
 
-// LiqBot represents one liquidity bot.
-type LiqBot struct {
+// Bot represents one Normal liquidity bot.
+type Bot struct {
 	config          config.BotConfig
 	active          bool
 	log             *log.Entry
 	pricingEngine   PricingEngine
 	settlementAsset string
-	stop            chan bool
+	stopPosMgmt     chan bool
+	stopPriceSteer  chan bool
+	strategy        *Strategy
 	market          *proto.Market
 	node            Node
 
@@ -59,9 +61,9 @@ type LiqBot struct {
 	mu sync.Mutex
 }
 
-// New returns a new instance of LiqBot.
-func New(config config.BotConfig, pe PricingEngine, ws wallet.WalletHandler) *LiqBot {
-	lb := LiqBot{
+// New returns a new instance of Bot.
+func New(config config.BotConfig, pe PricingEngine, ws wallet.WalletHandler) (b *Bot, err error) {
+	b = &Bot{
 		config: config,
 		log: log.WithFields(log.Fields{
 			"bot":  config.Name,
@@ -71,11 +73,20 @@ func New(config config.BotConfig, pe PricingEngine, ws wallet.WalletHandler) *Li
 		walletServer:  ws,
 	}
 
-	return &lb
+	b.strategy, err = readStrategyConfig(config.StrategyDetails)
+	if err != nil {
+		err = errors.Wrap(err, "failed to read strategy details")
+		return
+	}
+	b.log.WithFields(log.Fields{
+		"strategy": b.strategy.String(),
+	}).Debug("read strategy config")
+
+	return
 }
 
 // Start starts the liquidity bot goroutine(s).
-func (lb *LiqBot) Start() error {
+func (lb *Bot) Start() error {
 	lb.mu.Lock()
 	err := lb.setupWallet()
 	if err != nil {
@@ -111,16 +122,18 @@ func (lb *LiqBot) Start() error {
 	}).Debug("Fetched market info")
 
 	lb.active = true
-	lb.stop = make(chan bool)
+	lb.stopPosMgmt = make(chan bool)
+	lb.stopPriceSteer = make(chan bool)
 	lb.mu.Unlock()
 
-	go lb.run()
+	go lb.runPositionManagement()
+	go lb.runPriceSteering()
 
 	return nil
 }
 
 // Stop stops the liquidity bot goroutine(s).
-func (lb *LiqBot) Stop() {
+func (lb *Bot) Stop() {
 	lb.mu.Lock()
 	active := lb.active
 	lb.mu.Unlock()
@@ -129,23 +142,28 @@ func (lb *LiqBot) Stop() {
 		return
 	}
 
-	// Do not send data to lb.stop while lb.mu is held. It would cause deadlock.
+	// Do not send data to lb.stop* while lb.mu is held. It would cause deadlock.
 	// This goroutine would be trying to send on a channel while the lock is
 	// held, and another goroutine (lb.run()) needs to aquire the lock before
 	// the channel is read from.
-	lb.stop <- true
-	close(lb.stop)
+	lb.stopPosMgmt <- true
+	close(lb.stopPosMgmt)
+	lb.stopPriceSteer <- true
+	close(lb.stopPriceSteer)
 }
 
-func (lb *LiqBot) run() {
+func (lb *Bot) runPositionManagement() {
 	for {
 		select {
-		case <-lb.stop:
-			lb.log.Debug("Stopping bot")
+		case <-lb.stopPosMgmt:
+			lb.log.Debug("Stopping bot position management")
+			lb.mu.Lock()
 			lb.active = false
+			lb.mu.Unlock()
 			return
 
 		default:
+			lb.log.Debug("Position management tick")
 			blockTime, err := lb.node.GetVegaTime()
 			if err != nil {
 				lb.log.WithFields(log.Fields{"error": err.Error()}).Warning("Failed to get block time")
@@ -171,18 +189,44 @@ func (lb *LiqBot) run() {
 				}
 			}
 
-			lb.log.Debug("Sleeping...")
-			err = doze(time.Duration(5)*time.Second, lb.stop)
+			err = doze(time.Duration(lb.strategy.PosManagementSleepMilliseconds)*time.Millisecond, lb.stopPosMgmt)
 			if err != nil {
-				lb.log.Debug("Stopping bot")
+				lb.log.Debug("Stopping bot position management")
+				lb.mu.Lock()
 				lb.active = false
+				lb.mu.Unlock()
 				return
 			}
 		}
 	}
 }
 
-func (lb *LiqBot) setupWallet() (err error) {
+func (lb *Bot) runPriceSteering() {
+	for {
+		select {
+		case <-lb.stopPriceSteer:
+			lb.log.Debug("Stopping bot market price steering")
+			lb.mu.Lock()
+			lb.active = false
+			lb.mu.Unlock()
+			return
+
+		default:
+			lb.log.Debug("Market price steering tick")
+
+			err := doze(time.Duration(1.0/lb.strategy.MarketPriceSteeringRatePerSecond)*time.Second, lb.stopPriceSteer)
+			if err != nil {
+				lb.log.Debug("Stopping bot market price steering")
+				lb.mu.Lock()
+				lb.active = false
+				lb.mu.Unlock()
+				return
+			}
+		}
+	}
+}
+
+func (lb *Bot) setupWallet() (err error) {
 	// no need to acquire lb.mu, it's already held.
 	lb.walletPassphrase = "DCBAabcd1357!#&*" + lb.config.Name
 

@@ -9,6 +9,7 @@ import (
 	"code.vegaprotocol.io/go-wallet/wallet"
 	ppconfig "code.vegaprotocol.io/priceproxy/config"
 	ppservice "code.vegaprotocol.io/priceproxy/service"
+	"github.com/pkg/errors"
 )
 
 // Bot is the generic bot interface.
@@ -28,9 +29,14 @@ type PricingEngine interface {
 func New(config config.BotConfig, pe PricingEngine, ws wallet.WalletHandler) (b Bot, err error) {
 	switch config.Strategy {
 	case "normal":
-		b = normal.New(config, pe, ws)
+		b, err = normal.New(config, pe, ws)
 	default:
-		err = fmt.Errorf("unrecognised bot strategy: %s", config.Strategy)
+		err = errors.New("unrecognised bot strategy")
 	}
+	if err != nil {
+		err = errors.Wrap(err, fmt.Sprintf("failed to create new bot with strategy %s", config.Strategy))
+		return
+	}
+
 	return
 }
