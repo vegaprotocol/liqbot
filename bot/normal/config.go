@@ -129,11 +129,21 @@ func readStrategyConfig(details map[string]string) (s *Strategy, err error) {
 	s.PosManagementSleepMilliseconds, err = config.ReadUint64(details, keyPosManagementSleepMilliseconds)
 	if err != nil {
 		errs = multierror.Append(errs, errors.Wrap(err, fmt.Sprintf(errInvalid, keyPosManagementSleepMilliseconds)))
+	} else {
+		if s.PosManagementSleepMilliseconds < 100 {
+			errs = multierror.Append(errs, errors.Wrap(fmt.Errorf("must be >=100"), fmt.Sprintf(errInvalid, keyPosManagementSleepMilliseconds)))
+		}
 	}
 
 	s.MarketPriceSteeringRatePerSecond, err = config.ReadFloat64(details, keyMarketPriceSteeringRatePerSecond)
 	if err != nil {
 		errs = multierror.Append(errs, errors.Wrap(err, fmt.Sprintf(errInvalid, keyMarketPriceSteeringRatePerSecond)))
+	} else {
+		if s.MarketPriceSteeringRatePerSecond <= 0.0 {
+			errs = multierror.Append(errs, errors.Wrap(fmt.Errorf("must be >0"), fmt.Sprintf(errInvalid, keyMarketPriceSteeringRatePerSecond)))
+		} else if s.MarketPriceSteeringRatePerSecond > 10.0 {
+			errs = multierror.Append(errs, errors.Wrap(fmt.Errorf("must be <=10"), fmt.Sprintf(errInvalid, keyMarketPriceSteeringRatePerSecond)))
+		}
 	}
 
 	// LimitOrderDistributionParams TBD

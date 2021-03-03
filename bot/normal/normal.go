@@ -46,7 +46,8 @@ type Bot struct {
 	log             *log.Entry
 	pricingEngine   PricingEngine
 	settlementAsset string
-	stop            chan bool
+	stopPosMgmt     chan bool
+	stopPriceSteer  chan bool
 	strategy        *Strategy
 	market          *proto.Market
 	node            Node
@@ -121,10 +122,12 @@ func (lb *Bot) Start() error {
 	}).Debug("Fetched market info")
 
 	lb.active = true
-	lb.stop = make(chan bool)
+	lb.stopPosMgmt = make(chan bool)
+	lb.stopPriceSteer = make(chan bool)
 	lb.mu.Unlock()
 
-	go lb.run()
+	go lb.runPositionManagement()
+	go lb.runPriceSteering()
 
 	return nil
 }
@@ -139,23 +142,28 @@ func (lb *Bot) Stop() {
 		return
 	}
 
-	// Do not send data to lb.stop while lb.mu is held. It would cause deadlock.
+	// Do not send data to lb.stop* while lb.mu is held. It would cause deadlock.
 	// This goroutine would be trying to send on a channel while the lock is
 	// held, and another goroutine (lb.run()) needs to aquire the lock before
 	// the channel is read from.
-	lb.stop <- true
-	close(lb.stop)
+	lb.stopPosMgmt <- true
+	close(lb.stopPosMgmt)
+	lb.stopPriceSteer <- true
+	close(lb.stopPriceSteer)
 }
 
-func (lb *Bot) run() {
+func (lb *Bot) runPositionManagement() {
 	for {
 		select {
-		case <-lb.stop:
-			lb.log.Debug("Stopping bot")
+		case <-lb.stopPosMgmt:
+			lb.log.Debug("Stopping bot position management")
+			lb.mu.Lock()
 			lb.active = false
+			lb.mu.Unlock()
 			return
 
 		default:
+			lb.log.Debug("Position management tick")
 			blockTime, err := lb.node.GetVegaTime()
 			if err != nil {
 				lb.log.WithFields(log.Fields{"error": err.Error()}).Warning("Failed to get block time")
@@ -181,11 +189,37 @@ func (lb *Bot) run() {
 				}
 			}
 
-			lb.log.Debug("Sleeping...")
-			err = doze(time.Duration(5)*time.Second, lb.stop)
+			err = doze(time.Duration(lb.strategy.PosManagementSleepMilliseconds)*time.Millisecond, lb.stopPosMgmt)
 			if err != nil {
-				lb.log.Debug("Stopping bot")
+				lb.log.Debug("Stopping bot position management")
+				lb.mu.Lock()
 				lb.active = false
+				lb.mu.Unlock()
+				return
+			}
+		}
+	}
+}
+
+func (lb *Bot) runPriceSteering() {
+	for {
+		select {
+		case <-lb.stopPriceSteer:
+			lb.log.Debug("Stopping bot market price steering")
+			lb.mu.Lock()
+			lb.active = false
+			lb.mu.Unlock()
+			return
+
+		default:
+			lb.log.Debug("Market price steering tick")
+
+			err := doze(time.Duration(1.0/lb.strategy.MarketPriceSteeringRatePerSecond)*time.Second, lb.stopPriceSteer)
+			if err != nil {
+				lb.log.Debug("Stopping bot market price steering")
+				lb.mu.Lock()
+				lb.active = false
+				lb.mu.Unlock()
 				return
 			}
 		}
