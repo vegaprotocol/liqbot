@@ -1,0 +1,30 @@
+---
+
+server:
+  env: prod  # dev, prod
+  listen: ":8000"
+  logformat: text  # json, text
+  loglevel: info  # debug, info, warning, error
+
+pricing:
+  address:
+    scheme: https
+    host: pricing.example.com
+    path: /prices
+
+wallet:
+  rootPath: .liqbot  # in $HOME, unless rootPath starts with a "/"
+  tokenExpiry: 31536000  # seconds
+
+bots:
+
+  # A list of bots
+  - name: somebot
+    location: grpcveganode.example.com:1234
+    connectTimeout: 3000  # milliseconds
+    callTimeout: 1000  # milliseconds
+    marketID: some_market_id
+    strategy: some_strategy
+    strategyDetails:
+      # strategy-specific configuration
+      foo: bar
