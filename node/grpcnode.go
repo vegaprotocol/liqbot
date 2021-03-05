@@ -115,6 +115,25 @@ func (n *GRPCNode) MarketByID(req *api.MarketByIDRequest) (response *api.MarketB
 	return
 }
 
+// LiquidityProvisions gets the liquidity provisions for a given market and party.
+func (n *GRPCNode) LiquidityProvisions(req *api.LiquidityProvisionsRequest) (response *api.LiquidityProvisionsResponse, err error) {
+	msg := "gRPC call failed: LiquidityProvisions"
+	if n == nil {
+		err = errors.Wrap(e.ErrNil, msg)
+		return
+	}
+
+	c := api.NewTradingDataServiceClient(n.conn)
+	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
+	defer cancel()
+	response, err = c.LiquidityProvisions(ctx, req)
+	if err != nil {
+		err = errors.Wrap(err, msg)
+		return
+	}
+	return
+}
+
 // MarketDepth gets the depth for a market.
 func (n *GRPCNode) MarketDepth(req *api.MarketDepthRequest) (response *api.MarketDepthResponse, err error) {
 	msg := "gRPC call failed: MarketDepth"
