@@ -235,10 +235,19 @@ func (b *Bot) manageLiquidityProvision() error {
 		return errors.Wrap(err, "failed to get liquidity provisions")
 	}
 	if len(lpResponse.LiquidityProvisions) > 0 {
-		// This bot already has a liquidity provision
+		b.log.WithFields(log.Fields{
+			"count": len(lpResponse.LiquidityProvisions),
+		}).Debug("Liquidity provision already exists")
+		for i, lp := range lpResponse.LiquidityProvisions {
+			b.log.WithFields(log.Fields{
+				"i":  i,
+				"lp": lp,
+			}).Debug("Liquidity provision detail")
+		}
 		return nil
 	}
 
+	// TODO: extract into config file
 	buys := []*proto.LiquidityOrder{
 		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: -20, Proportion: 50},
 		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: -10, Proportion: 50},
@@ -260,6 +269,7 @@ func (b *Bot) manageLiquidityProvision() error {
 	if err != nil {
 		return errors.Wrap(err, "failed to submit liquidity provision order")
 	}
+	b.log.Debug("Submitted liquidity provision order")
 	return nil
 }
 
