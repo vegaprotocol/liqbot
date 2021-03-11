@@ -6,7 +6,7 @@ require (
 	code.vegaprotocol.io/go-wallet v0.6.2
 	code.vegaprotocol.io/priceproxy v0.0.2
 	github.com/golang/mock v1.5.0
-	github.com/hashicorp/go-multierror v1.1.0
+	github.com/hashicorp/go-multierror v1.1.1
 	github.com/jinzhu/configor v1.2.1
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/pkg/errors v0.9.1
