@@ -1,6 +1,8 @@
 package node
 
 import (
+	e "code.vegaprotocol.io/liqbot/errors"
+
 	protobufproto "github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	uuid "github.com/satori/go.uuid"
@@ -38,28 +40,57 @@ const (
 	SubmitOracleDataCommand Command = 0x51
 )
 
-// Encode takes a Tx payload and a command and builds a raw Tx.
-func Encode(input []byte, cmd Command) ([]byte, error) {
-	prefix := uuid.NewV4().String()
-	prefixBytes := []byte(prefix)
-	commandInput := append([]byte{byte(cmd)}, input...)
+const (
+	failedValidate = "failed to validate request"
+)
+
+// MarshalEncode takes a Tx payload and a command and builds a raw Tx.
+func MarshalEncode(submission protobufproto.Message, cmd Command) (encoded []byte, err error) {
+	raw, err := protobufproto.Marshal(submission)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshal request")
+	}
+
+	prefixBytes := []byte(uuid.NewV4().String())
+	commandInput := append([]byte{byte(cmd)}, raw...)
 	return append(prefixBytes, commandInput...), nil
 }
 
 // PrepareLiquidityProvision prepares an API request. Code copied from Core.
 func PrepareLiquidityProvision(req *api.PrepareLiquidityProvisionRequest) (*api.PrepareLiquidityProvisionResponse, error) {
+	if req == nil || req.Submission == nil {
+		return nil, e.ErrNil
+	}
 	if err := req.Validate(); err != nil {
-		return nil, errors.Wrap(err, "failed to prepare liquidity provision request")
+		return nil, errors.Wrap(err, failedValidate)
 	}
 
-	raw, err := protobufproto.Marshal(req.Submission)
+	raw, err := MarshalEncode(req.Submission, LiquidityProvisionCommand)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to marshal liquidity provision request")
-	}
-
-	if raw, err = Encode(raw, LiquidityProvisionCommand); err != nil {
-		return nil, errors.Wrap(err, "failed to encode liquidity provision request")
+		return nil, err // no need to wrap
 	}
 
 	return &api.PrepareLiquidityProvisionResponse{Blob: raw}, nil
+}
+
+// PrepareSubmitOrder prepares an API request. Code copied from Core.
+func PrepareSubmitOrder(req *api.PrepareSubmitOrderRequest) (*api.PrepareSubmitOrderResponse, error) {
+	if req == nil || req.Submission == nil {
+		return nil, e.ErrNil
+	}
+	if err := req.Validate(); err != nil {
+		return nil, errors.Wrap(err, failedValidate)
+	}
+
+	if req.Submission.Reference == "" {
+		req.Submission.Reference = uuid.NewV4().String()
+	}
+	raw, err := MarshalEncode(req.Submission, SubmitOrderCommand)
+	if err != nil {
+		return nil, err // no need to wrap
+	}
+	return &api.PrepareSubmitOrderResponse{
+		Blob:     raw,
+		SubmitId: req.Submission.Reference,
+	}, nil
 }
