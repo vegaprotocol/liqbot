@@ -320,7 +320,7 @@ func (b *Bot) getPositions() ([]*proto.Position, error) {
 	return response.Positions, nil
 }
 
-func calculatePositionMarginCost(openVolume int64, currentPrice uint64, risk_parameters *struct{}) uint64 {
+func calculatePositionMarginCost(openVolume int64, currentPrice uint64, riskParameters *struct{}) uint64 {
 	return 1
 }
 
@@ -334,25 +334,25 @@ func (b *Bot) runPositionManagement() {
 	var openVolume int64
 
 	// TODO: extract into config file
-	longening_buys := []*proto.LiquidityOrder{
+	longeningBuys := []*proto.LiquidityOrder{
 		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: -8, Proportion: 25},
 		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: -4, Proportion: 25},
 		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: -2, Proportion: 25},
 		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: -1, Proportion: 25},
 	}
-	longening_sells := []*proto.LiquidityOrder{
+	longeningSells := []*proto.LiquidityOrder{
 		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_ASK, Offset: 2, Proportion: 25},
 		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_ASK, Offset: 4, Proportion: 25},
 		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_ASK, Offset: 8, Proportion: 25},
 		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_ASK, Offset: 16, Proportion: 25},
 	}
-	shortening_buys := []*proto.LiquidityOrder{
+	shorteningBuys := []*proto.LiquidityOrder{
 		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: -2, Proportion: 25},
 		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: -4, Proportion: 25},
 		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: -8, Proportion: 25},
 		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: -16, Proportion: 25},
 	}
-	shortening_sells := []*proto.LiquidityOrder{
+	shorteningSells := []*proto.LiquidityOrder{
 		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_ASK, Offset: 1, Proportion: 25},
 		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_ASK, Offset: 2, Proportion: 25},
 		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_ASK, Offset: 4, Proportion: 25},
@@ -424,12 +424,12 @@ func (b *Bot) runPositionManagement() {
 				var shape string
 				if openVolume <= 0 {
 					shape = "longening"
-					buys = longening_buys
-					sells = longening_sells
+					buys = longeningBuys
+					sells = longeningSells
 				} else {
 					shape = "shortening"
-					buys = shortening_buys
-					sells = shortening_sells
+					buys = shorteningBuys
+					sells = shorteningSells
 				}
 
 				b.log.WithFields(log.Fields{
