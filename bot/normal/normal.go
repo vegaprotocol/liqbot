@@ -17,8 +17,8 @@ import (
 	ppservice "code.vegaprotocol.io/priceproxy/service"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
-	"github.com/vegaprotocol/api-clients/go/generated/code.vegaprotocol.io/vega/proto"
-	"github.com/vegaprotocol/api-clients/go/generated/code.vegaprotocol.io/vega/proto/api"
+	"github.com/vegaprotocol/api/go/generated/code.vegaprotocol.io/vega/proto"
+	"github.com/vegaprotocol/api/go/generated/code.vegaprotocol.io/vega/proto/api"
 )
 
 // Node is a Vega gRPC node
@@ -56,6 +56,9 @@ type Bot struct {
 	strategy        *Strategy
 	market          *proto.Market
 	node            Node
+
+	balanceGeneral uint64
+	balanceMargin  uint64
 
 	walletServer     wallet.WalletHandler
 	walletPassphrase string
@@ -121,6 +124,26 @@ func (b *Bot) Start() error {
 		"marketID":        b.config.MarketID,
 		"settlementAsset": b.settlementAsset,
 	}).Debug("Fetched market info")
+
+	b.balanceGeneral = 0
+	for {
+		err = b.getAccountGeneral()
+		if err != nil {
+			b.log.WithFields(log.Fields{
+				"error": err.Error(),
+			}).Debug("Failed to get general balance")
+		} else {
+			if b.balanceGeneral > 0 {
+				b.log.WithFields(log.Fields{
+					"general": b.balanceGeneral,
+				}).Debug("Fetched general balance")
+				break
+			} else {
+				b.log.Warning("Waiting for positive general balance")
+			}
+		}
+		time.Sleep(time.Second)
+	}
 
 	b.active = true
 	b.stopPosMgmt = make(chan bool)
@@ -248,7 +271,7 @@ func (b *Bot) manageLiquidityProvision(buys, sells []*proto.LiquidityOrder) erro
 		Submission: &proto.LiquidityProvisionSubmission{
 			Fee:              "0.01",
 			MarketId:         b.market.Id,
-			CommitmentAmount: 1000,
+			CommitmentAmount: 100000000,
 			Buys:             buys,
 			Sells:            sells,
 		},
@@ -262,7 +285,7 @@ func (b *Bot) manageLiquidityProvision(buys, sells []*proto.LiquidityOrder) erro
 }
 
 // getAccountGeneral get this bot's general account balance.
-func (b *Bot) getAccountGeneral() (uint64, error) {
+func (b *Bot) getAccountGeneral() error {
 	response, err := b.node.PartyAccounts(&api.PartyAccountsRequest{
 		// MarketId: general account is not per market
 		PartyId: b.walletPubKeyHex,
@@ -270,17 +293,20 @@ func (b *Bot) getAccountGeneral() (uint64, error) {
 		Type:    proto.AccountType_ACCOUNT_TYPE_GENERAL,
 	})
 	if err != nil {
-		return 0, errors.Wrap(err, "failed to get general account")
+		return errors.Wrap(err, "failed to get general account")
 	}
 	if len(response.Accounts) == 0 {
-		return 0, errors.Wrap(err, "found zero general accounts for party")
+		return errors.Wrap(err, "found zero general accounts for party")
 	}
-
-	return response.Accounts[0].Balance, nil
+	if len(response.Accounts) > 1 {
+		return fmt.Errorf("found too many general accounts for party: %d", len(response.Accounts))
+	}
+	b.balanceGeneral = response.Accounts[0].Balance
+	return nil
 }
 
 // getAccountMargin get this bot's margin account balance.
-func (b *Bot) getAccountMargin() (uint64, error) {
+func (b *Bot) getAccountMargin() error {
 	response, err := b.node.PartyAccounts(&api.PartyAccountsRequest{
 		PartyId:  b.walletPubKeyHex,
 		MarketId: b.market.Id,
@@ -288,13 +314,16 @@ func (b *Bot) getAccountMargin() (uint64, error) {
 		Type:     proto.AccountType_ACCOUNT_TYPE_MARGIN,
 	})
 	if err != nil {
-		return 0, errors.Wrap(err, "failed to get margin account")
+		return errors.Wrap(err, "failed to get margin account")
 	}
 	if len(response.Accounts) == 0 {
-		return 0, errors.Wrap(err, "found zero margin accounts for party")
+		return errors.Wrap(err, "found zero margin accounts for party")
 	}
-
-	return response.Accounts[0].Balance, nil
+	if len(response.Accounts) > 1 {
+		return fmt.Errorf("found too many margin accounts for party: %d", len(response.Accounts))
+	}
+	b.balanceMargin = response.Accounts[0].Balance
+	return nil
 }
 
 // getMarketData get the market data for the market that this bot trades on.
@@ -325,7 +354,6 @@ func calculatePositionMarginCost(openVolume int64, currentPrice uint64, riskPara
 }
 
 func (b *Bot) runPositionManagement() {
-	var generalBalance, marginBalance uint64
 	var buys, sells []*proto.LiquidityOrder
 	var marketData *proto.MarketData
 	var positions []*proto.Position
@@ -334,31 +362,33 @@ func (b *Bot) runPositionManagement() {
 	var openVolume int64
 
 	// TODO: extract into config file
-	longeningBuys := []*proto.LiquidityOrder{
-		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: -8, Proportion: 25},
-		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: -4, Proportion: 25},
-		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: -2, Proportion: 25},
-		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: -1, Proportion: 25},
-	}
 	longeningSells := []*proto.LiquidityOrder{
-		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_ASK, Offset: 2, Proportion: 25},
-		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_ASK, Offset: 4, Proportion: 25},
-		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_ASK, Offset: 8, Proportion: 25},
-		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_ASK, Offset: 16, Proportion: 25},
+		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_ASK, Offset: 16, Proportion: 10},
+		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_ASK, Offset: 8, Proportion: 20},
+		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_ASK, Offset: 4, Proportion: 30},
+		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_ASK, Offset: 2, Proportion: 40},
 	}
-	shorteningBuys := []*proto.LiquidityOrder{
-		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: -2, Proportion: 25},
-		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: -4, Proportion: 25},
-		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: -8, Proportion: 25},
-		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: -16, Proportion: 25},
-	}
-	shorteningSells := []*proto.LiquidityOrder{
-		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_ASK, Offset: 1, Proportion: 25},
-		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_ASK, Offset: 2, Proportion: 25},
-		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_ASK, Offset: 4, Proportion: 25},
-		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_ASK, Offset: 8, Proportion: 25},
+	longeningBuys := []*proto.LiquidityOrder{
+		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: -1, Proportion: 40},
+		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: -2, Proportion: 30},
+		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: -4, Proportion: 20},
+		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: -8, Proportion: 10},
 	}
 
+	shorteningSells := []*proto.LiquidityOrder{
+		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_ASK, Offset: 8, Proportion: 10},
+		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_ASK, Offset: 4, Proportion: 20},
+		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_ASK, Offset: 2, Proportion: 30},
+		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_ASK, Offset: 1, Proportion: 40},
+	}
+	shorteningBuys := []*proto.LiquidityOrder{
+		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: -2, Proportion: 40},
+		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: -4, Proportion: 30},
+		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: -8, Proportion: 20},
+		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: -16, Proportion: 10},
+	}
+
+	sleepTime := b.strategy.PosManagementSleepMilliseconds
 	for {
 		select {
 		case <-b.stopPosMgmt:
@@ -367,15 +397,20 @@ func (b *Bot) runPositionManagement() {
 			return
 
 		default:
-			generalBalance, err = b.getAccountGeneral()
+			err = b.getAccountGeneral()
 			if err != nil {
 				b.log.WithFields(log.Fields{
 					"error": err.Error(),
 				}).Warning("Failed to get general account balance")
+			} else {
+				if b.balanceGeneral == 0 {
+					b.log.Warning("Position management: Zero balance in general account")
+					err = errors.New("zero general balance")
+				}
 			}
 
 			if err == nil {
-				marginBalance, err = b.getAccountMargin()
+				err = b.getAccountMargin()
 				if err != nil {
 					b.log.WithFields(log.Fields{
 						"error": err.Error(),
@@ -434,8 +469,8 @@ func (b *Bot) runPositionManagement() {
 
 				b.log.WithFields(log.Fields{
 					"currentPrice":   currentPrice,
-					"generalBalance": generalBalance,
-					"marginBalance":  marginBalance,
+					"balanceGeneral": b.balanceGeneral,
+					"balanceMargin":  b.balanceMargin,
 					"openVolume":     openVolume,
 					"shape":          shape,
 				}).Debug("Position management info")
@@ -452,7 +487,7 @@ func (b *Bot) runPositionManagement() {
 			if err == nil {
 				posMarginCost := calculatePositionMarginCost(openVolume, currentPrice, nil)
 				var shouldBuy, shouldSell bool
-				if posMarginCost > uint64((1.0-b.strategy.StakeFraction-b.strategy.OrdersFraction)*float64(generalBalance)) {
+				if posMarginCost > uint64((1.0-b.strategy.StakeFraction-b.strategy.OrdersFraction)*float64(b.balanceGeneral)) {
 					if openVolume > 0 {
 						shouldSell = true
 					} else if openVolume < 0 {
@@ -471,7 +506,17 @@ func (b *Bot) runPositionManagement() {
 				}
 			}
 
-			err = doze(time.Duration(b.strategy.PosManagementSleepMilliseconds)*time.Millisecond, b.stopPosMgmt)
+			if err == nil {
+				sleepTime = b.strategy.PosManagementSleepMilliseconds
+			} else {
+				sleepTime *= 2
+				b.log.WithFields(log.Fields{
+					"error":     err.Error(),
+					"sleepTime": sleepTime,
+				}).Warning("Error during position management")
+			}
+
+			err = doze(time.Duration(sleepTime)*time.Millisecond, b.stopPosMgmt)
 			if err != nil {
 				b.log.Debug("Stopping bot position management")
 				b.active = false
@@ -483,7 +528,9 @@ func (b *Bot) runPositionManagement() {
 
 func (b *Bot) runPriceSteering() {
 	var currentPrice, externalPrice uint64
+	var err error
 	var marketData *proto.MarketData
+	var externalPriceResponse ppservice.PriceResponse
 
 	ppcfg := ppconfig.PriceConfig{
 		Base:   "BTC",
@@ -491,6 +538,7 @@ func (b *Bot) runPriceSteering() {
 		Wander: true,
 	}
 
+	sleepTime := 1000.0 / b.strategy.MarketPriceSteeringRatePerSecond
 	for {
 		select {
 		case <-b.stopPriceSteer:
@@ -499,13 +547,21 @@ func (b *Bot) runPriceSteering() {
 			return
 
 		default:
-			externalPriceResponse, err := b.pricingEngine.GetPrice(ppcfg)
-			if err != nil {
-				b.log.WithFields(log.Fields{
-					"error": err.Error(),
-				}).Warning("Failed to get external price")
-			} else {
-				externalPrice = uint64(externalPriceResponse.Price * math.Pow10(int(b.market.DecimalPlaces)))
+			err = nil
+			if b.balanceGeneral == 0 {
+				b.log.Warning("Price steering: Zero balance in general account")
+				err = errors.New("zero general balance")
+			}
+
+			if err == nil {
+				externalPriceResponse, err = b.pricingEngine.GetPrice(ppcfg)
+				if err != nil {
+					b.log.WithFields(log.Fields{
+						"error": err.Error(),
+					}).Warning("Failed to get external price")
+				} else {
+					externalPrice = uint64(externalPriceResponse.Price * math.Pow10(int(b.market.DecimalPlaces)))
+				}
 			}
 
 			if err == nil {
@@ -520,12 +576,20 @@ func (b *Bot) runPriceSteering() {
 			}
 
 			if err == nil {
+				shouldMove := "no"
+				if externalPrice > currentPrice {
+					shouldMove = "UP"
+				} else if externalPrice < currentPrice {
+					shouldMove = "DN"
+				}
 				b.log.WithFields(log.Fields{
 					"currentPrice":  currentPrice,
 					"externalPrice": externalPrice,
+					"diff":          int(externalPrice) - int(currentPrice),
+					"shouldMove":    shouldMove,
 				}).Debug("Steering info")
 
-				expiration := time.Now().Add(time.Duration(1) * time.Minute)
+				expiration := time.Now().Add(time.Duration(30) * time.Second)
 
 				var side proto.Side
 				if externalPrice > currentPrice {
@@ -533,7 +597,7 @@ func (b *Bot) runPriceSteering() {
 				} else {
 					side = proto.Side_SIDE_SELL
 				}
-				for _, inc := range []uint64{0, 1, 2, 4, 8, 16, 32, 10000} {
+				for _, inc := range []uint64{1, 10, 100} {
 					req := &api.PrepareSubmitOrderRequest{
 						Submission: &proto.OrderSubmission{
 							Id:          "",
@@ -561,7 +625,7 @@ func (b *Bot) runPriceSteering() {
 				} else {
 					side = proto.Side_SIDE_BUY
 				}
-				for _, inc := range []uint64{0, 1, 2, 4, 8, 16, 32, 10000} {
+				for _, inc := range []uint64{1, 10, 100} {
 					req := &api.PrepareSubmitOrderRequest{
 						Submission: &proto.OrderSubmission{
 							Id:          "",
@@ -586,7 +650,17 @@ func (b *Bot) runPriceSteering() {
 				}
 			}
 
-			err = doze(time.Duration(1.0/b.strategy.MarketPriceSteeringRatePerSecond)*time.Second, b.stopPriceSteer)
+			if err == nil {
+				sleepTime = 1000.0 / b.strategy.MarketPriceSteeringRatePerSecond
+			} else {
+				sleepTime *= 2
+				b.log.WithFields(log.Fields{
+					"error":     err.Error(),
+					"sleepTime": sleepTime,
+				}).Warning("Error during price steering")
+			}
+
+			err = doze(time.Duration(sleepTime)*time.Millisecond, b.stopPriceSteer)
 			if err != nil {
 				b.log.Debug("Stopping bot market price steering")
 				b.active = false

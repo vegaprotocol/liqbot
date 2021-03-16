@@ -10,7 +10,7 @@ import (
 	time "time"
 
 	gomock "github.com/golang/mock/gomock"
-	api "github.com/vegaprotocol/api-clients/go/generated/code.vegaprotocol.io/vega/proto/api"
+	api "github.com/vegaprotocol/api/go/generated/code.vegaprotocol.io/vega/proto/api"
 )
 
 // MockNode is a mock of Node interface.

@@ -9,7 +9,7 @@ import (
 	e "code.vegaprotocol.io/liqbot/errors"
 
 	"github.com/pkg/errors"
-	"github.com/vegaprotocol/api-clients/go/generated/code.vegaprotocol.io/vega/proto/api"
+	"github.com/vegaprotocol/api/go/generated/code.vegaprotocol.io/vega/proto/api"
 	"google.golang.org/grpc"
 )
 

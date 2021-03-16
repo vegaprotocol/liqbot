@@ -6,7 +6,7 @@ import (
 	protobufproto "github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	uuid "github.com/satori/go.uuid"
-	"github.com/vegaprotocol/api-clients/go/generated/code.vegaprotocol.io/vega/proto/api"
+	"github.com/vegaprotocol/api/go/generated/code.vegaprotocol.io/vega/proto/api"
 )
 
 // Command is a one-byte prefix added to transactions.
