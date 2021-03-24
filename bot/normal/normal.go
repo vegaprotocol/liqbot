@@ -11,6 +11,7 @@ import (
 	"code.vegaprotocol.io/liqbot/config"
 	e "code.vegaprotocol.io/liqbot/errors"
 	"code.vegaprotocol.io/liqbot/node"
+	"code.vegaprotocol.io/vega/logging"
 
 	"code.vegaprotocol.io/go-wallet/wallet"
 	ppconfig "code.vegaprotocol.io/priceproxy/config"
@@ -65,6 +66,13 @@ type Bot struct {
 	walletPubKeyRaw  []byte // "XYZ" ...
 	walletPubKeyHex  string // "58595a" ...
 	walletToken      string
+}
+
+func max(a, b uint64) uint64 {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 // New returns a new instance of Bot.
@@ -354,7 +362,7 @@ func calculatePositionMarginCost(openVolume int64, currentPrice uint64, riskPara
 }
 
 func (b *Bot) runPositionManagement() {
-	var buys, sells []*proto.LiquidityOrder
+	var buyShape, sellShape []*proto.LiquidityOrder
 	var marketData *proto.MarketData
 	var positions []*proto.Position
 	var err error
@@ -387,6 +395,10 @@ func (b *Bot) runPositionManagement() {
 		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: -8, Proportion: 20},
 		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: -16, Proportion: 10},
 	}
+
+	// We always start off with longening shapes
+	buyShape = longeningBuys
+	sellShape = longeningSells
 
 	sleepTime := b.strategy.PosManagementSleepMilliseconds
 	for {
@@ -429,16 +441,39 @@ func (b *Bot) runPositionManagement() {
 				}
 			}
 
-			// defBuyingShapeMarginCost = CalculateMarginCost(risk model params, currentPrice, defaultBuyingShape)
+			// Turn the shapes into a set of orders scaled by commitment
+			buyOrders := b.CalculateOrderSizes(b.config.MarketID, b.walletPubKeyHex, 1000, buyShape, marketData.MidPrice)
+			sellOrders := b.CalculateOrderSizes(b.config.MarketID, b.walletPubKeyHex, 1000, sellShape, marketData.MidPrice)
 
-			// defSellingShapeMarginCost = CalculateMarginCost(risk model params, currentPrice, defaultSellingShape)
+			buyRisk := float64(0.15)
+			sellRisk := float64(0.10)
 
-			// shapeMarginCost = max(defBuyingShapeMarginCost,defSellingShapeMarginCost)
+			buyCost := b.CalculateMarginCost(buyRisk, marketData.MarkPrice, buyOrders)
+			sellCost := b.CalculateMarginCost(sellRisk, marketData.MarkPrice, sellOrders)
 
-			// if assetBalance * ordersFraction < shapeMarginCost
-			//     throw Error("Not enough collateral to safely keep orders up given current price, risk parameters and supplied default shapes.")
-			// else
-			//     proceed by submitting the LP order with the defaultBuyingShape to the market.
+			shapeMarginCost := max(buyCost, sellCost)
+
+			var ordersFraction uint64 = 1
+			if b.balanceGeneral*ordersFraction < shapeMarginCost {
+				b.log.Error("Not enough collateral to safely keep orders up given current price, risk parameters and supplied default shapes.")
+				return
+			} else {
+				// Submit LP order to market.
+				req := api.PrepareLiquidityProvisionRequest{
+					Submission: &proto.LiquidityProvisionSubmission{
+						MarketId:         b.config.MarketID,
+						CommitmentAmount: 1000,
+						Fee:              "0.05",
+						Sells:            sellShape,
+						Buys:             buyShape,
+					},
+				}
+				err = b.submitLiquidityProvision(&req)
+				if err != nil {
+					b.log.Error("Failed to send liquidity provision order", logging.Error(err))
+					return
+				}
+			}
 
 			if err == nil {
 				positions, err = b.getPositions()
@@ -459,12 +494,12 @@ func (b *Bot) runPositionManagement() {
 				var shape string
 				if openVolume <= 0 {
 					shape = "longening"
-					buys = longeningBuys
-					sells = longeningSells
+					buyShape = longeningBuys
+					sellShape = longeningSells
 				} else {
 					shape = "shortening"
-					buys = shorteningBuys
-					sells = shorteningSells
+					buyShape = shorteningBuys
+					sellShape = shorteningSells
 				}
 
 				b.log.WithFields(log.Fields{
@@ -475,7 +510,7 @@ func (b *Bot) runPositionManagement() {
 					"shape":          shape,
 				}).Debug("Position management info")
 
-				err = b.manageLiquidityProvision(buys, sells)
+				err = b.manageLiquidityProvision(buyShape, sellShape)
 				if err != nil {
 					b.log.WithFields(log.Fields{
 						"error": err.Error(),
@@ -524,6 +559,55 @@ func (b *Bot) runPositionManagement() {
 			}
 		}
 	}
+}
+
+// The size of the orders is calculated using the total commitment, price, distance from mid and chance of trading
+// liquidity.supplied.updateSizes(obligation, currentPrice, liquidityOrders, true, minPrice, maxPrice)
+func (b *Bot) CalculateOrderSizes(marketID, partyID string, obligation float64, liquidityOrders []*proto.LiquidityOrder, midPrice uint64) []*proto.Order {
+	orders := make([]*proto.Order, 0, len(liquidityOrders))
+	// Work out the total proportion for the shape
+	var totalProportion uint32
+	for _, order := range liquidityOrders {
+		totalProportion += order.Proportion
+	}
+
+	// Now size up the orders and create the real order objects
+	for _, lo := range liquidityOrders {
+		prob := 0.3 // Need to make this more accurate later
+		fraction := float64(lo.Proportion) / float64(totalProportion)
+		scaling := fraction / prob
+		size := uint64(math.Ceil(obligation * scaling / float64(midPrice)))
+
+		peggedOrder := proto.PeggedOrder{
+			Reference: lo.Reference,
+			Offset:    lo.Offset,
+		}
+
+		order := proto.Order{
+			MarketId:    marketID,
+			PartyId:     partyID,
+			Side:        proto.Side_SIDE_BUY,
+			Remaining:   size,
+			Size:        size,
+			TimeInForce: proto.Order_TIME_IN_FORCE_GTC,
+			Type:        proto.Order_TYPE_LIMIT,
+			PeggedOrder: &peggedOrder,
+		}
+		orders = append(orders, &order)
+	}
+	return orders
+}
+
+func (b *Bot) CalculateMarginCost(risk float64, markPrice uint64, orders []*proto.Order) uint64 {
+	var totalMargin uint64
+	for _, order := range orders {
+		if order.Side == proto.Side_SIDE_BUY {
+			totalMargin += uint64((risk * float64(markPrice)) + (float64(order.Size) * risk * float64(markPrice)))
+		} else {
+			totalMargin += uint64(float64(order.Size) * risk * float64(markPrice))
+		}
+	}
+	return totalMargin
 }
 
 func (b *Bot) runPriceSteering() {
