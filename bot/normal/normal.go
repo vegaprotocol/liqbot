@@ -75,6 +75,13 @@ func max(a, b uint64) uint64 {
 	return b
 }
 
+func abs(a int64) int64 {
+	if a < 0 {
+		return -a
+	}
+	return a
+}
+
 // New returns a new instance of Bot.
 func New(config config.BotConfig, pe PricingEngine, ws wallet.WalletHandler) (b *Bot, err error) {
 	b = &Bot{
@@ -87,7 +94,7 @@ func New(config config.BotConfig, pe PricingEngine, ws wallet.WalletHandler) (b 
 		walletServer:  ws,
 	}
 
-	b.strategy, err = readStrategyConfig(config.StrategyDetails)
+	b.strategy, err = validateStrategyConfig(config.StrategyDetails)
 	if err != nil {
 		err = errors.Wrap(err, "failed to read strategy details")
 		return
@@ -158,7 +165,7 @@ func (b *Bot) Start() error {
 	b.stopPriceSteer = make(chan bool)
 
 	go b.runPositionManagement()
-	go b.runPriceSteering()
+	//	go b.runPriceSteering()
 
 	return nil
 }
@@ -277,9 +284,9 @@ func (b *Bot) manageLiquidityProvision(buys, sells []*proto.LiquidityOrder) erro
 
 	sub := &api.PrepareLiquidityProvisionRequest{
 		Submission: &proto.LiquidityProvisionSubmission{
-			Fee:              "0.01",
+			Fee:              b.config.StrategyDetails.Fee,
 			MarketId:         b.market.Id,
-			CommitmentAmount: 100000000,
+			CommitmentAmount: b.strategy.CommitmentAmount,
 			Buys:             buys,
 			Sells:            sells,
 		},
@@ -369,36 +376,9 @@ func (b *Bot) runPositionManagement() {
 	var currentPrice uint64
 	var openVolume int64
 
-	// TODO: extract into config file
-	longeningSells := []*proto.LiquidityOrder{
-		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_ASK, Offset: 16, Proportion: 10},
-		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_ASK, Offset: 8, Proportion: 20},
-		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_ASK, Offset: 4, Proportion: 30},
-		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_ASK, Offset: 2, Proportion: 40},
-	}
-	longeningBuys := []*proto.LiquidityOrder{
-		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: -1, Proportion: 40},
-		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: -2, Proportion: 30},
-		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: -4, Proportion: 20},
-		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: -8, Proportion: 10},
-	}
-
-	shorteningSells := []*proto.LiquidityOrder{
-		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_ASK, Offset: 8, Proportion: 10},
-		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_ASK, Offset: 4, Proportion: 20},
-		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_ASK, Offset: 2, Proportion: 30},
-		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_ASK, Offset: 1, Proportion: 40},
-	}
-	shorteningBuys := []*proto.LiquidityOrder{
-		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: -2, Proportion: 40},
-		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: -4, Proportion: 30},
-		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: -8, Proportion: 20},
-		{Reference: proto.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: -16, Proportion: 10},
-	}
-
 	// We always start off with longening shapes
-	buyShape = longeningBuys
-	sellShape = longeningSells
+	buyShape = b.strategy.LongeningShape.Buys
+	sellShape = b.strategy.LongeningShape.Sells
 
 	sleepTime := b.strategy.PosManagementSleepMilliseconds
 	for {
@@ -442,8 +422,8 @@ func (b *Bot) runPositionManagement() {
 			}
 
 			// Turn the shapes into a set of orders scaled by commitment
-			buyOrders := b.CalculateOrderSizes(b.config.MarketID, b.walletPubKeyHex, 1000, buyShape, marketData.MidPrice)
-			sellOrders := b.CalculateOrderSizes(b.config.MarketID, b.walletPubKeyHex, 1000, sellShape, marketData.MidPrice)
+			buyOrders := b.CalculateOrderSizes(b.config.MarketID, b.walletPubKeyHex, float64(b.strategy.CommitmentAmount), buyShape, marketData.MidPrice)
+			sellOrders := b.CalculateOrderSizes(b.config.MarketID, b.walletPubKeyHex, float64(b.strategy.CommitmentAmount), sellShape, marketData.MidPrice)
 
 			buyRisk := float64(0.15)
 			sellRisk := float64(0.10)
@@ -462,8 +442,8 @@ func (b *Bot) runPositionManagement() {
 				req := api.PrepareLiquidityProvisionRequest{
 					Submission: &proto.LiquidityProvisionSubmission{
 						MarketId:         b.config.MarketID,
-						CommitmentAmount: 1000,
-						Fee:              "0.05",
+						CommitmentAmount: uint64(b.strategy.CommitmentAmount),
+						Fee:              b.config.StrategyDetails.Fee,
 						Sells:            sellShape,
 						Buys:             buyShape,
 					},
@@ -494,12 +474,12 @@ func (b *Bot) runPositionManagement() {
 				var shape string
 				if openVolume <= 0 {
 					shape = "longening"
-					buyShape = longeningBuys
-					sellShape = longeningSells
+					buyShape = b.strategy.LongeningShape.Buys
+					sellShape = b.strategy.LongeningShape.Sells
 				} else {
 					shape = "shortening"
-					buyShape = shorteningBuys
-					sellShape = shorteningSells
+					buyShape = b.strategy.ShorteningShape.Buys
+					sellShape = b.strategy.ShorteningShape.Sells
 				}
 
 				b.log.WithFields(log.Fields{
@@ -535,9 +515,31 @@ func (b *Bot) runPositionManagement() {
 				}
 
 				if shouldBuy {
-					b.log.Debug("TODO: place a market buy order for posManagementFraction x position volume")
+					request := &api.PrepareSubmitOrderRequest{
+						Submission: &proto.OrderSubmission{
+							MarketId:    b.market.Id,
+							PartyId:     b.walletPubKeyHex,
+							Size:        uint64(float64(abs(openVolume)) * b.strategy.PosManagementFraction),
+							Side:        proto.Side_SIDE_BUY,
+							TimeInForce: proto.Order_TIME_IN_FORCE_IOC,
+							Type:        proto.Order_TYPE_MARKET,
+							Reference:   "PosManagement",
+						},
+					}
+					b.submitOrder(request)
 				} else if shouldSell {
-					b.log.Debug("TODO: place a market sell order for posManagementFraction x (-position) volume")
+					request := &api.PrepareSubmitOrderRequest{
+						Submission: &proto.OrderSubmission{
+							MarketId:    b.market.Id,
+							PartyId:     b.walletPubKeyHex,
+							Size:        uint64(float64(abs(openVolume)) * b.strategy.PosManagementFraction),
+							Side:        proto.Side_SIDE_SELL,
+							TimeInForce: proto.Order_TIME_IN_FORCE_IOC,
+							Type:        proto.Order_TYPE_MARKET,
+							Reference:   "PosManagement",
+						},
+					}
+					b.submitOrder(request)
 				}
 			}
 
@@ -573,10 +575,12 @@ func (b *Bot) CalculateOrderSizes(marketID, partyID string, obligation float64, 
 
 	// Now size up the orders and create the real order objects
 	for _, lo := range liquidityOrders {
-		prob := 0.3 // Need to make this more accurate later
+		prob := 0.10 // Need to make this more accurate later
 		fraction := float64(lo.Proportion) / float64(totalProportion)
 		scaling := fraction / prob
 		size := uint64(math.Ceil(obligation * scaling / float64(midPrice)))
+
+		//		b.log.Debugf("Sizing Info: Size:%d Offset:%d\n", size, lo.Offset)
 
 		peggedOrder := proto.PeggedOrder{
 			Reference: lo.Reference,
@@ -755,7 +759,8 @@ func (b *Bot) runPriceSteering() {
 }
 
 func (b *Bot) setupWallet() (err error) {
-	b.walletPassphrase = "DCBAabcd1357!#&*" + b.config.Name
+	//	b.walletPassphrase = "DCBAabcd1357!#&*" + b.config.Name
+	b.walletPassphrase = "123"
 
 	if b.walletToken == "" {
 		b.walletToken, err = b.walletServer.LoginWallet(b.config.Name, b.walletPassphrase)

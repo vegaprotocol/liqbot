@@ -1,0 +1,112 @@
+---
+
+server:
+  env: prod  # dev, prod
+  listen: ":7800"
+  logformat: text  # json, text
+  loglevel: debug  # debug, info, warning, error
+pricing:
+  address:
+    scheme: https
+    host: prices.ops.vega.xyz
+    path: /prices
+wallet:
+#  rootPath: .liqbot  # in $HOME, unless rootPath starts with a "/"
+  rootPath: dockerised-pete/vega/wallet/.vega-walletserver  # in $HOME, unless rootPath starts with a "/"
+  tokenExpiry: 31536000  # seconds
+bots:
+  - name: w00
+    location: localhost:1002
+    connectTimeout: 30000  # milliseconds
+    callTimeout: 10000  # milliseconds
+    marketID: 9ae615aaf8960e8d253fe954d4f23ede93e20738892ec4da7d87a6eb6408ccd8  # BTC/USD
+    strategy: normal
+    strategyDetails:
+      expectedMarkPrice: 0
+      auctionVolume: 0
+      maxLong: 1000
+      maxShort: 1000
+      posManagementFraction: 0.25
+      stakeFraction: 0.1
+      ordersFraction: 0.25
+      commitmentAmount: 100000000
+      fee: 0.01
+
+      shorteningShape:
+        sells:
+          - reference: Ask
+            proportion: 10
+            offset: 8
+          - reference: Ask
+            proportion: 20
+            offset: 4
+          - reference: Ask
+            proportion: 30
+            offset: 2
+          - reference: Ask
+            proportion: 40
+            offset: 1
+        buys:
+          - reference: Bid
+            proportion: 40
+            offset: -2
+          - reference: Bid
+            proportion: 30
+            offset: -4
+          - reference: Bid
+            proportion: 20
+            offset: -8
+          - reference: Bid
+            proportion: 10
+            offset: -16
+      longeningShape:
+        sells:
+          - reference: Ask
+            proportion: 10
+            offset: 16
+          - reference: Ask
+            proportion: 20
+            offset: 8
+          - reference: Ask
+            proportion: 30
+            offset: 4
+          - reference: Ask
+            proportion: 40
+            offset: 2
+        buys:
+          - reference: Bid
+            proportion: 40
+            offset: -1
+          - reference: Bid
+            proportion: 30
+            offset: -2
+          - reference: Bid
+            proportion: 20
+            offset: -4
+          - reference: Bid
+            proportion: 10
+            offset: -8
+      posManagementSleepMilliseconds: 5050
+      marketPriceSteeringRatePerSecond: 0.1
+      limitOrderDistributionParams: 'TBD, json or yaml'
+      targetLNVol: 0.0
+#  - name: w03
+#    location: localhost:1002
+#    connectTimeout: 30000  # milliseconds
+#    callTimeout: 10000  # milliseconds
+#    marketID: c0a7c34226537dfa88c50d3f45a9d211efc161c31c3df66b5a4e9b975679c1de  # BTC/USD
+#    strategy: normal
+#    strategyDetails:
+#      expectedMarkPrice: 0
+#      auctionVolume: 0
+#      maxLong: 1000
+#      maxShort: 1000
+#      posManagementFraction: 0.25
+#      stakeFraction: 0.1
+#      ordersFraction: 0.25
+#      shorteningShape: TBD
+#      longeningShape: TBD
+#      posManagementSleepMilliseconds: 5050
+#      marketPriceSteeringRatePerSecond: 0.1
+#      limitOrderDistributionParams: 'TBD, json or yaml'
+#      targetLNVol: 0.0

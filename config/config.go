@@ -48,7 +48,39 @@ type BotConfig struct {
 	Strategy string `yaml:"strategy"`
 
 	// StrategyDetails contains the parameters needed by the strategy algorithm
-	StrategyDetails map[string]string `yaml:"strategyDetails"`
+	StrategyDetails Strategy `yaml:"strategyDetails"`
+}
+
+type Strategy struct {
+	ExpectedMarkPrice     uint64  `yaml:"expectedMarkPrice"`
+	AuctionVolume         uint64  `yaml:"auctionVolume"`
+	MaxLong               uint64  `yaml:"maxLong"`
+	MaxShort              uint64  `yaml:"maxShort"`
+	PosManagementFraction float64 `yaml:"posManagementFraction"`
+	StakeFraction         float64 `yaml:"stakeFraction"`
+	OrdersFraction        float64 `yaml:"ordersFraction"`
+
+	CommitmentAmount uint64 `yaml:"commitmentAmount"`
+	Fee              string `yaml:"fee"`
+
+	PosManagementSleepMilliseconds   int     `yaml:"posManagementSleepMilliseconds"`
+	MarketPriceSteeringRatePerSecond float64 `yaml:"marketPriceSteeringRatePerSecond"`
+	LimitOrderDistributionParams     string  `yaml:"limitOrderDistributionParams"`
+	TargetLNVol                      float64 `yaml:"targetLNVol"`
+
+	ShorteningShape Shape `yaml:"shorteningShape"`
+	LongeningShape  Shape `yaml:"longeningShape"`
+}
+
+type Shape struct {
+	Sells []LiquidityOrder `yaml:"sells"`
+	Buys  []LiquidityOrder `yaml:"buys"`
+}
+
+type LiquidityOrder struct {
+	Reference  string `yaml:"reference"`
+	Proportion uint32 `yaml:"proportion"`
+	Offset     int64  `yaml:"offset"`
 }
 
 // WalletConfig describes the settings for running an internal wallet server
