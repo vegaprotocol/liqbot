@@ -260,28 +260,7 @@ func (b *Bot) submitOrder(sub *api.PrepareSubmitOrderRequest) error {
 	return nil
 }
 
-func (b *Bot) manageLiquidityProvision(buys, sells []*proto.LiquidityOrder) error {
-	// lpReq := &api.LiquidityProvisionsRequest{
-	// 	Market: b.market.Id,
-	// 	Party:  b.walletPubKeyHex,
-	// }
-	// lpResponse, err := b.node.LiquidityProvisions(lpReq)
-	// if err != nil {
-	// 	return errors.Wrap(err, "failed to get liquidity provisions")
-	// }
-	// if len(lpResponse.LiquidityProvisions) > 0 {
-	// 	b.log.WithFields(log.Fields{
-	// 		"count": len(lpResponse.LiquidityProvisions),
-	// 	}).Debug("Liquidity provision already exists")
-	// 	for i, lp := range lpResponse.LiquidityProvisions {
-	// 		b.log.WithFields(log.Fields{
-	// 			"i":  i,
-	// 			"lp": lp,
-	// 		}).Debug("Liquidity provision detail")
-	// 	}
-	// 	return nil
-	// }
-
+func (b *Bot) sendLiquidityProvision(buys, sells []*proto.LiquidityOrder) error {
 	sub := &api.PrepareLiquidityProvisionRequest{
 		Submission: &proto.LiquidityProvisionSubmission{
 			Fee:              b.config.StrategyDetails.Fee,
@@ -375,6 +354,8 @@ func (b *Bot) runPositionManagement() {
 	var err error
 	var currentPrice uint64
 	var openVolume int64
+	var previousOpenVolume int64
+	var firstTime bool = true
 
 	// We always start off with longening shapes
 	buyShape = b.strategy.LongeningShape.Buys
@@ -421,37 +402,30 @@ func (b *Bot) runPositionManagement() {
 				}
 			}
 
-			// Turn the shapes into a set of orders scaled by commitment
-			buyOrders := b.CalculateOrderSizes(b.config.MarketID, b.walletPubKeyHex, float64(b.strategy.CommitmentAmount), buyShape, marketData.MidPrice)
-			sellOrders := b.CalculateOrderSizes(b.config.MarketID, b.walletPubKeyHex, float64(b.strategy.CommitmentAmount), sellShape, marketData.MidPrice)
+			if firstTime {
+				// Turn the shapes into a set of orders scaled by commitment
+				buyOrders := b.CalculateOrderSizes(b.config.MarketID, b.walletPubKeyHex, float64(b.strategy.CommitmentAmount), buyShape, marketData.MidPrice)
+				sellOrders := b.CalculateOrderSizes(b.config.MarketID, b.walletPubKeyHex, float64(b.strategy.CommitmentAmount), sellShape, marketData.MidPrice)
 
-			buyRisk := float64(0.15)
-			sellRisk := float64(0.10)
+				buyRisk := float64(0.15)
+				sellRisk := float64(0.10)
 
-			buyCost := b.CalculateMarginCost(buyRisk, marketData.MarkPrice, buyOrders)
-			sellCost := b.CalculateMarginCost(sellRisk, marketData.MarkPrice, sellOrders)
+				buyCost := b.CalculateMarginCost(buyRisk, marketData.MarkPrice, buyOrders)
+				sellCost := b.CalculateMarginCost(sellRisk, marketData.MarkPrice, sellOrders)
 
-			shapeMarginCost := max(buyCost, sellCost)
+				shapeMarginCost := max(buyCost, sellCost)
 
-			var ordersFraction uint64 = 1
-			if b.balanceGeneral*ordersFraction < shapeMarginCost {
-				b.log.Error("Not enough collateral to safely keep orders up given current price, risk parameters and supplied default shapes.")
-				return
-			} else {
-				// Submit LP order to market.
-				req := api.PrepareLiquidityProvisionRequest{
-					Submission: &proto.LiquidityProvisionSubmission{
-						MarketId:         b.config.MarketID,
-						CommitmentAmount: uint64(b.strategy.CommitmentAmount),
-						Fee:              b.config.StrategyDetails.Fee,
-						Sells:            sellShape,
-						Buys:             buyShape,
-					},
-				}
-				err = b.submitLiquidityProvision(&req)
-				if err != nil {
-					b.log.Error("Failed to send liquidity provision order", logging.Error(err))
+				if float64(b.balanceGeneral)*b.strategy.OrdersFraction < float64(shapeMarginCost) {
+					b.log.Error("Not enough collateral to safely keep orders up given current price, risk parameters and supplied default shapes.")
 					return
+				} else {
+					// Submit LP order to market.
+					err = b.sendLiquidityProvision(buyShape, sellShape)
+					if err != nil {
+						b.log.Error("Failed to send liquidity provision order", logging.Error(err))
+						return
+					}
+					firstTime = false
 				}
 			}
 
@@ -490,13 +464,18 @@ func (b *Bot) runPositionManagement() {
 					"shape":          shape,
 				}).Debug("Position management info")
 
-				err = b.manageLiquidityProvision(buyShape, sellShape)
-				if err != nil {
-					b.log.WithFields(log.Fields{
-						"error": err.Error(),
-					}).Warning("Failed to manage liquidity provision")
-				}
+				// If we flipped then send the new LP order
+				if (openVolume >= 0 && previousOpenVolume <= 0) ||
+					(openVolume <= 0 && previousOpenVolume >= 0) {
 
+					err = b.sendLiquidityProvision(buyShape, sellShape)
+					if err != nil {
+						b.log.WithFields(log.Fields{
+							"error": err.Error(),
+						}).Warning("Failed to send liquidity provision")
+					}
+				}
+				previousOpenVolume = openVolume
 			}
 
 			if err == nil {

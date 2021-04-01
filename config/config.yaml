@@ -19,7 +19,7 @@ bots:
     location: localhost:1002
     connectTimeout: 30000  # milliseconds
     callTimeout: 10000  # milliseconds
-    marketID: 9ae615aaf8960e8d253fe954d4f23ede93e20738892ec4da7d87a6eb6408ccd8  # BTC/USD
+    marketID: ed5cb3b79e7140da3013b58c67159e72162988795cffc3e5310c1c36bd74d691  # BTC/USD
     strategy: normal
     strategyDetails:
       expectedMarkPrice: 0
@@ -29,7 +29,7 @@ bots:
       posManagementFraction: 0.25
       stakeFraction: 0.1
       ordersFraction: 0.25
-      commitmentAmount: 100000000
+      commitmentAmount: 10000000000
       fee: 0.01
 
       shorteningShape:
