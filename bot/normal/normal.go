@@ -11,7 +11,6 @@ import (
 	"code.vegaprotocol.io/liqbot/config"
 	e "code.vegaprotocol.io/liqbot/errors"
 	"code.vegaprotocol.io/liqbot/node"
-	"code.vegaprotocol.io/vega/logging"
 
 	"code.vegaprotocol.io/go-wallet/wallet"
 	ppconfig "code.vegaprotocol.io/priceproxy/config"
@@ -20,6 +19,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/vegaprotocol/api/go/generated/code.vegaprotocol.io/vega/proto"
 	"github.com/vegaprotocol/api/go/generated/code.vegaprotocol.io/vega/proto/api"
+	"go.uber.org/zap"
 )
 
 // Node is a Vega gRPC node
@@ -422,7 +422,7 @@ func (b *Bot) runPositionManagement() {
 					// Submit LP order to market.
 					err = b.sendLiquidityProvision(buyShape, sellShape)
 					if err != nil {
-						b.log.Error("Failed to send liquidity provision order", logging.Error(err))
+						b.log.Error("Failed to send liquidity provision order", zap.Error(err))
 						return
 					}
 					firstTime = false
