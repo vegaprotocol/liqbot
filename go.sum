@@ -141,6 +141,7 @@ github.com/sirupsen/logrus v1.7.0 h1:ShrD1U9pZB12TX0cVy0DtePoCH97K8EtX+mg7ZARUtM
 github.com/sirupsen/logrus v1.7.0/go.mod h1:yWOB1SBYBC5VeMP7gHvWumXLIWorT60ONWic61uBYv0=
 github.com/sirupsen/logrus v1.8.0 h1:nfhvjKcUMhBMVqbKHJlk5RPrrfYr/NMo3692g0dwfWU=
 github.com/sirupsen/logrus v1.8.0/go.mod h1:4GuYW9TZmE769R5STWrRakJc4UqQ3+QQ95fyz7ENv1A=
+github.com/sirupsen/logrus v1.8.1 h1:dJKuHgqk1NNQlqoA6BTlM1Wf9DOH3NBjQyu0h9+AZZE=
 github.com/sirupsen/logrus v1.8.1/go.mod h1:yWOB1SBYBC5VeMP7gHvWumXLIWorT60ONWic61uBYv0=
 github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966/go.mod h1:sUM3LWHvSMaG192sy56D9F7CNvL7jUJVXoqM1QKLnog=
 github.com/soheilhy/cmux v0.1.4/go.mod h1:IM3LyeVVIOuxMH7sFAkER9+bJ4dT7Ms6E4xg4kGIyLM=
@@ -166,6 +167,8 @@ github.com/ugorji/go v1.1.4/go.mod h1:uQMGLiO92mf5W77hV/PUCpI3pbzQx3CRekS0kk+RGr
 github.com/vegaprotocol/api-clients v0.30.3-0.20210209095344-3a9425de980a/go.mod h1:FSy8HG+7TserVjTdvxUgmSEH9tEqwbVr0y30VyA+H1c=
 github.com/vegaprotocol/api-clients v0.32.0 h1:Cwxv0JgTvLttZuP0VPJxJsSZAfA1cVcxwunM2Q8Ehp4=
 github.com/vegaprotocol/api-clients v0.32.0/go.mod h1:FSy8HG+7TserVjTdvxUgmSEH9tEqwbVr0y30VyA+H1c=
+github.com/vegaprotocol/api-clients v0.34.0 h1:KFmzEUo1AeMWp37MDOs619ys+OpjMKD2GPccBdYWa/w=
+github.com/vegaprotocol/api-clients v0.34.0/go.mod h1:FSy8HG+7TserVjTdvxUgmSEH9tEqwbVr0y30VyA+H1c=
 github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2/go.mod h1:UETIi67q53MR2AWcXfiuqkDkRtnGDLqkBTpCHuJHxtU=
 github.com/xordataexchange/crypt v0.0.3-0.20170626215501-b2862e3d0a77/go.mod h1:aYKd//L2LvnjZzWKhF00oedf4jCCReLcmhLdhm1A27Q=
 github.com/zannen/toml v0.3.2 h1:IYPp4GVtabUyQpzSU6xP1VDyKR3Ico3qhNP2VxCkl2Y=
