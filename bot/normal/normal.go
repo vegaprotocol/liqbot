@@ -141,28 +141,11 @@ func (b *Bot) Start() error {
 	}).Debug("Fetched market info")
 
 	b.balanceGeneral = 0
-	for {
-		err = b.getAccountGeneral()
-		if err != nil {
-			b.log.WithFields(log.Fields{
-				"error": err.Error(),
-			}).Debug("Failed to get general balance")
-		} else {
-			if b.balanceGeneral > 0 {
-				b.log.WithFields(log.Fields{
-					"general": b.balanceGeneral,
-				}).Debug("Fetched general balance")
-				break
-			} else {
-				b.log.Warning("Waiting for positive general balance")
-			}
-		}
-		time.Sleep(time.Second)
-	}
+	b.balanceMargin = 0
 
 	b.active = true
 	b.stopPosMgmt = make(chan bool)
-	b.stopPriceSteer = make(chan bool)
+	// b.stopPriceSteer = make(chan bool)
 
 	go b.runPositionManagement()
 	//	go b.runPriceSteering()
@@ -348,6 +331,29 @@ func calculatePositionMarginCost(openVolume int64, currentPrice uint64, riskPara
 }
 
 func (b *Bot) runPositionManagement() {
+	sleepTime := b.strategy.PosManagementSleepMilliseconds
+	for {
+		err := b.getAccountGeneral()
+		if err != nil {
+			b.log.WithFields(log.Fields{
+				"error": err.Error(),
+			}).Debug("Failed to get general balance")
+		} else {
+			if b.balanceGeneral > 0 {
+				b.log.WithFields(log.Fields{
+					"general": b.balanceGeneral,
+				}).Debug("Fetched general balance")
+				break
+			} else {
+				b.log.WithFields(log.Fields{
+					"asset": b.settlementAsset,
+				}).Warning("Waiting for positive general balance")
+			}
+		}
+		sleepTime += 250
+		time.Sleep(time.Duration(sleepTime) * time.Millisecond)
+	}
+
 	var buyShape, sellShape []*proto.LiquidityOrder
 	var marketData *proto.MarketData
 	var positions []*proto.Position
@@ -361,7 +367,7 @@ func (b *Bot) runPositionManagement() {
 	buyShape = b.strategy.LongeningShape.Buys
 	sellShape = b.strategy.LongeningShape.Sells
 
-	sleepTime := b.strategy.PosManagementSleepMilliseconds
+	sleepTime = b.strategy.PosManagementSleepMilliseconds
 	for {
 		select {
 		case <-b.stopPosMgmt:
@@ -415,15 +421,21 @@ func (b *Bot) runPositionManagement() {
 
 				shapeMarginCost := max(buyCost, sellCost)
 
-				if float64(b.balanceGeneral)*b.strategy.OrdersFraction < float64(shapeMarginCost) {
-					b.log.Error("Not enough collateral to safely keep orders up given current price, risk parameters and supplied default shapes.")
-					return
+				avail := int64(float64(b.balanceGeneral) * b.strategy.OrdersFraction)
+				cost := int64(float64(shapeMarginCost))
+				if avail < cost {
+					b.log.WithFields(log.Fields{
+						"available":       avail,
+						"cost":            cost,
+						"missing":         avail - cost,
+						"missing_percent": (cost - avail) * 100 / avail,
+					}).Error("Not enough collateral to safely keep orders up given current price, risk parameters and supplied default shapes.")
+					err = errors.New("not enough collateral")
 				} else {
 					// Submit LP order to market.
 					err = b.sendLiquidityProvision(buyShape, sellShape)
 					if err != nil {
 						b.log.Error("Failed to send liquidity provision order", zap.Error(err))
-						return
 					}
 					firstTime = false
 				}
@@ -782,6 +794,7 @@ func (b *Bot) setupWallet() (err error) {
 			return errors.Wrap(err, "failed to decode hex pubkey")
 		}
 	}
+	b.log = b.log.WithFields(log.Fields{"pubkey": b.walletPubKeyHex})
 	return
 }
 
