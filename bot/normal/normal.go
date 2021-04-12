@@ -330,7 +330,7 @@ func calculatePositionMarginCost(openVolume int64, currentPrice uint64, riskPara
 	return 1
 }
 
-func (b *Bot) runPositionManagement() {
+func (b *Bot) waitForGeneralAccountBalance() {
 	sleepTime := b.strategy.PosManagementSleepMilliseconds
 	for {
 		err := b.getAccountGeneral()
@@ -350,10 +350,15 @@ func (b *Bot) runPositionManagement() {
 				}).Warning("Waiting for positive general balance")
 			}
 		}
-		sleepTime += 250
+
+		if sleepTime < 9000 {
+			sleepTime += 1000
+		}
 		time.Sleep(time.Duration(sleepTime) * time.Millisecond)
 	}
+}
 
+func (b *Bot) runPositionManagement() {
 	var buyShape, sellShape []*proto.LiquidityOrder
 	var marketData *proto.MarketData
 	var positions []*proto.Position
@@ -367,7 +372,7 @@ func (b *Bot) runPositionManagement() {
 	buyShape = b.strategy.LongeningShape.Buys
 	sellShape = b.strategy.LongeningShape.Sells
 
-	sleepTime = b.strategy.PosManagementSleepMilliseconds
+	sleepTime := b.strategy.PosManagementSleepMilliseconds
 	for {
 		select {
 		case <-b.stopPosMgmt:
@@ -376,25 +381,15 @@ func (b *Bot) runPositionManagement() {
 			return
 
 		default:
-			err = b.getAccountGeneral()
+			// At the start of each loop, wait for positive general account balance. This is in case the network has
+			// been restarted.
+			b.waitForGeneralAccountBalance()
+
+			err = b.getAccountMargin()
 			if err != nil {
 				b.log.WithFields(log.Fields{
 					"error": err.Error(),
-				}).Warning("Failed to get general account balance")
-			} else {
-				if b.balanceGeneral == 0 {
-					b.log.Warning("Position management: Zero balance in general account")
-					err = errors.New("zero general balance")
-				}
-			}
-
-			if err == nil {
-				err = b.getAccountMargin()
-				if err != nil {
-					b.log.WithFields(log.Fields{
-						"error": err.Error(),
-					}).Warning("Failed to get margin account balance")
-				}
+				}).Warning("Failed to get margin account balance")
 			}
 
 			if err == nil {
@@ -537,7 +532,9 @@ func (b *Bot) runPositionManagement() {
 			if err == nil {
 				sleepTime = b.strategy.PosManagementSleepMilliseconds
 			} else {
-				sleepTime *= 2
+				if sleepTime < 29000 {
+					sleepTime += 1000
+				}
 				b.log.WithFields(log.Fields{
 					"error":     err.Error(),
 					"sleepTime": sleepTime,
@@ -626,21 +623,17 @@ func (b *Bot) runPriceSteering() {
 			return
 
 		default:
-			err = nil
-			if b.balanceGeneral == 0 {
-				b.log.Warning("Price steering: Zero balance in general account")
-				err = errors.New("zero general balance")
-			}
+			// At the start of each loop, wait for positive general account balance. This is in case the network has
+			// been restarted.
+			b.waitForGeneralAccountBalance()
 
-			if err == nil {
-				externalPriceResponse, err = b.pricingEngine.GetPrice(ppcfg)
-				if err != nil {
-					b.log.WithFields(log.Fields{
-						"error": err.Error(),
-					}).Warning("Failed to get external price")
-				} else {
-					externalPrice = uint64(externalPriceResponse.Price * math.Pow10(int(b.market.DecimalPlaces)))
-				}
+			externalPriceResponse, err = b.pricingEngine.GetPrice(ppcfg)
+			if err != nil {
+				b.log.WithFields(log.Fields{
+					"error": err.Error(),
+				}).Warning("Failed to get external price")
+			} else {
+				externalPrice = uint64(externalPriceResponse.Price * math.Pow10(int(b.market.DecimalPlaces)))
 			}
 
 			if err == nil {
@@ -732,7 +725,9 @@ func (b *Bot) runPriceSteering() {
 			if err == nil {
 				sleepTime = 1000.0 / b.strategy.MarketPriceSteeringRatePerSecond
 			} else {
-				sleepTime *= 2
+				if sleepTime < 29000 {
+					sleepTime += 1000
+				}
 				b.log.WithFields(log.Fields{
 					"error":     err.Error(),
 					"sleepTime": sleepTime,
