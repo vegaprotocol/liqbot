@@ -17,8 +17,9 @@ import (
 	ppservice "code.vegaprotocol.io/priceproxy/service"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
-	"github.com/vegaprotocol/api/go/generated/code.vegaprotocol.io/vega/proto"
-	"github.com/vegaprotocol/api/go/generated/code.vegaprotocol.io/vega/proto/api"
+	"github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto"
+	"github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto/api"
+	"github.com/vegaprotocol/api/grpc/clients/go/txn"
 	"go.uber.org/zap"
 )
 
@@ -217,7 +218,7 @@ func (b *Bot) signSubmitTx(blob []byte, typ api.SubmitTransactionRequest_Type) e
 
 func (b *Bot) submitLiquidityProvision(sub *api.PrepareLiquidityProvisionRequest) error {
 	// Prepare tx, without talking to a Vega node
-	prepared, err := node.PrepareLiquidityProvision(sub)
+	prepared, err := txn.PrepareLiquidityProvision(sub)
 	if err != nil {
 		return errors.Wrap(err, "failed to prepare tx")
 	}
@@ -231,7 +232,7 @@ func (b *Bot) submitLiquidityProvision(sub *api.PrepareLiquidityProvisionRequest
 
 func (b *Bot) submitOrder(sub *api.PrepareSubmitOrderRequest) error {
 	// Prepare tx, without talking to a Vega node
-	prepared, err := node.PrepareSubmitOrder(sub)
+	prepared, err := txn.PrepareSubmitOrder(sub)
 	if err != nil {
 		return errors.Wrap(err, "failed to prepare tx")
 	}

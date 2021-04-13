@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"code.vegaprotocol.io/liqbot/config"
-	"github.com/vegaprotocol/api/go/generated/code.vegaprotocol.io/vega/proto"
+	"github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto"
 
 	"github.com/hashicorp/go-multierror"
 	"github.com/pkg/errors"

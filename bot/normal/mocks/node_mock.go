@@ -10,7 +10,7 @@ import (
 	time "time"
 
 	gomock "github.com/golang/mock/gomock"
-	api "github.com/vegaprotocol/api/go/generated/code.vegaprotocol.io/vega/proto/api"
+	api "github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto/api"
 )
 
 // MockNode is a mock of Node interface.
@@ -66,6 +66,21 @@ func (mr *MockNodeMockRecorder) GetVegaTime() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVegaTime", reflect.TypeOf((*MockNode)(nil).GetVegaTime))
 }
 
+// LiquidityProvisions mocks base method.
+func (m *MockNode) LiquidityProvisions(arg0 *api.LiquidityProvisionsRequest) (*api.LiquidityProvisionsResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LiquidityProvisions", arg0)
+	ret0, _ := ret[0].(*api.LiquidityProvisionsResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LiquidityProvisions indicates an expected call of LiquidityProvisions.
+func (mr *MockNodeMockRecorder) LiquidityProvisions(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LiquidityProvisions", reflect.TypeOf((*MockNode)(nil).LiquidityProvisions), arg0)
+}
+
 // MarketByID mocks base method.
 func (m *MockNode) MarketByID(arg0 *api.MarketByIDRequest) (*api.MarketByIDResponse, error) {
 	m.ctrl.T.Helper()
@@ -81,6 +96,21 @@ func (mr *MockNodeMockRecorder) MarketByID(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarketByID", reflect.TypeOf((*MockNode)(nil).MarketByID), arg0)
 }
 
+// MarketDataByID mocks base method.
+func (m *MockNode) MarketDataByID(arg0 *api.MarketDataByIDRequest) (*api.MarketDataByIDResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MarketDataByID", arg0)
+	ret0, _ := ret[0].(*api.MarketDataByIDResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// MarketDataByID indicates an expected call of MarketDataByID.
+func (mr *MockNodeMockRecorder) MarketDataByID(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarketDataByID", reflect.TypeOf((*MockNode)(nil).MarketDataByID), arg0)
+}
+
 // PartyAccounts mocks base method.
 func (m *MockNode) PartyAccounts(arg0 *api.PartyAccountsRequest) (*api.PartyAccountsResponse, error) {
 	m.ctrl.T.Helper()
@@ -94,4 +124,34 @@ func (m *MockNode) PartyAccounts(arg0 *api.PartyAccountsRequest) (*api.PartyAcco
 func (mr *MockNodeMockRecorder) PartyAccounts(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PartyAccounts", reflect.TypeOf((*MockNode)(nil).PartyAccounts), arg0)
+}
+
+// PositionsByParty mocks base method.
+func (m *MockNode) PositionsByParty(arg0 *api.PositionsByPartyRequest) (*api.PositionsByPartyResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PositionsByParty", arg0)
+	ret0, _ := ret[0].(*api.PositionsByPartyResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PositionsByParty indicates an expected call of PositionsByParty.
+func (mr *MockNodeMockRecorder) PositionsByParty(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PositionsByParty", reflect.TypeOf((*MockNode)(nil).PositionsByParty), arg0)
+}
+
+// SubmitTransaction mocks base method.
+func (m *MockNode) SubmitTransaction(arg0 *api.SubmitTransactionRequest) (*api.SubmitTransactionResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SubmitTransaction", arg0)
+	ret0, _ := ret[0].(*api.SubmitTransactionResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SubmitTransaction indicates an expected call of SubmitTransaction.
+func (mr *MockNodeMockRecorder) SubmitTransaction(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitTransaction", reflect.TypeOf((*MockNode)(nil).SubmitTransaction), arg0)
 }
