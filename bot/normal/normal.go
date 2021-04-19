@@ -409,8 +409,8 @@ func (b *Bot) runPositionManagement() {
 				buyOrders := b.CalculateOrderSizes(b.config.MarketID, b.walletPubKeyHex, float64(b.strategy.CommitmentAmount), buyShape, marketData.MidPrice)
 				sellOrders := b.CalculateOrderSizes(b.config.MarketID, b.walletPubKeyHex, float64(b.strategy.CommitmentAmount), sellShape, marketData.MidPrice)
 
-				buyRisk := float64(0.15)
-				sellRisk := float64(0.10)
+				buyRisk := float64(0.01)
+				sellRisk := float64(0.01)
 
 				buyCost := b.CalculateMarginCost(buyRisk, marketData.MarkPrice, buyOrders)
 				sellCost := b.CalculateMarginCost(sellRisk, marketData.MarkPrice, sellOrders)
@@ -473,8 +473,8 @@ func (b *Bot) runPositionManagement() {
 				}).Debug("Position management info")
 
 				// If we flipped then send the new LP order
-				if (openVolume >= 0 && previousOpenVolume <= 0) ||
-					(openVolume <= 0 && previousOpenVolume >= 0) {
+				if (openVolume > 0 && previousOpenVolume < 0) ||
+					(openVolume < 0 && previousOpenVolume > 0) {
 
 					err = b.sendLiquidityProvision(buyShape, sellShape)
 					if err != nil {
