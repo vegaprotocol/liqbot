@@ -729,11 +729,6 @@ func (b *Bot) runPriceSteering() {
 						"side":  req.Submission.Side,
 					}).Debug("Submitting order")
 					err = b.submitOrder(req)
-					if err != nil {
-						b.log.WithFields(log.Fields{
-							"error": err.Error(),
-						}).Warning("Failed to submit error")
-					}
 				}
 				b.log.WithFields(log.Fields{
 					"currentPrice":  currentPrice,
