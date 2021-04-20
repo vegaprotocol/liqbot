@@ -1,6 +1,6 @@
 module code.vegaprotocol.io/liqbot
 
-go 1.14
+go 1.16
 
 require (
 	code.vegaprotocol.io/go-wallet v0.6.5
