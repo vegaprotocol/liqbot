@@ -18,13 +18,6 @@ type ShapeConfig struct {
 	Buys  []*proto.LiquidityOrder
 }
 
-// LiquidityOrder is the definition of a single order in the liquidity provision
-type LiquidityOrder struct {
-	Reference  proto.PeggedReference
-	Proportion int64
-	Offset     int64
-}
-
 // LODParamsConfig is ... TBD: a little data structure which sets the algo and params for how limits
 // orders are generated.
 type LODParamsConfig struct{}

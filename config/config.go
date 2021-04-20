@@ -51,6 +51,7 @@ type BotConfig struct {
 	StrategyDetails Strategy `yaml:"strategyDetails"`
 }
 
+// Strategy describes parameters for the bot's strategy.
 type Strategy struct {
 	ExpectedMarkPrice     uint64  `yaml:"expectedMarkPrice"`
 	AuctionVolume         uint64  `yaml:"auctionVolume"`
@@ -74,11 +75,13 @@ type Strategy struct {
 	LongeningShape  Shape `yaml:"longeningShape"`
 }
 
+// Shape describes the buy and sell sides of a Liquidity Provision instruction
 type Shape struct {
 	Sells []LiquidityOrder `yaml:"sells"`
 	Buys  []LiquidityOrder `yaml:"buys"`
 }
 
+// LiquidityOrder describes ...
 type LiquidityOrder struct {
 	Reference  string `yaml:"reference"`
 	Proportion uint32 `yaml:"proportion"`
