@@ -551,7 +551,12 @@ func (b *Bot) runPositionManagement() {
 							Reference:   "PosManagement",
 						},
 					}
-					b.submitOrder(request)
+					err = b.submitOrder(request)
+					if err != nil {
+						b.log.WithFields(log.Fields{
+							"error": err.Error(),
+						}).Warning("Failed to submit order")
+					}
 				} else if shouldSell {
 					request := &api.PrepareSubmitOrderRequest{
 						Submission: &proto.OrderSubmission{
@@ -564,7 +569,12 @@ func (b *Bot) runPositionManagement() {
 							Reference:   "PosManagement",
 						},
 					}
-					b.submitOrder(request)
+					err = b.submitOrder(request)
+					if err != nil {
+						b.log.WithFields(log.Fields{
+							"error": err.Error(),
+						}).Warning("Failed to submit order")
+					}
 				}
 			}
 
@@ -719,6 +729,11 @@ func (b *Bot) runPriceSteering() {
 						"side":  req.Submission.Side,
 					}).Debug("Submitting order")
 					err = b.submitOrder(req)
+					if err != nil {
+						b.log.WithFields(log.Fields{
+							"error": err.Error(),
+						}).Warning("Failed to submit error")
+					}
 				}
 				b.log.WithFields(log.Fields{
 					"currentPrice":  currentPrice,
