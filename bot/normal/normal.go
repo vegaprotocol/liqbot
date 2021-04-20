@@ -473,8 +473,8 @@ func (b *Bot) runPositionManagement() {
 				}).Debug("Position management info")
 
 				// If we flipped then send the new LP order
-				if (openVolume > 0 && previousOpenVolume < 0) ||
-					(openVolume < 0 && previousOpenVolume > 0) {
+				if (openVolume > 0 && previousOpenVolume <= 0) ||
+					(openVolume < 0 && previousOpenVolume >= 0) {
 
 					err = b.sendLiquidityProvision(buyShape, sellShape)
 					if err != nil {
