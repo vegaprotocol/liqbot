@@ -586,7 +586,7 @@ func (b *Bot) runPositionManagement() {
 	}
 }
 
-// The size of the orders is calculated using the total commitment, price, distance from mid and chance of trading
+// CalculateOrderSizes: The size of the orders is calculated using the total commitment, price, distance from mid and chance of trading
 // liquidity.supplied.updateSizes(obligation, currentPrice, liquidityOrders, true, minPrice, maxPrice)
 func (b *Bot) CalculateOrderSizes(marketID, partyID string, obligation float64, liquidityOrders []*proto.LiquidityOrder, midPrice uint64) []*proto.Order {
 	orders := make([]*proto.Order, 0, len(liquidityOrders))
@@ -625,6 +625,7 @@ func (b *Bot) CalculateOrderSizes(marketID, partyID string, obligation float64, 
 	return orders
 }
 
+// CalculateMarginCost: Estimate the margin cost of the set of orders
 func (b *Bot) CalculateMarginCost(risk float64, markPrice uint64, orders []*proto.Order) uint64 {
 	var totalMargin uint64
 	for _, order := range orders {
