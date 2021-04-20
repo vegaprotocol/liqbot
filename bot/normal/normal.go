@@ -262,7 +262,11 @@ func (b *Bot) sendLiquidityProvision(buys, sells []*proto.LiquidityOrder) error 
 	if err != nil {
 		return errors.Wrap(err, "failed to submit liquidity provision order")
 	}
-	b.log.Debug("Submitted liquidity provision order")
+	b.log.WithFields(log.Fields{
+		"commitment":         commitment,
+		"commitmentFraction": b.strategy.CommitmentFraction,
+		"balanceTotal":       b.balanceGeneral + b.balanceMargin + b.balanceBond,
+	}).Debug("Submitted liquidity provision order")
 	return nil
 }
 
