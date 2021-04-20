@@ -39,8 +39,8 @@ type Strategy struct {
 	// AuctionVolume ...
 	AuctionVolume uint64
 
-	// CommitmentAmount is the amount of stack for the LP
-	CommitmentAmount uint64
+	// CommitmentFraction is the fractional amount of stake for the LP
+	CommitmentFraction float64
 
 	// Fee is the 0->1 fee for supplying liquidity
 	Fee float64
@@ -111,7 +111,7 @@ func validateStrategyConfig(details config.Strategy) (s *Strategy, err error) {
 	s.PosManagementFraction = details.PosManagementFraction
 	s.StakeFraction = details.StakeFraction
 	s.OrdersFraction = details.OrdersFraction
-	s.CommitmentAmount = details.CommitmentAmount
+	s.CommitmentFraction = details.CommitmentFraction
 	s.Fee, _ = strconv.ParseFloat(details.Fee, 64)
 
 	var shorteningShape *ShapeConfig = &ShapeConfig{
