@@ -150,7 +150,7 @@ func (b *Bot) Start() error {
 	// b.stopPriceSteer = make(chan bool)
 
 	go b.runPositionManagement()
-	//	go b.runPriceSteering()
+	go b.runPriceSteering()
 
 	return nil
 }
@@ -685,10 +685,36 @@ func (b *Bot) runPriceSteering() {
 
 			if err == nil {
 				shouldMove := "no"
-				if externalPrice > currentPrice {
-					shouldMove = "UP"
-				} else if externalPrice < currentPrice {
-					shouldMove = "DN"
+				// We only want to steer the price if the external and market price
+				// are greater than a certain percentage apart
+				currentDiff := math.Abs(float64(currentPrice-externalPrice) / float64(externalPrice))
+				if currentDiff > b.strategy.MinPriceSteerFraction {
+					var side proto.Side
+					if externalPrice > currentPrice {
+						side = proto.Side_SIDE_BUY
+						shouldMove = "UP"
+					} else {
+						side = proto.Side_SIDE_SELL
+						shouldMove = "DN"
+					}
+					req := &api.PrepareSubmitOrderRequest{
+						Submission: &proto.OrderSubmission{
+							Id:          "",
+							MarketId:    b.market.Id,
+							PartyId:     b.walletPubKeyHex,
+							Size:        b.strategy.PriceSteerOrderSize,
+							Side:        side,
+							TimeInForce: proto.Order_TIME_IN_FORCE_IOC,
+							Type:        proto.Order_TYPE_MARKET,
+							Reference:   "",
+						},
+					}
+					b.log.WithFields(log.Fields{
+						"price": req.Submission.Price,
+						"size":  req.Submission.Size,
+						"side":  req.Submission.Side,
+					}).Debug("Submitting order")
+					err = b.submitOrder(req)
 				}
 				b.log.WithFields(log.Fields{
 					"currentPrice":  currentPrice,
@@ -696,66 +722,6 @@ func (b *Bot) runPriceSteering() {
 					"diff":          int(externalPrice) - int(currentPrice),
 					"shouldMove":    shouldMove,
 				}).Debug("Steering info")
-
-				expiration := time.Now().Add(time.Duration(30) * time.Second)
-
-				var side proto.Side
-				if externalPrice > currentPrice {
-					side = proto.Side_SIDE_BUY
-				} else {
-					side = proto.Side_SIDE_SELL
-				}
-				for _, inc := range []uint64{1, 10, 100} {
-					req := &api.PrepareSubmitOrderRequest{
-						Submission: &proto.OrderSubmission{
-							Id:          "",
-							MarketId:    b.market.Id,
-							PartyId:     b.walletPubKeyHex,
-							Price:       externalPrice + inc,
-							Size:        1,
-							Side:        side,
-							TimeInForce: proto.Order_TIME_IN_FORCE_GTT,
-							ExpiresAt:   expiration.UnixNano(),
-							Type:        proto.Order_TYPE_LIMIT,
-							Reference:   "",
-						},
-					}
-					b.log.WithFields(log.Fields{
-						"price":     req.Submission.Price,
-						"size":      req.Submission.Size,
-						"side":      req.Submission.Side,
-						"increment": inc,
-					}).Debug("Submitting order")
-					err = b.submitOrder(req)
-				}
-				if externalPrice > currentPrice {
-					side = proto.Side_SIDE_SELL
-				} else {
-					side = proto.Side_SIDE_BUY
-				}
-				for _, inc := range []uint64{1, 10, 100} {
-					req := &api.PrepareSubmitOrderRequest{
-						Submission: &proto.OrderSubmission{
-							Id:          "",
-							MarketId:    b.market.Id,
-							PartyId:     b.walletPubKeyHex,
-							Price:       externalPrice - inc,
-							Size:        1,
-							Side:        side,
-							TimeInForce: proto.Order_TIME_IN_FORCE_GTT,
-							ExpiresAt:   expiration.UnixNano(),
-							Type:        proto.Order_TYPE_LIMIT,
-							Reference:   "",
-						},
-					}
-					b.log.WithFields(log.Fields{
-						"price":     req.Submission.Price,
-						"size":      req.Submission.Size,
-						"side":      req.Submission.Side,
-						"increment": inc,
-					}).Debug("Submitting order")
-					err = b.submitOrder(req)
-				}
 			}
 
 			if err == nil {
