@@ -56,5 +56,7 @@ bots:
           - {reference: Bid, proportion: 10, offset: -8}
       posManagementSleepMilliseconds: 5050
       marketPriceSteeringRatePerSecond: 0.1
+      minPriceSteerFraction: 0.001
+      priceSteerOrderSize: 1
       limitOrderDistributionParams: 'TBD, json or yaml'
       targetLNVol: 0.0
