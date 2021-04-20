@@ -247,7 +247,7 @@ func (b *Bot) submitOrder(sub *api.PrepareSubmitOrderRequest) error {
 
 func (b *Bot) sendLiquidityProvision(buys, sells []*proto.LiquidityOrder) error {
 	// CommitmentAmount is the fractional commitment value * total collateral
-	commitment := b.strategy.CommitmentFraction * (float64(b.balanceGeneral + b.balanceMargin + b.balanceBond))
+	commitment := b.strategy.CommitmentFraction * float64(b.balanceGeneral+b.balanceMargin+b.balanceBond)
 
 	sub := &api.PrepareLiquidityProvisionRequest{
 		Submission: &proto.LiquidityProvisionSubmission{
@@ -308,7 +308,7 @@ func (b *Bot) getAccountMargin() error {
 	return nil
 }
 
-// getAccountMargin get this bot's bond account balance.
+// getAccountBond get this bot's bond account balance.
 func (b *Bot) getAccountBond() error {
 	b.balanceBond = 0
 	response, err := b.node.PartyAccounts(&api.PartyAccountsRequest{
