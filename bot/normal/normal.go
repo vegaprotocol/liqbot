@@ -684,63 +684,44 @@ func (b *Bot) runPriceSteering() {
 			}
 
 			if err == nil {
+				shouldMove := "no"
 				// We only want to steer the price if the external and market price
 				// are greater than a certain percentage apart
 				currentDiff := math.Abs(float64(currentPrice-externalPrice) / float64(externalPrice))
 				if currentDiff > b.strategy.MinPriceSteerFraction {
-					shouldMove := "no"
+					var side proto.Side
 					if externalPrice > currentPrice {
+						side = proto.Side_SIDE_BUY
 						shouldMove = "UP"
-					} else if externalPrice < currentPrice {
+					} else {
+						side = proto.Side_SIDE_SELL
 						shouldMove = "DN"
 					}
-					b.log.WithFields(log.Fields{
-						"currentPrice":  currentPrice,
-						"externalPrice": externalPrice,
-						"diff":          int(externalPrice) - int(currentPrice),
-						"shouldMove":    shouldMove,
-					}).Debug("Steering info")
-
-					if externalPrice > currentPrice {
-						req := &api.PrepareSubmitOrderRequest{
-							Submission: &proto.OrderSubmission{
-								Id:          "",
-								MarketId:    b.market.Id,
-								PartyId:     b.walletPubKeyHex,
-								Size:        b.strategy.PriceSteerOrderSize,
-								Side:        proto.Side_SIDE_BUY,
-								TimeInForce: proto.Order_TIME_IN_FORCE_IOC,
-								Type:        proto.Order_TYPE_MARKET,
-								Reference:   "",
-							},
-						}
-						b.log.WithFields(log.Fields{
-							"price": req.Submission.Price,
-							"size":  req.Submission.Size,
-							"side":  req.Submission.Side,
-						}).Debug("Submitting order")
-						err = b.submitOrder(req)
-					} else {
-						req := &api.PrepareSubmitOrderRequest{
-							Submission: &proto.OrderSubmission{
-								Id:          "",
-								MarketId:    b.market.Id,
-								PartyId:     b.walletPubKeyHex,
-								Size:        b.strategy.PriceSteerOrderSize,
-								Side:        proto.Side_SIDE_SELL,
-								TimeInForce: proto.Order_TIME_IN_FORCE_IOC,
-								Type:        proto.Order_TYPE_MARKET,
-								Reference:   "",
-							},
-						}
-						b.log.WithFields(log.Fields{
-							"price": req.Submission.Price,
-							"size":  req.Submission.Size,
-							"side":  req.Submission.Side,
-						}).Debug("Submitting order")
-						err = b.submitOrder(req)
+					req := &api.PrepareSubmitOrderRequest{
+						Submission: &proto.OrderSubmission{
+							Id:          "",
+							MarketId:    b.market.Id,
+							PartyId:     b.walletPubKeyHex,
+							Size:        b.strategy.PriceSteerOrderSize,
+							Side:        side,
+							TimeInForce: proto.Order_TIME_IN_FORCE_IOC,
+							Type:        proto.Order_TYPE_MARKET,
+							Reference:   "",
+						},
 					}
+					b.log.WithFields(log.Fields{
+						"price": req.Submission.Price,
+						"size":  req.Submission.Size,
+						"side":  req.Submission.Side,
+					}).Debug("Submitting order")
+					err = b.submitOrder(req)
 				}
+				b.log.WithFields(log.Fields{
+					"currentPrice":  currentPrice,
+					"externalPrice": externalPrice,
+					"diff":          int(externalPrice) - int(currentPrice),
+					"shouldMove":    shouldMove,
+				}).Debug("Steering info")
 			}
 
 			if err == nil {
