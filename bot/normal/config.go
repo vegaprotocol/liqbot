@@ -2,31 +2,21 @@ package normal
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 
 	"code.vegaprotocol.io/liqbot/config"
+	"github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto"
 
 	"github.com/hashicorp/go-multierror"
 	"github.com/pkg/errors"
 )
 
-const (
-	keyExpectedMarkPrice                = "expectedMarkPrice"
-	keyAuctionVolume                    = "auctionVolume"
-	keyMaxLong                          = "maxLong"
-	keyMaxShort                         = "maxShort"
-	keyPosManagementFraction            = "posManagementFraction"
-	keyStakeFraction                    = "stakeFraction"
-	keyOrdersFraction                   = "ordersFraction"
-	keyShorteningShape                  = "shorteningShape"
-	keyLongeningShape                   = "longeningShape"
-	keyPosManagementSleepMilliseconds   = "posManagementSleepMilliseconds"
-	keyMarketPriceSteeringRatePerSecond = "marketPriceSteeringRatePerSecond"
-	keyLimitOrderDistributionParams     = "limitOrderDistributionParams"
-	keyTargetLNVol                      = "targetLNVol"
-)
-
-// ShapeConfig is ... TBD. May be replaced with a struct from Vega Core.
-type ShapeConfig struct{}
+// ShapeConfig is the top level definition of a liquidity shape
+type ShapeConfig struct {
+	Sells []*proto.LiquidityOrder
+	Buys  []*proto.LiquidityOrder
+}
 
 // LODParamsConfig is ... TBD: a little data structure which sets the algo and params for how limits
 // orders are generated.
@@ -41,6 +31,12 @@ type Strategy struct {
 
 	// AuctionVolume ...
 	AuctionVolume uint64
+
+	// CommitmentFraction is the fractional amount of stake for the LP
+	CommitmentFraction float64
+
+	// Fee is the 0->1 fee for supplying liquidity
+	Fee float64
 
 	// MaxLong specifies the maximum long position that the bot will tolerate.
 	MaxLong uint64
@@ -74,6 +70,13 @@ type Strategy struct {
 	// MarketPriceSteeringRatePerSecond ...
 	MarketPriceSteeringRatePerSecond float64
 
+	// MinPriceSteerFraction is the minimum difference between external and current price that will
+	// allow a price steering order to be placed.
+	MinPriceSteerFraction float64
+
+	// PriceSteerOrderSize is the size of a steering order when placed
+	PriceSteerOrderSize uint64
+
 	// LimitOrderDistributionParams ...
 	LimitOrderDistributionParams *LODParamsConfig
 
@@ -81,84 +84,97 @@ type Strategy struct {
 	TargetLNVol float64
 }
 
-func readStrategyConfig(details map[string]string) (s *Strategy, err error) {
+func refStringToEnum(reference string) proto.PeggedReference {
+	reference = strings.ToUpper(reference)
+	switch reference {
+	case "ASK":
+		return proto.PeggedReference_PEGGED_REFERENCE_BEST_ASK
+	case "BID":
+		return proto.PeggedReference_PEGGED_REFERENCE_BEST_BID
+	case "MID":
+		return proto.PeggedReference_PEGGED_REFERENCE_MID
+	default:
+		return proto.PeggedReference_PEGGED_REFERENCE_UNSPECIFIED
+	}
+}
+
+func validateStrategyConfig(details config.Strategy) (s *Strategy, err error) {
 	s = &Strategy{}
 	errInvalid := "invalid strategy config for %s"
 
 	var errs *multierror.Error
 
-	s.ExpectedMarkPrice, err = config.ReadUint64(details, keyExpectedMarkPrice)
-	if err != nil {
-		errs = multierror.Append(errs, errors.Wrap(err, fmt.Sprintf(errInvalid, keyExpectedMarkPrice)))
+	s.ExpectedMarkPrice = details.ExpectedMarkPrice
+	s.AuctionVolume = details.AuctionVolume
+	s.MaxLong = details.MaxLong
+	s.MaxShort = details.MaxShort
+	s.PosManagementFraction = details.PosManagementFraction
+	s.StakeFraction = details.StakeFraction
+	s.OrdersFraction = details.OrdersFraction
+	s.CommitmentFraction = details.CommitmentFraction
+	s.Fee, _ = strconv.ParseFloat(details.Fee, 64)
+
+	var shorteningShape *ShapeConfig = &ShapeConfig{
+		Sells: []*proto.LiquidityOrder{},
+		Buys:  []*proto.LiquidityOrder{},
 	}
 
-	s.AuctionVolume, err = config.ReadUint64(details, keyAuctionVolume)
-	if err != nil {
-		errs = multierror.Append(errs, errors.Wrap(err, fmt.Sprintf(errInvalid, keyAuctionVolume)))
+	var longeningShape *ShapeConfig = &ShapeConfig{
+		Sells: []*proto.LiquidityOrder{},
+		Buys:  []*proto.LiquidityOrder{},
 	}
 
-	s.MaxLong, err = config.ReadUint64(details, keyMaxLong)
-	if err != nil {
-		errs = multierror.Append(errs, errors.Wrap(err, fmt.Sprintf(errInvalid, keyMaxLong)))
+	for _, buy := range details.ShorteningShape.Buys {
+		shorteningShape.Buys = append(shorteningShape.Buys, &proto.LiquidityOrder{Reference: refStringToEnum(buy.Reference),
+			Proportion: buy.Proportion,
+			Offset:     buy.Offset,
+		})
+	}
+	for _, sell := range details.ShorteningShape.Sells {
+		shorteningShape.Sells = append(shorteningShape.Sells, &proto.LiquidityOrder{Reference: refStringToEnum(sell.Reference),
+			Proportion: sell.Proportion,
+			Offset:     sell.Offset,
+		})
+	}
+	s.ShorteningShape = shorteningShape
+
+	for _, buy := range details.LongeningShape.Buys {
+		longeningShape.Buys = append(longeningShape.Buys, &proto.LiquidityOrder{Reference: refStringToEnum(buy.Reference),
+			Proportion: buy.Proportion,
+			Offset:     buy.Offset,
+		})
+	}
+	for _, sell := range details.LongeningShape.Sells {
+		longeningShape.Sells = append(longeningShape.Sells, &proto.LiquidityOrder{Reference: refStringToEnum(sell.Reference),
+			Proportion: sell.Proportion,
+			Offset:     sell.Offset,
+		})
+	}
+	s.LongeningShape = longeningShape
+
+	s.PosManagementSleepMilliseconds = uint64(details.PosManagementSleepMilliseconds)
+	if s.PosManagementSleepMilliseconds < 100 {
+		errs = multierror.Append(errs, errors.Wrap(fmt.Errorf("must be >=100"), fmt.Sprintf(errInvalid, "PosManagementSleepMilliseconds")))
 	}
 
-	s.MaxShort, err = config.ReadUint64(details, keyMaxShort)
-	if err != nil {
-		errs = multierror.Append(errs, errors.Wrap(err, fmt.Sprintf(errInvalid, keyMaxShort)))
+	s.MarketPriceSteeringRatePerSecond = details.MarketPriceSteeringRatePerSecond
+	if s.MarketPriceSteeringRatePerSecond <= 0.0 {
+		errs = multierror.Append(errs, errors.Wrap(fmt.Errorf("must be >0"), fmt.Sprintf(errInvalid, "MarketPriceSteeringRatePerSecond")))
+	} else if s.MarketPriceSteeringRatePerSecond > 10.0 {
+		errs = multierror.Append(errs, errors.Wrap(fmt.Errorf("must be <=10"), fmt.Sprintf(errInvalid, "MarketPriceSteeringRatePerSecond")))
 	}
 
-	s.PosManagementFraction, err = config.ReadFloat64(details, keyPosManagementFraction)
-	if err != nil {
-		errs = multierror.Append(errs, errors.Wrap(err, fmt.Sprintf(errInvalid, keyPosManagementFraction)))
-	}
-
-	s.StakeFraction, err = config.ReadFloat64(details, keyStakeFraction)
-	if err != nil {
-		errs = multierror.Append(errs, errors.Wrap(err, fmt.Sprintf(errInvalid, keyStakeFraction)))
-	}
-
-	s.OrdersFraction, err = config.ReadFloat64(details, keyOrdersFraction)
-	if err != nil {
-		errs = multierror.Append(errs, errors.Wrap(err, fmt.Sprintf(errInvalid, keyOrdersFraction)))
-	}
-
-	// ShorteningShape TBD
-
-	// LongeningShape TBD
-
-	s.PosManagementSleepMilliseconds, err = config.ReadUint64(details, keyPosManagementSleepMilliseconds)
-	if err != nil {
-		errs = multierror.Append(errs, errors.Wrap(err, fmt.Sprintf(errInvalid, keyPosManagementSleepMilliseconds)))
-	} else {
-		if s.PosManagementSleepMilliseconds < 100 {
-			errs = multierror.Append(errs, errors.Wrap(fmt.Errorf("must be >=100"), fmt.Sprintf(errInvalid, keyPosManagementSleepMilliseconds)))
-		}
-	}
-
-	s.MarketPriceSteeringRatePerSecond, err = config.ReadFloat64(details, keyMarketPriceSteeringRatePerSecond)
-	if err != nil {
-		errs = multierror.Append(errs, errors.Wrap(err, fmt.Sprintf(errInvalid, keyMarketPriceSteeringRatePerSecond)))
-	} else {
-		if s.MarketPriceSteeringRatePerSecond <= 0.0 {
-			errs = multierror.Append(errs, errors.Wrap(fmt.Errorf("must be >0"), fmt.Sprintf(errInvalid, keyMarketPriceSteeringRatePerSecond)))
-		} else if s.MarketPriceSteeringRatePerSecond > 10.0 {
-			errs = multierror.Append(errs, errors.Wrap(fmt.Errorf("must be <=10"), fmt.Sprintf(errInvalid, keyMarketPriceSteeringRatePerSecond)))
-		}
-	}
-
+	s.PriceSteerOrderSize = details.PriceSteerOrderSize
+	s.MinPriceSteerFraction = details.MinPriceSteerFraction
 	// LimitOrderDistributionParams TBD
 
-	s.TargetLNVol, err = config.ReadFloat64(details, keyTargetLNVol)
-	if err != nil {
-		errs = multierror.Append(errs, errors.Wrap(err, fmt.Sprintf(errInvalid, keyTargetLNVol)))
-	}
-
+	s.TargetLNVol = details.TargetLNVol
 	err = errs.ErrorOrNil()
 	return
 }
 
 func (s *Strategy) String() string {
-	return fmt.Sprintf("normal.Strategy{ExpectedMarkPrice=%d, AuctionVolume=%d, MaxLong=%d, MaxShort=%d, PosManagementFraction=%f, StakeFraction=%f, OrdersFraction=%f, ShorteningShape=TBD(*ShapeConfig), LongeningShape=TBD(*ShapeConfig), PosManagementSleepMilliseconds=%d, MarketPriceSteeringRatePerSecond=%f, LimitOrderDistributionParams=TBD(*LODParamsConfig), TargetLNVol=%f}",
+	return fmt.Sprintf("normal.Strategy{ExpectedMarkPrice=%d, AuctionVolume=%d, MaxLong=%d, MaxShort=%d, PosManagementFraction=%f, StakeFraction=%f, OrdersFraction=%f, ShorteningShape=TBD(*ShapeConfig), LongeningShape=TBD(*ShapeConfig), PosManagementSleepMilliseconds=%d, MarketPriceSteeringRatePerSecond=%f, MinPriceSteerFraction=%f, PriceSteerOrderSize=%d, LimitOrderDistributionParams=TBD(*LODParamsConfig), TargetLNVol=%f}",
 		s.ExpectedMarkPrice,
 		s.AuctionVolume,
 		s.MaxLong,
@@ -170,6 +186,8 @@ func (s *Strategy) String() string {
 		// s.LongeningShape,
 		s.PosManagementSleepMilliseconds,
 		s.MarketPriceSteeringRatePerSecond,
+		s.MinPriceSteerFraction,
+		s.PriceSteerOrderSize,
 		// s.LimitOrderDistributionParams,
 		s.TargetLNVol,
 	)

@@ -9,7 +9,7 @@ import (
 	e "code.vegaprotocol.io/liqbot/errors"
 
 	"github.com/pkg/errors"
-	"github.com/vegaprotocol/api-clients/go/generated/code.vegaprotocol.io/vega/proto/api"
+	"github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto/api"
 	"google.golang.org/grpc"
 )
 
@@ -115,6 +115,44 @@ func (n *GRPCNode) MarketByID(req *api.MarketByIDRequest) (response *api.MarketB
 	return
 }
 
+// MarketDataByID gets market data from the node
+func (n *GRPCNode) MarketDataByID(req *api.MarketDataByIDRequest) (response *api.MarketDataByIDResponse, err error) {
+	msg := "gRPC call failed: MarketDataByID"
+	if n == nil {
+		err = errors.Wrap(e.ErrNil, msg)
+		return
+	}
+
+	c := api.NewTradingDataServiceClient(n.conn)
+	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
+	defer cancel()
+	response, err = c.MarketDataByID(ctx, req)
+	if err != nil {
+		err = errors.Wrap(err, msg)
+		return
+	}
+	return
+}
+
+// LiquidityProvisions gets the liquidity provisions for a given market and party.
+func (n *GRPCNode) LiquidityProvisions(req *api.LiquidityProvisionsRequest) (response *api.LiquidityProvisionsResponse, err error) {
+	msg := "gRPC call failed: LiquidityProvisions"
+	if n == nil {
+		err = errors.Wrap(e.ErrNil, msg)
+		return
+	}
+
+	c := api.NewTradingDataServiceClient(n.conn)
+	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
+	defer cancel()
+	response, err = c.LiquidityProvisions(ctx, req)
+	if err != nil {
+		err = errors.Wrap(err, msg)
+		return
+	}
+	return
+}
+
 // MarketDepth gets the depth for a market.
 func (n *GRPCNode) MarketDepth(req *api.MarketDepthRequest) (response *api.MarketDepthResponse, err error) {
 	msg := "gRPC call failed: MarketDepth"
@@ -146,6 +184,25 @@ func (n *GRPCNode) PartyAccounts(req *api.PartyAccountsRequest) (response *api.P
 	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
 	defer cancel()
 	response, err = c.PartyAccounts(ctx, req)
+	if err != nil {
+		err = errors.Wrap(err, msg)
+		return
+	}
+	return
+}
+
+// PositionsByParty gets the positions for a party.
+func (n *GRPCNode) PositionsByParty(req *api.PositionsByPartyRequest) (response *api.PositionsByPartyResponse, err error) {
+	msg := "gRPC call failed: PositionsByParty"
+	if n == nil {
+		err = errors.Wrap(e.ErrNil, msg)
+		return
+	}
+
+	c := api.NewTradingDataServiceClient(n.conn)
+	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
+	defer cancel()
+	response, err = c.PositionsByParty(ctx, req)
 	if err != nil {
 		err = errors.Wrap(err, msg)
 		return

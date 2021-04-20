@@ -193,7 +193,12 @@ func (s *Service) initBots() error {
 
 // Status is an endpoint to show the service is up (always returns succeeded=true).
 func (s *Service) Status(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	writeSuccess(w, SimpleResponse{Success: true}, http.StatusOK)
+	var err error
+	if err != nil {
+		writeError(w, err, http.StatusBadRequest)
+	} else {
+		writeSuccess(w, SimpleResponse{Success: true}, http.StatusOK)
+	}
 }
 
 func writeSuccess(w http.ResponseWriter, data interface{}, status int) {
