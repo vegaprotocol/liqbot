@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go: ['1.15', '1.14']
+        go: ['1.16', '1.15']
     env:
       GO_VER: ${{ matrix.go }}
     steps:
@@ -51,14 +51,14 @@ jobs:
           GOTOOLDIR: /usr/local/go/pkg/tool/linux_amd64
         with:
           args: ./...
-        if: env.GO_VER == '1.15'
+        if: env.GO_VER == '1.16'
 
   build-macos:
     name: MacOS build
     runs-on: macos-latest
     strategy:
       matrix:
-        go: ['1.15', '1.14']
+        go: ['1.16', '1.15']
     steps:
 
       - name: Set up Go ${{ matrix.go }}
@@ -90,7 +90,7 @@ jobs:
     runs-on: windows-latest
     strategy:
       matrix:
-        go: ['1.15', '1.14']
+        go: ['1.16', '1.15']
     steps:
 
       - name: Set up Go ${{ matrix.go }}
