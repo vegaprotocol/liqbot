@@ -61,6 +61,7 @@ type Bot struct {
 
 	balanceGeneral uint64
 	balanceMargin  uint64
+	balanceBond    uint64
 
 	walletServer     wallet.WalletHandler
 	walletPassphrase string
@@ -245,11 +246,14 @@ func (b *Bot) submitOrder(sub *api.PrepareSubmitOrderRequest) error {
 }
 
 func (b *Bot) sendLiquidityProvision(buys, sells []*proto.LiquidityOrder) error {
+	// CommitmentAmount is the fractional commitment value * total collateral
+	commitment := b.strategy.CommitmentFraction * float64(b.balanceGeneral+b.balanceMargin+b.balanceBond)
+
 	sub := &api.PrepareLiquidityProvisionRequest{
 		Submission: &proto.LiquidityProvisionSubmission{
 			Fee:              b.config.StrategyDetails.Fee,
 			MarketId:         b.market.Id,
-			CommitmentAmount: b.strategy.CommitmentAmount,
+			CommitmentAmount: uint64(commitment),
 			Buys:             buys,
 			Sells:            sells,
 		},
@@ -301,6 +305,28 @@ func (b *Bot) getAccountMargin() error {
 		return fmt.Errorf("found too many margin accounts for party: %d", len(response.Accounts))
 	}
 	b.balanceMargin = response.Accounts[0].Balance
+	return nil
+}
+
+// getAccountBond get this bot's bond account balance.
+func (b *Bot) getAccountBond() error {
+	b.balanceBond = 0
+	response, err := b.node.PartyAccounts(&api.PartyAccountsRequest{
+		PartyId:  b.walletPubKeyHex,
+		MarketId: b.market.Id,
+		Asset:    b.settlementAsset,
+		Type:     proto.AccountType_ACCOUNT_TYPE_BOND,
+	})
+	if err != nil {
+		return errors.Wrap(err, "failed to get bond account")
+	}
+	if len(response.Accounts) == 0 {
+		return errors.Wrap(err, "found zero bond accounts for party")
+	}
+	if len(response.Accounts) > 1 {
+		return fmt.Errorf("found too many bond accounts for party: %d", len(response.Accounts))
+	}
+	b.balanceBond = response.Accounts[0].Balance
 	return nil
 }
 
@@ -393,6 +419,13 @@ func (b *Bot) runPositionManagement() {
 				}).Warning("Failed to get margin account balance")
 			}
 
+			err = b.getAccountBond()
+			if err != nil {
+				b.log.WithFields(log.Fields{
+					"error": err.Error(),
+				}).Warning("Failed to get bond account balance")
+			}
+
 			if err == nil {
 				marketData, err = b.getMarketData()
 				if err != nil {
@@ -406,8 +439,9 @@ func (b *Bot) runPositionManagement() {
 
 			if firstTime {
 				// Turn the shapes into a set of orders scaled by commitment
-				buyOrders := b.CalculateOrderSizes(b.config.MarketID, b.walletPubKeyHex, float64(b.strategy.CommitmentAmount), buyShape, marketData.MidPrice)
-				sellOrders := b.CalculateOrderSizes(b.config.MarketID, b.walletPubKeyHex, float64(b.strategy.CommitmentAmount), sellShape, marketData.MidPrice)
+				obligation := b.strategy.CommitmentFraction * float64(b.balanceMargin+b.balanceBond+b.balanceGeneral)
+				buyOrders := b.CalculateOrderSizes(b.config.MarketID, b.walletPubKeyHex, obligation, buyShape, marketData.MidPrice)
+				sellOrders := b.CalculateOrderSizes(b.config.MarketID, b.walletPubKeyHex, obligation, sellShape, marketData.MidPrice)
 
 				buyRisk := float64(0.01)
 				sellRisk := float64(0.01)
@@ -552,7 +586,7 @@ func (b *Bot) runPositionManagement() {
 	}
 }
 
-// The size of the orders is calculated using the total commitment, price, distance from mid and chance of trading
+// CalculateOrderSizes: The size of the orders is calculated using the total commitment, price, distance from mid and chance of trading
 // liquidity.supplied.updateSizes(obligation, currentPrice, liquidityOrders, true, minPrice, maxPrice)
 func (b *Bot) CalculateOrderSizes(marketID, partyID string, obligation float64, liquidityOrders []*proto.LiquidityOrder, midPrice uint64) []*proto.Order {
 	orders := make([]*proto.Order, 0, len(liquidityOrders))
@@ -591,6 +625,7 @@ func (b *Bot) CalculateOrderSizes(marketID, partyID string, obligation float64, 
 	return orders
 }
 
+// CalculateMarginCost: Estimate the margin cost of the set of orders
 func (b *Bot) CalculateMarginCost(risk float64, markPrice uint64, orders []*proto.Order) uint64 {
 	var totalMargin uint64
 	for _, order := range orders {

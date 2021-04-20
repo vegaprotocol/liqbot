@@ -59,9 +59,8 @@ type Strategy struct {
 	PosManagementFraction float64 `yaml:"posManagementFraction"`
 	StakeFraction         float64 `yaml:"stakeFraction"`
 	OrdersFraction        float64 `yaml:"ordersFraction"`
-
-	CommitmentAmount uint64 `yaml:"commitmentAmount"`
-	Fee              string `yaml:"fee"`
+	CommitmentFraction    float64 `yaml:"commitmentFraction"`
+	Fee                   string  `yaml:"fee"`
 
 	PosManagementSleepMilliseconds   int     `yaml:"posManagementSleepMilliseconds"`
 	MarketPriceSteeringRatePerSecond float64 `yaml:"marketPriceSteeringRatePerSecond"`
