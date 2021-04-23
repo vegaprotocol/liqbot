@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strconv"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -47,7 +48,44 @@ type BotConfig struct {
 	Strategy string `yaml:"strategy"`
 
 	// StrategyDetails contains the parameters needed by the strategy algorithm
-	StrategyDetails map[string]string `yaml:"strategyDetails"`
+	StrategyDetails Strategy `yaml:"strategyDetails"`
+}
+
+// Strategy describes parameters for the bot's strategy.
+type Strategy struct {
+	ExpectedMarkPrice     uint64  `yaml:"expectedMarkPrice"`
+	AuctionVolume         uint64  `yaml:"auctionVolume"`
+	MaxLong               uint64  `yaml:"maxLong"`
+	MaxShort              uint64  `yaml:"maxShort"`
+	PosManagementFraction float64 `yaml:"posManagementFraction"`
+	StakeFraction         float64 `yaml:"stakeFraction"`
+	OrdersFraction        float64 `yaml:"ordersFraction"`
+	CommitmentFraction    float64 `yaml:"commitmentFraction"`
+	Fee                   string  `yaml:"fee"`
+
+	PosManagementSleepMilliseconds   int     `yaml:"posManagementSleepMilliseconds"`
+	MarketPriceSteeringRatePerSecond float64 `yaml:"marketPriceSteeringRatePerSecond"`
+	MinPriceSteerFraction            float64 `yaml:"minPriceSteerFraction"`
+	PriceSteerOrderSize              uint64  `yaml:"priceSteerOrderSize"`
+
+	LimitOrderDistributionParams string  `yaml:"limitOrderDistributionParams"`
+	TargetLNVol                  float64 `yaml:"targetLNVol"`
+
+	ShorteningShape Shape `yaml:"shorteningShape"`
+	LongeningShape  Shape `yaml:"longeningShape"`
+}
+
+// Shape describes the buy and sell sides of a Liquidity Provision instruction
+type Shape struct {
+	Sells []LiquidityOrder `yaml:"sells"`
+	Buys  []LiquidityOrder `yaml:"buys"`
+}
+
+// LiquidityOrder describes ...
+type LiquidityOrder struct {
+	Reference  string `yaml:"reference"`
+	Proportion uint32 `yaml:"proportion"`
+	Offset     int64  `yaml:"offset"`
 }
 
 // WalletConfig describes the settings for running an internal wallet server
@@ -141,4 +179,24 @@ func ConfigureLogging(cfg *ServerConfig) error {
 		log.SetLevel(log.WarnLevel)
 	}
 	return nil
+}
+
+// ReadFloat64 extracts a float64 from a strategy config map.
+func ReadFloat64(details map[string]string, key string) (v float64, err error) {
+	value, found := details[key]
+	if !found {
+		err = errors.New("missing config")
+		return
+	}
+	return strconv.ParseFloat(value, 64)
+}
+
+// ReadUint64 extracts a uint64 from a strategy config map.
+func ReadUint64(details map[string]string, key string) (v uint64, err error) {
+	value, found := details[key]
+	if !found {
+		err = errors.New("missing config")
+		return
+	}
+	return strconv.ParseUint(value, 0, 64)
 }
