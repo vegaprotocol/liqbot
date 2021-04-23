@@ -13,7 +13,7 @@ require (
 	github.com/satori/go.uuid v1.2.0 // indirect
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.0
-	github.com/vegaprotocol/api v0.35.0-a2
+	github.com/vegaprotocol/api v0.35.0
 	go.uber.org/zap v1.16.0
 	google.golang.org/grpc v1.37.0
 	gopkg.in/yaml.v2 v2.2.5 // indirect
