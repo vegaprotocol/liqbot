@@ -209,3 +209,35 @@ func (n *GRPCNode) PositionsByParty(req *api.PositionsByPartyRequest) (response 
 	}
 	return
 }
+
+func (n *GRPCNode) ObserveEventBus() (stream api.TradingDataService_ObserveEventBusClient, err error) {
+	msg := "gRPC call failed: ObserveEventBus"
+	if n == nil {
+		err = errors.Wrap(e.ErrNil, msg)
+		return
+	}
+
+	c := api.NewTradingDataServiceClient(n.conn)
+	stream, err = c.ObserveEventBus(context.Background())
+	if err != nil {
+		err = errors.Wrap(err, msg)
+		return
+	}
+	return
+}
+
+func (n *GRPCNode) PositionsSubscribe(req *api.PositionsSubscribeRequest) (stream api.TradingDataService_PositionsSubscribeClient, err error) {
+	msg := "gRPC call failed: PositionsSubscribe"
+	if n == nil {
+		err = errors.Wrap(e.ErrNil, msg)
+		return
+	}
+
+	c := api.NewTradingDataServiceClient(n.conn)
+	stream, err = c.PositionsSubscribe(context.Background(), req)
+	if err != nil {
+		err = errors.Wrap(err, msg)
+		return
+	}
+	return
+}
