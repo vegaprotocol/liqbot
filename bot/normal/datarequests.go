@@ -2,34 +2,11 @@ package normal
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 	"github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto"
 	"github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto/api"
 )
-
-func (b *Bot) waitForGeneralAccountBalance() {
-	sleepTime := b.strategy.PosManagementSleepMilliseconds
-	for {
-		if b.balanceGeneral > 0 {
-			b.log.WithFields(log.Fields{
-				"general": b.balanceGeneral,
-			}).Debug("Fetched general balance")
-			break
-		} else {
-			b.log.WithFields(log.Fields{
-				"asset": b.settlementAsset,
-			}).Warning("Waiting for positive general balance")
-		}
-
-		if sleepTime < 9000 {
-			sleepTime += 1000
-		}
-		time.Sleep(time.Duration(sleepTime) * time.Millisecond)
-	}
-}
 
 // As the streaming service only gives us data when it changes
 // we need to look up the initial data manually
@@ -44,6 +21,10 @@ func (b *Bot) lookupInitialValues() error {
 		return err
 	}
 	err = b.getAccountBond()
+	if err != nil {
+		return err
+	}
+	err = b.getMarketData()
 	if err != nil {
 		return err
 	}
@@ -134,4 +115,16 @@ func (b *Bot) getPositions() ([]*proto.Position, error) {
 		return nil, errors.Wrap(err, "failed to get positions by party")
 	}
 	return response.Positions, nil
+}
+
+// getMarketData gets the latest info about the market
+func (b *Bot) getMarketData() error {
+	response, err := b.node.MarketDataByID(&api.MarketDataByIDRequest{
+		MarketId: b.market.Id,
+	})
+	if err != nil {
+		return errors.Wrap(err, "Failed to get market data by id")
+	}
+	b.marketData = response.MarketData
+	return nil
 }

@@ -9,6 +9,7 @@ import (
 
 	"code.vegaprotocol.io/liqbot/config"
 	"code.vegaprotocol.io/liqbot/node"
+	"go.uber.org/zap"
 
 	"code.vegaprotocol.io/go-wallet/wallet"
 	ppconfig "code.vegaprotocol.io/priceproxy/config"
@@ -79,6 +80,8 @@ type Bot struct {
 	openVolume         int64
 	previousOpenVolume int64
 
+	// These flags are used for the streaming systems to let
+	// the app know if they are up and working
 	eventStreamLive    bool
 	positionStreamLive bool
 }
@@ -91,8 +94,10 @@ func New(config config.BotConfig, pe PricingEngine, ws wallet.WalletHandler) (b 
 			"bot":  config.Name,
 			"node": config.Location,
 		}),
-		pricingEngine: pe,
-		walletServer:  ws,
+		pricingEngine:      pe,
+		walletServer:       ws,
+		eventStreamLive:    false,
+		positionStreamLive: false,
 	}
 
 	b.strategy, err = validateStrategyConfig(config.StrategyDetails)
@@ -374,26 +379,40 @@ func (b *Bot) checkInitialMargin() error {
 	return nil
 }
 
-func (b *Bot) runPositionManagement() {
+func (b *Bot) initialiseData() error {
 	var err error
-	//	var firstTime bool = true
 
 	err = b.lookupInitialValues()
 	if err != nil {
 		b.log.Debug("Stopping position management as we could not get initial values")
-		b.active = false
-		return
+		return err
 	}
 
-	err = b.subscribeToEvents()
-	if err != nil {
-		b.log.Debug("Unable to subscribe to event bus feeds")
-		b.active = false
-		return
+	if !b.eventStreamLive {
+		err = b.subscribeToEvents()
+		if err != nil {
+			b.log.Debug("Unable to subscribe to event bus feeds")
+			return err
+		}
 	}
-	err = b.subscribePositions()
+
+	if !b.positionStreamLive {
+		err = b.subscribePositions()
+		if err != nil {
+			b.log.Debug("Unable to subscribe to event bus feeds")
+			return err
+		}
+	}
+	return nil
+}
+
+func (b *Bot) runPositionManagement() {
+	var err error
+	var firstTime bool = true
+
+	err = b.initialiseData()
 	if err != nil {
-		b.log.Debug("Unable to subscribe to event bus feeds")
+		b.log.Debug("Stopping position management as we could not get initial the data system")
 		b.active = false
 		return
 	}
@@ -413,23 +432,24 @@ func (b *Bot) runPositionManagement() {
 		default:
 			// At the start of each loop, wait for positive general account balance. This is in case the network has
 			// been restarted.
-			/*			if firstTime {
-							err = b.checkInitialMargin()
-							if err != nil {
-								b.active = false
-								b.log.Debug(zap.Error(err))
-								return
-							}
-							// Submit LP order to market.
-							err = b.sendLiquidityProvision(b.buyShape, b.sellShape)
-							if err != nil {
-								b.log.Error("Failed to send liquidity provision order", zap.Error(err))
-							}
-							firstTime = false
-						}
+			if firstTime {
+				err = b.checkInitialMargin()
+				if err != nil {
+					b.active = false
+					b.log.Error("Failed initial margin check", zap.Error(err))
+					return
+				}
+				// Submit LP order to market.
+				err = b.sendLiquidityProvision(b.buyShape, b.sellShape)
+				if err != nil {
+					b.log.Error("Failed to send liquidity provision order", zap.Error(err))
+					return
+				}
+				firstTime = false
+			}
 
-						b.checkForShapeChange()
-						b.checkPositionManagement()*/
+			b.checkForShapeChange()
+			b.checkPositionManagement()
 
 			// If we have lost the incoming streams we should attempt to reconnect
 			for !b.positionStreamLive || !b.eventStreamLive {
@@ -440,14 +460,8 @@ func (b *Bot) runPositionManagement() {
 					return
 				}
 
-				// Attempt reconnect
-				if !b.positionStreamLive {
-					b.subscribePositions()
-					continue
-				}
-
-				if !b.eventStreamLive {
-					b.subscribeToEvents()
+				err = b.initialiseData()
+				if err != nil {
 					continue
 				}
 			}
@@ -478,8 +492,6 @@ func (b *Bot) calculateOrderSizes(marketID, partyID string, obligation float64, 
 		fraction := float64(lo.Proportion) / float64(totalProportion)
 		scaling := fraction / prob
 		size := uint64(math.Ceil(obligation * scaling / float64(midPrice)))
-
-		//		b.log.Debugf("Sizing Info: Size:%d Offset:%d\n", size, lo.Offset)
 
 		peggedOrder := proto.PeggedOrder{
 			Reference: lo.Reference,
@@ -534,10 +546,6 @@ func (b *Bot) runPriceSteering() {
 			return
 
 		default:
-			// At the start of each loop, wait for positive general account balance. This is in case the network has
-			// been restarted.
-			b.waitForGeneralAccountBalance()
-
 			externalPriceResponse, err = b.pricingEngine.GetPrice(ppcfg)
 			if err != nil {
 				b.log.WithFields(log.Fields{
