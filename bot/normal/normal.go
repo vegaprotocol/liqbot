@@ -135,6 +135,9 @@ func (b *Bot) Start() error {
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("failed to get market %s", b.config.MarketID))
 	}
+	if marketResponse.Market == nil {
+		return fmt.Errorf("No market that matchs our ID: %s", b.config.MarketID)
+	}
 	b.market = marketResponse.Market
 	future := b.market.TradableInstrument.Instrument.GetFuture()
 	if future == nil {
