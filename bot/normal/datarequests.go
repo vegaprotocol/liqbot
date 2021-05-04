@@ -14,25 +14,27 @@ func (b *Bot) lookupInitialValues() error {
 	// Collateral
 	err := b.getAccountGeneral()
 	if err != nil {
-		return err
+		return fmt.Errorf("Failed to get general account details: %w", err)
 	}
 	err = b.getAccountMargin()
 	if err != nil {
-		return err
+		return fmt.Errorf("Failed to get margin account details: %w", err)
 	}
 	err = b.getAccountBond()
 	if err != nil {
-		return err
+		return fmt.Errorf("Failed to get bond account details: %w", err)
 	}
+
+	// Market data (currentPrice, auction etc)
 	err = b.getMarketData()
 	if err != nil {
-		return err
+		return fmt.Errorf("Failed to get market data: %w", err)
 	}
 
 	// Position
 	positions, err := b.getPositions()
 	if err != nil {
-		return err
+		return fmt.Errorf("Failed to get position details: %w", err)
 	}
 
 	// If we have not traded yet then we won't have a position
