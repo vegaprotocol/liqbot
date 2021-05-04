@@ -513,7 +513,7 @@ func (b *Bot) calculateOrderSizes(marketID, partyID string, obligation float64, 
 	return orders
 }
 
-// CalculateMarginCost estimates the margin cost of the set of orders
+// calculateMarginCost estimates the margin cost of the set of orders
 func (b *Bot) calculateMarginCost(risk float64, markPrice uint64, orders []*proto.Order) uint64 {
 	var totalMargin uint64
 	for _, order := range orders {
