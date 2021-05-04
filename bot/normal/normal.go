@@ -606,68 +606,62 @@ func (b *Bot) runPriceSteering() {
 			return
 
 		default:
-			externalPriceResponse, err = b.pricingEngine.GetPrice(ppcfg)
-			if err != nil {
-				b.log.WithFields(log.Fields{
-					"error": err.Error(),
-				}).Warning("Failed to get external price")
-			} else {
-				externalPrice = uint64(externalPriceResponse.Price * math.Pow10(int(b.market.DecimalPlaces)))
-			}
+			if b.marketData.MarketTradingMode == proto.Market_TRADING_MODE_CONTINUOUS {
+				externalPriceResponse, err = b.pricingEngine.GetPrice(ppcfg)
+				if err != nil {
+					b.log.WithFields(log.Fields{
+						"error": err.Error(),
+					}).Warning("Failed to get external price")
+				} else {
+					externalPrice = uint64(externalPriceResponse.Price * math.Pow10(int(b.market.DecimalPlaces)))
+				}
 
-			if err == nil {
-				shouldMove := "no"
-				// We only want to steer the price if the external and market price
-				// are greater than a certain percentage apart
-				currentDiff := math.Abs(float64(currentPrice-externalPrice) / float64(externalPrice))
-				if currentDiff > b.strategy.MinPriceSteerFraction {
-					var side proto.Side
-					if externalPrice > currentPrice {
-						side = proto.Side_SIDE_BUY
-						shouldMove = "UP"
-					} else {
-						side = proto.Side_SIDE_SELL
-						shouldMove = "DN"
-					}
-					req := &api.PrepareSubmitOrderRequest{
-						Submission: &proto.OrderSubmission{
-							Id:          "",
-							MarketId:    b.market.Id,
-							PartyId:     b.walletPubKeyHex,
-							Size:        b.strategy.PriceSteerOrderSize,
-							Side:        side,
-							TimeInForce: proto.Order_TIME_IN_FORCE_IOC,
-							Type:        proto.Order_TYPE_MARKET,
-							Reference:   "",
-						},
+				if err == nil {
+					shouldMove := "no"
+					// We only want to steer the price if the external and market price
+					// are greater than a certain percentage apart
+					currentDiff := math.Abs(float64(currentPrice-externalPrice) / float64(externalPrice))
+					if currentDiff > b.strategy.MinPriceSteerFraction {
+						var side proto.Side
+						if externalPrice > currentPrice {
+							side = proto.Side_SIDE_BUY
+							shouldMove = "UP"
+						} else {
+							side = proto.Side_SIDE_SELL
+							shouldMove = "DN"
+						}
+						b.log.WithFields(log.Fields{
+							"size": b.strategy.PriceSteerOrderSize,
+							"side": side,
+						}).Debug("Submitting order")
+						err = b.sendOrder(b.strategy.PriceSteerOrderSize,
+							0,
+							side,
+							proto.Order_TIME_IN_FORCE_IOC,
+							proto.Order_TYPE_MARKET,
+							"PriceSteeringOrder",
+							0)
 					}
 					b.log.WithFields(log.Fields{
-						"price": req.Submission.Price,
-						"size":  req.Submission.Size,
-						"side":  req.Submission.Side,
-					}).Debug("Submitting order")
-					err = b.submitOrder(req)
+						"currentPrice":  currentPrice,
+						"externalPrice": externalPrice,
+						"diff":          int(externalPrice) - int(currentPrice),
+						"shouldMove":    shouldMove,
+					}).Debug("Steering info")
 				}
-				b.log.WithFields(log.Fields{
-					"currentPrice":  currentPrice,
-					"externalPrice": externalPrice,
-					"diff":          int(externalPrice) - int(currentPrice),
-					"shouldMove":    shouldMove,
-				}).Debug("Steering info")
-			}
 
-			if err == nil {
-				sleepTime = 1000.0 / b.strategy.MarketPriceSteeringRatePerSecond
-			} else {
-				if sleepTime < 29000 {
-					sleepTime += 1000
+				if err == nil {
+					sleepTime = 1000.0 / b.strategy.MarketPriceSteeringRatePerSecond
+				} else {
+					if sleepTime < 29000 {
+						sleepTime += 1000
+					}
+					b.log.WithFields(log.Fields{
+						"error":     err.Error(),
+						"sleepTime": sleepTime,
+					}).Warning("Error during price steering")
 				}
-				b.log.WithFields(log.Fields{
-					"error":     err.Error(),
-					"sleepTime": sleepTime,
-				}).Warning("Error during price steering")
 			}
-
 			err = doze(time.Duration(sleepTime)*time.Millisecond, b.stopPriceSteer)
 			if err != nil {
 				b.log.Debug("Stopping bot market price steering")
