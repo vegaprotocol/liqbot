@@ -60,11 +60,11 @@ func (b *Bot) processEventBusData(stream api.TradingDataService_ObserveEventBusC
 	for {
 		eb, err := stream.Recv()
 		if err == io.EOF {
-			log.Println("event bus data: stream closed by server err:", err)
+			log.Warning("event bus data: stream closed by server err:", err)
 			break
 		}
 		if err != nil {
-			log.Println("event bus data: stream closed err:", err)
+			log.Warning("event bus data: stream closed err:", err)
 			break
 		}
 
