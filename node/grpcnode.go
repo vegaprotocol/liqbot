@@ -210,6 +210,7 @@ func (n *GRPCNode) PositionsByParty(req *api.PositionsByPartyRequest) (response 
 	return
 }
 
+// ObserveEventBus starts a network connection to the node to sending event messages on
 func (n *GRPCNode) ObserveEventBus() (stream api.TradingDataService_ObserveEventBusClient, err error) {
 	msg := "gRPC call failed: ObserveEventBus"
 	if n == nil {
@@ -226,6 +227,7 @@ func (n *GRPCNode) ObserveEventBus() (stream api.TradingDataService_ObserveEvent
 	return
 }
 
+// PositionsSubscribe starts a network connection to receive the party position as it updates
 func (n *GRPCNode) PositionsSubscribe(req *api.PositionsSubscribeRequest) (stream api.TradingDataService_PositionsSubscribeClient, err error) {
 	msg := "gRPC call failed: PositionsSubscribe"
 	if n == nil {
