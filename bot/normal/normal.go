@@ -323,10 +323,16 @@ func (b *Bot) checkPositionManagement() {
 
 	if shouldBuy {
 		size := uint64(float64(abs(b.openVolume)) * b.strategy.PosManagementFraction)
-		b.sendOrder(size, 0, proto.Side_SIDE_BUY, proto.Order_TIME_IN_FORCE_IOC, proto.Order_TYPE_MARKET, "PosManagement", 0)
+		err := b.sendOrder(size, 0, proto.Side_SIDE_BUY, proto.Order_TIME_IN_FORCE_IOC, proto.Order_TYPE_MARKET, "PosManagement", 0)
+		if err != nil {
+			log.Warningln("Failed to place a position management buy")
+		}
 	} else if shouldSell {
 		size := uint64(float64(abs(b.openVolume)) * b.strategy.PosManagementFraction)
-		b.sendOrder(size, 0, proto.Side_SIDE_SELL, proto.Order_TIME_IN_FORCE_IOC, proto.Order_TYPE_MARKET, "PosManagement", 0)
+		err := b.sendOrder(size, 0, proto.Side_SIDE_SELL, proto.Order_TIME_IN_FORCE_IOC, proto.Order_TYPE_MARKET, "PosManagement", 0)
+		if err != nil {
+			log.Warningln("Failed to place a position management sell")
+		}
 	}
 }
 
@@ -433,7 +439,7 @@ func (b *Bot) placeAuctionOrders() {
 
 	// Place the random orders split into
 	var totalVolume uint64
-	r := rand.New(rand.NewSource(1))
+	r := rand.New(rand.NewSource(1)) // #nosec G404 This suboptimal rand generator is fine for now
 
 	for totalVolume < b.config.StrategyDetails.AuctionVolume {
 		remaining := b.config.StrategyDetails.AuctionVolume - totalVolume
