@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"math"
+	"math/rand"
 	"net/url"
 	"time"
 
@@ -84,6 +85,9 @@ type Bot struct {
 	// the app know if they are up and working
 	eventStreamLive    bool
 	positionStreamLive bool
+
+	// Flag to indicate if we have already placed auction orders
+	auctionOrdersPlaced bool
 }
 
 // New returns a new instance of Bot.
@@ -94,10 +98,11 @@ func New(config config.BotConfig, pe PricingEngine, ws wallet.WalletHandler) (b 
 			"bot":  config.Name,
 			"node": config.Location,
 		}),
-		pricingEngine:      pe,
-		walletServer:       ws,
-		eventStreamLive:    false,
-		positionStreamLive: false,
+		pricingEngine:       pe,
+		walletServer:        ws,
+		eventStreamLive:     false,
+		positionStreamLive:  false,
+		auctionOrdersPlaced: false,
 	}
 
 	b.strategy, err = validateStrategyConfig(config.StrategyDetails)
@@ -298,6 +303,10 @@ func (b *Bot) checkForShapeChange() {
 }
 
 func (b *Bot) checkPositionManagement() {
+	if b.marketData.MarketTradingMode != proto.Market_TRADING_MODE_CONTINUOUS {
+		// Only allow position management during continuous trading
+		return
+	}
 	posMarginCost := calculatePositionMarginCost(b.openVolume, b.currentPrice, nil)
 	var shouldBuy, shouldSell bool
 	if posMarginCost > uint64((1.0-b.strategy.StakeFraction-b.strategy.OrdersFraction)*float64(b.balanceGeneral)) {
@@ -313,42 +322,46 @@ func (b *Bot) checkPositionManagement() {
 	}
 
 	if shouldBuy {
-		request := &api.PrepareSubmitOrderRequest{
-			Submission: &proto.OrderSubmission{
-				MarketId:    b.market.Id,
-				PartyId:     b.walletPubKeyHex,
-				Size:        uint64(float64(abs(b.openVolume)) * b.strategy.PosManagementFraction),
-				Side:        proto.Side_SIDE_BUY,
-				TimeInForce: proto.Order_TIME_IN_FORCE_IOC,
-				Type:        proto.Order_TYPE_MARKET,
-				Reference:   "PosManagement",
-			},
-		}
-		err := b.submitOrder(request)
-		if err != nil {
-			b.log.WithFields(log.Fields{
-				"error": err.Error(),
-			}).Warning("Failed to submit order")
-		}
+		size := uint64(float64(abs(b.openVolume)) * b.strategy.PosManagementFraction)
+		b.sendOrder(size, 0, proto.Side_SIDE_BUY, proto.Order_TIME_IN_FORCE_IOC, proto.Order_TYPE_MARKET, "PosManagement", 0)
 	} else if shouldSell {
-		request := &api.PrepareSubmitOrderRequest{
-			Submission: &proto.OrderSubmission{
-				MarketId:    b.market.Id,
-				PartyId:     b.walletPubKeyHex,
-				Size:        uint64(float64(abs(b.openVolume)) * b.strategy.PosManagementFraction),
-				Side:        proto.Side_SIDE_SELL,
-				TimeInForce: proto.Order_TIME_IN_FORCE_IOC,
-				Type:        proto.Order_TYPE_MARKET,
-				Reference:   "PosManagement",
-			},
-		}
-		err := b.submitOrder(request)
-		if err != nil {
-			b.log.WithFields(log.Fields{
-				"error": err.Error(),
-			}).Warning("Failed to submit order")
-		}
+		size := uint64(float64(abs(b.openVolume)) * b.strategy.PosManagementFraction)
+		b.sendOrder(size, 0, proto.Side_SIDE_SELL, proto.Order_TIME_IN_FORCE_IOC, proto.Order_TYPE_MARKET, "PosManagement", 0)
 	}
+}
+
+func (b *Bot) sendOrder(size, price uint64,
+	side proto.Side,
+	tif proto.Order_TimeInForce,
+	orderType proto.Order_Type,
+	reference string,
+	secondsFromNow int64) error {
+	request := &api.PrepareSubmitOrderRequest{
+		Submission: &proto.OrderSubmission{
+			MarketId:    b.market.Id,
+			PartyId:     b.walletPubKeyHex,
+			Size:        size,
+			Side:        side,
+			TimeInForce: tif,
+			Type:        orderType,
+			Reference:   reference,
+		},
+	}
+	if tif == proto.Order_TIME_IN_FORCE_GTT {
+		request.Submission.ExpiresAt = time.Now().UnixNano() + (secondsFromNow * 1000000000)
+	}
+
+	if orderType != proto.Order_TYPE_MARKET {
+		request.Submission.Price = price
+	}
+
+	err := b.submitOrder(request)
+	if err != nil {
+		b.log.WithFields(log.Fields{
+			"error": err.Error(),
+		}).Warning("Failed to submit order")
+	}
+	return err
 }
 
 func (b *Bot) checkInitialMargin() error {
@@ -406,6 +419,41 @@ func (b *Bot) initialiseData() error {
 	return nil
 }
 
+// Divide the auction amount into 10 orders and place them randomly
+// around the current price at upto 50+/- from it.
+func (b *Bot) placeAuctionOrders() {
+	// Check we have not placed them already
+	if b.auctionOrdersPlaced == true {
+		return
+	}
+	// Check we have a currentPrice we can use
+	if b.currentPrice == 0 {
+		return
+	}
+
+	// Place the random orders split into
+	var totalVolume uint64
+	r := rand.New(rand.NewSource(1))
+
+	for totalVolume < b.config.StrategyDetails.AuctionVolume {
+		remaining := b.config.StrategyDetails.AuctionVolume - totalVolume
+		size := min(1+(b.config.StrategyDetails.AuctionVolume/10), remaining)
+		price := b.currentPrice + (uint64(r.Int63n(100) - 50))
+		side := proto.Side_SIDE_BUY
+		if r.Intn(2) == 0 {
+			side = proto.Side_SIDE_SELL
+		}
+		err := b.sendOrder(size, price, side, proto.Order_TIME_IN_FORCE_GTT, proto.Order_TYPE_LIMIT, "AuctionOrder", 330)
+		if err == nil {
+			totalVolume += size
+		} else {
+			// We failed to send an order so stop trying to send anymore
+			break
+		}
+	}
+	b.auctionOrdersPlaced = true
+}
+
 func (b *Bot) runPositionManagement() {
 	var err error
 	var firstTime bool = true
@@ -448,8 +496,14 @@ func (b *Bot) runPositionManagement() {
 				firstTime = false
 			}
 
-			b.checkForShapeChange()
-			b.checkPositionManagement()
+			// Only update liquidity and position if we are not in auction
+			if b.marketData.MarketTradingMode == proto.Market_TRADING_MODE_CONTINUOUS {
+				b.auctionOrdersPlaced = false
+				b.checkForShapeChange()
+				b.checkPositionManagement()
+			} else {
+				b.placeAuctionOrders()
+			}
 
 			// If we have lost the incoming streams we should attempt to reconnect
 			for !b.positionStreamLive || !b.eventStreamLive {

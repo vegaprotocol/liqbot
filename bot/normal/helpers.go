@@ -27,6 +27,13 @@ func max(a, b uint64) uint64 {
 	return b
 }
 
+func min(a, b uint64) uint64 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 func abs(a int64) int64 {
 	if a < 0 {
 		return -a
