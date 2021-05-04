@@ -151,10 +151,10 @@ func (b *Bot) Start() error {
 
 	b.active = true
 	b.stopPosMgmt = make(chan bool)
-	// b.stopPriceSteer = make(chan bool)
+	b.stopPriceSteer = make(chan bool)
 
 	go b.runPositionManagement()
-	//	go b.runPriceSteering()
+	go b.runPriceSteering()
 
 	return nil
 }
@@ -476,7 +476,7 @@ func (b *Bot) runPositionManagement() {
 	}
 }
 
-// CalculateOrderSizes calculates the size of the orders using the total commitment, price, distance from mid and chance
+// calculateOrderSizes calculates the size of the orders using the total commitment, price, distance from mid and chance
 // of trading liquidity.supplied.updateSizes(obligation, currentPrice, liquidityOrders, true, minPrice, maxPrice)
 func (b *Bot) calculateOrderSizes(marketID, partyID string, obligation float64, liquidityOrders []*proto.LiquidityOrder, midPrice uint64) []*proto.Order {
 	orders := make([]*proto.Order, 0, len(liquidityOrders))
