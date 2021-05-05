@@ -18,6 +18,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto"
 	"github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto/api"
+	commandspb "github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto/commands/v1"
 	"github.com/vegaprotocol/api/grpc/clients/go/txn"
 )
 
@@ -263,7 +264,7 @@ func (b *Bot) sendLiquidityProvision(buys, sells []*proto.LiquidityOrder) error 
 	commitment := b.strategy.CommitmentFraction * float64(b.balanceGeneral+b.balanceMargin+b.balanceBond)
 
 	sub := &api.PrepareLiquidityProvisionRequest{
-		Submission: &proto.LiquidityProvisionSubmission{
+		Submission: &commandspb.LiquidityProvisionSubmission{
 			Fee:              b.config.StrategyDetails.Fee,
 			MarketId:         b.market.Id,
 			CommitmentAmount: uint64(commitment),
@@ -338,9 +339,8 @@ func (b *Bot) checkPositionManagement() {
 
 	if shouldBuy {
 		request := &api.PrepareSubmitOrderRequest{
-			Submission: &proto.OrderSubmission{
+			Submission: &commandspb.OrderSubmission{
 				MarketId:    b.market.Id,
-				PartyId:     b.walletPubKeyHex,
 				Size:        uint64(float64(abs(b.openVolume)) * b.strategy.PosManagementFraction),
 				Side:        proto.Side_SIDE_BUY,
 				TimeInForce: proto.Order_TIME_IN_FORCE_IOC,
@@ -356,9 +356,8 @@ func (b *Bot) checkPositionManagement() {
 		}
 	} else if shouldSell {
 		request := &api.PrepareSubmitOrderRequest{
-			Submission: &proto.OrderSubmission{
+			Submission: &commandspb.OrderSubmission{
 				MarketId:    b.market.Id,
-				PartyId:     b.walletPubKeyHex,
 				Size:        uint64(float64(abs(b.openVolume)) * b.strategy.PosManagementFraction),
 				Side:        proto.Side_SIDE_SELL,
 				TimeInForce: proto.Order_TIME_IN_FORCE_IOC,
@@ -594,10 +593,8 @@ func (b *Bot) runPriceSteering() {
 						shouldMove = "DN"
 					}
 					req := &api.PrepareSubmitOrderRequest{
-						Submission: &proto.OrderSubmission{
-							Id:          "",
+						Submission: &commandspb.OrderSubmission{
 							MarketId:    b.market.Id,
-							PartyId:     b.walletPubKeyHex,
 							Size:        b.strategy.PriceSteerOrderSize,
 							Side:        side,
 							TimeInForce: proto.Order_TIME_IN_FORCE_IOC,

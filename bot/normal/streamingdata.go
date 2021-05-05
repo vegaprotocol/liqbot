@@ -7,6 +7,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto"
 	"github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto/api"
+	eventspb "github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto/events/v1"
 )
 
 // Subscribe to all the events that we need to keep the bot happy
@@ -16,8 +17,8 @@ import (
 func (b *Bot) subscribeToEvents() error {
 	// Party related events
 	eventBusDataReq := &api.ObserveEventBusRequest{
-		Type: []proto.BusEventType{
-			proto.BusEventType_BUS_EVENT_TYPE_ACCOUNT,
+		Type: []eventspb.BusEventType{
+			eventspb.BusEventType_BUS_EVENT_TYPE_ACCOUNT,
 		},
 		PartyId: b.walletPubKeyHex,
 	}
@@ -36,8 +37,8 @@ func (b *Bot) subscribeToEvents() error {
 
 	// Market related events
 	eventBusDataReq2 := &api.ObserveEventBusRequest{
-		Type: []proto.BusEventType{
-			proto.BusEventType_BUS_EVENT_TYPE_MARKET_DATA,
+		Type: []eventspb.BusEventType{
+			eventspb.BusEventType_BUS_EVENT_TYPE_MARKET_DATA,
 		},
 		MarketId: b.config.MarketID,
 	}
@@ -70,7 +71,7 @@ func (b *Bot) processEventBusData(stream api.TradingDataService_ObserveEventBusC
 
 		for _, event := range eb.Events {
 			switch event.Type {
-			case proto.BusEventType_BUS_EVENT_TYPE_ACCOUNT:
+			case eventspb.BusEventType_BUS_EVENT_TYPE_ACCOUNT:
 				acct := event.GetAccount()
 				// Filter out any that are for different assets
 				if acct.Asset != b.settlementAssetID {
@@ -87,7 +88,7 @@ func (b *Bot) processEventBusData(stream api.TradingDataService_ObserveEventBusC
 					b.log.Debugln("Setting bond account to ", acct.Balance)
 					b.balanceBond = acct.Balance
 				}
-			case proto.BusEventType_BUS_EVENT_TYPE_MARKET_DATA:
+			case eventspb.BusEventType_BUS_EVENT_TYPE_MARKET_DATA:
 				b.log.Debugln("Updating market data")
 				b.marketData = event.GetMarketData()
 				b.log.Debugln(b.marketData)
