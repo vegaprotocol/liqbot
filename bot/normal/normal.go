@@ -36,6 +36,7 @@ type Node interface {
 	MarketDataByID(req *api.MarketDataByIDRequest) (response *api.MarketDataByIDResponse, err error)
 	PartyAccounts(req *api.PartyAccountsRequest) (response *api.PartyAccountsResponse, err error)
 	PositionsByParty(req *api.PositionsByPartyRequest) (response *api.PositionsByPartyResponse, err error)
+	AssetByID(assetID string) (response *api.AssetByIDResponse, err error)
 
 	// Events
 	ObserveEventBus() (stream api.TradingDataService_ObserveEventBusClient, err error)
@@ -50,16 +51,17 @@ type PricingEngine interface {
 
 // Bot represents one Normal liquidity bot.
 type Bot struct {
-	config          config.BotConfig
-	active          bool
-	log             *log.Entry
-	pricingEngine   PricingEngine
-	settlementAsset string
-	stopPosMgmt     chan bool
-	stopPriceSteer  chan bool
-	strategy        *Strategy
-	market          *proto.Market
-	node            Node
+	config                 config.BotConfig
+	active                 bool
+	log                    *log.Entry
+	pricingEngine          PricingEngine
+	settlementAssetID      string
+	settlementAssetAddress string
+	stopPosMgmt            chan bool
+	stopPriceSteer         chan bool
+	strategy               *Strategy
+	market                 *proto.Market
+	node                   Node
 
 	balanceGeneral uint64
 	balanceMargin  uint64
@@ -143,11 +145,18 @@ func (b *Bot) Start() error {
 	if future == nil {
 		return errors.New("market is not a Futures market")
 	}
-	b.settlementAsset = future.SettlementAsset
+	b.settlementAssetID = future.SettlementAsset
 	b.log.WithFields(log.Fields{
-		"marketID":        b.config.MarketID,
-		"settlementAsset": b.settlementAsset,
+		"marketID":          b.config.MarketID,
+		"settlementAssetID": b.settlementAssetID,
 	}).Debug("Fetched market info")
+
+	// Use the settlementAssetID to lookup the settlement ethereum address
+	assetResponse, err := b.node.AssetByID(b.settlementAssetID)
+	if err != nil {
+		return fmt.Errorf("unable to look up asset details for %s", b.settlementAssetID)
+	}
+	b.settlementAssetAddress = assetResponse.Asset.Source.GetErc20().ContractAddress
 
 	b.balanceGeneral = 0
 	b.balanceMargin = 0
@@ -172,6 +181,18 @@ func (b *Bot) Stop() {
 	close(b.stopPosMgmt)
 	b.stopPriceSteer <- true
 	close(b.stopPriceSteer)
+}
+
+// GetTraderDetails returns information relating to the trader
+func (b *Bot) GetTraderDetails() string {
+	Name := b.config.Name
+	PubKey := b.walletPubKeyHex
+	SettlementVegaAssetID := b.settlementAssetID
+	SettlementEthereumContractAddress := b.settlementAssetAddress
+
+	return "{\"name\":\"" + Name + "\",\"pubKey\":\"" + PubKey + "\",\"settlementVegaAssetID\":\"" +
+		SettlementVegaAssetID + "\",\"settlementEthereumContractAddress\":\"" +
+		SettlementEthereumContractAddress + "\"}"
 }
 
 // ConvertSignedBundle converts from trading-core.wallet.SignedBundle to trading-core.proto.api.SignedBundle

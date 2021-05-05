@@ -29,6 +29,7 @@ import (
 type Bot interface {
 	Start() error
 	Stop()
+	GetTraderDetails() string
 }
 
 // PricingEngine is the source of price information from the price proxy.
@@ -126,6 +127,7 @@ func NewService(config config.Config, pe PricingEngine, ws wallet.WalletHandler)
 
 func (s *Service) addRoutes() {
 	s.GET("/status", s.Status)
+	s.GET("/traders-settlement", s.TradersSettlement)
 }
 
 func (s *Service) getServer() *http.Server {
@@ -201,11 +203,34 @@ func (s *Service) Status(w http.ResponseWriter, r *http.Request, _ httprouter.Pa
 	}
 }
 
+// TradersSettlement is an endpoint to show details of all active traders
+func (s *Service) TradersSettlement(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Go through all the bots and ask for details
+	msg := "["
+	count := 0
+	for _, bot := range s.bots {
+		if count > 0 {
+			msg += ","
+		}
+		ts := bot.GetTraderDetails()
+		msg += ts
+		count++
+	}
+	msg += "]"
+	writeString(w, msg, http.StatusOK)
+}
+
 func writeSuccess(w http.ResponseWriter, data interface{}, status int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	buf, _ := json.Marshal(data)
 	_, _ = w.Write(buf)
+}
+
+func writeString(w http.ResponseWriter, str string, status int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_, _ = w.Write([]byte(str))
 }
 
 func writeError(w http.ResponseWriter, e error, status int) {
