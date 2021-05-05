@@ -185,14 +185,14 @@ func (b *Bot) Stop() {
 
 // GetTraderDetails returns information relating to the trader
 func (b *Bot) GetTraderDetails() string {
-	Name := b.config.Name
-	PubKey := b.walletPubKeyHex
-	SettlementVegaAssetID := b.settlementAssetID
-	SettlementEthereumContractAddress := b.settlementAssetAddress
+	name := b.config.Name
+	pubKey := b.walletPubKeyHex
+	settlementVegaAssetID := b.settlementAssetID
+	settlementEthereumContractAddress := b.settlementAssetAddress
 
-	return "{\"name\":\"" + Name + "\",\"pubKey\":\"" + PubKey + "\",\"settlementVegaAssetID\":\"" +
-		SettlementVegaAssetID + "\",\"settlementEthereumContractAddress\":\"" +
-		SettlementEthereumContractAddress + "\"}"
+	return "{\"name\":\"" + name + "\",\"pubKey\":\"" + pubKey + "\",\"settlementVegaAssetID\":\"" +
+		settlementVegaAssetID + "\",\"settlementEthereumContractAddress\":\"" +
+		settlementEthereumContractAddress + "\"}"
 }
 
 // ConvertSignedBundle converts from trading-core.wallet.SignedBundle to trading-core.proto.api.SignedBundle
