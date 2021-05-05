@@ -73,7 +73,7 @@ func (b *Bot) processEventBusData(stream api.TradingDataService_ObserveEventBusC
 			case proto.BusEventType_BUS_EVENT_TYPE_ACCOUNT:
 				acct := event.GetAccount()
 				// Filter out any that are for different assets
-				if acct.Asset != b.settlementAsset {
+				if acct.Asset != b.settlementAssetID {
 					continue
 				}
 				switch acct.Type {

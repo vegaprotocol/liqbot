@@ -48,7 +48,7 @@ func (b *Bot) getAccountGeneral() error {
 	response, err := b.node.PartyAccounts(&api.PartyAccountsRequest{
 		// MarketId: general account is not per market
 		PartyId: b.walletPubKeyHex,
-		Asset:   b.settlementAsset,
+		Asset:   b.settlementAssetID,
 		Type:    proto.AccountType_ACCOUNT_TYPE_GENERAL,
 	})
 	if err != nil {
@@ -69,7 +69,7 @@ func (b *Bot) getAccountMargin() error {
 	response, err := b.node.PartyAccounts(&api.PartyAccountsRequest{
 		PartyId:  b.walletPubKeyHex,
 		MarketId: b.market.Id,
-		Asset:    b.settlementAsset,
+		Asset:    b.settlementAssetID,
 		Type:     proto.AccountType_ACCOUNT_TYPE_MARGIN,
 	})
 	if err != nil {
@@ -91,7 +91,7 @@ func (b *Bot) getAccountBond() error {
 	response, err := b.node.PartyAccounts(&api.PartyAccountsRequest{
 		PartyId:  b.walletPubKeyHex,
 		MarketId: b.market.Id,
-		Asset:    b.settlementAsset,
+		Asset:    b.settlementAssetID,
 		Type:     proto.AccountType_ACCOUNT_TYPE_BOND,
 	})
 	if err != nil {

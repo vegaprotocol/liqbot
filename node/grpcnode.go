@@ -243,3 +243,27 @@ func (n *GRPCNode) PositionsSubscribe(req *api.PositionsSubscribeRequest) (strea
 	}
 	return
 }
+
+// AssetByID returns information about a given asset
+func (n *GRPCNode) AssetByID(assetID string) (response *api.AssetByIDResponse, err error) {
+	msg := "gRPC call failed: AssetByID"
+	if n == nil {
+		err = errors.Wrap(e.ErrNil, msg)
+		return
+	}
+
+	c := api.NewTradingDataServiceClient(n.conn)
+	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
+	defer cancel()
+
+	req := &api.AssetByIDRequest{
+		Id: assetID,
+	}
+	response, err = c.AssetByID(ctx, req)
+	if err != nil {
+		err = errors.Wrap(err, msg)
+		return
+	}
+	return
+
+}
