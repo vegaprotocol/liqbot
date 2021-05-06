@@ -170,6 +170,10 @@ func (b *Bot) Start() error {
 	b.stopPosMgmt = make(chan bool)
 	b.stopPriceSteer = make(chan bool)
 
+	err = b.initialiseData()
+	if err != nil {
+		return fmt.Errorf("failed to initialise data: %w", err)
+	}
 	go b.runPositionManagement()
 	go b.runPriceSteering()
 
@@ -249,6 +253,10 @@ func (b *Bot) submitLiquidityProvision(sub *api.PrepareLiquidityProvisionRequest
 	return nil
 }
 
+func (b *Bot) canPlaceTrades() bool {
+	return b.marketData.MarketTradingMode == proto.Market_TRADING_MODE_CONTINUOUS
+}
+
 func (b *Bot) submitOrder(sub *api.PrepareSubmitOrderRequest) error {
 	// Prepare tx, without talking to a Vega node
 	prepared, err := txn.PrepareSubmitOrder(sub)
@@ -316,18 +324,20 @@ func (b *Bot) checkForShapeChange() {
 	if (b.openVolume > 0 && b.previousOpenVolume <= 0) ||
 		(b.openVolume < 0 && b.previousOpenVolume >= 0) {
 
+		b.log.WithFields(log.Fields{"shape": shape}).Debug("Flipping LP direction")
 		err := b.sendLiquidityProvision(b.buyShape, b.sellShape)
 		if err != nil {
 			b.log.WithFields(log.Fields{
 				"error": err.Error(),
 			}).Warning("Failed to send liquidity provision")
+		} else {
+			b.previousOpenVolume = b.openVolume
 		}
 	}
-	b.previousOpenVolume = b.openVolume
 }
 
 func (b *Bot) checkPositionManagement() {
-	if b.marketData.MarketTradingMode != proto.Market_TRADING_MODE_CONTINUOUS {
+	if !b.canPlaceTrades() {
 		// Only allow position management during continuous trading
 		return
 	}
@@ -488,13 +498,6 @@ func (b *Bot) runPositionManagement() {
 	var err error
 	var firstTime bool = true
 
-	err = b.initialiseData()
-	if err != nil {
-		b.log.Debug("Stopping position management as we could not get initial the data system")
-		b.active = false
-		return
-	}
-
 	// We always start off with longening shapes
 	b.buyShape = b.strategy.LongeningShape.Buys
 	b.sellShape = b.strategy.LongeningShape.Sells
@@ -527,7 +530,7 @@ func (b *Bot) runPositionManagement() {
 			}
 
 			// Only update liquidity and position if we are not in auction
-			if b.marketData.MarketTradingMode == proto.Market_TRADING_MODE_CONTINUOUS {
+			if b.canPlaceTrades() {
 				b.auctionOrdersPlaced = false
 				b.checkForShapeChange()
 				b.checkPositionManagement()
@@ -630,17 +633,18 @@ func (b *Bot) runPriceSteering() {
 			return
 
 		default:
-			if b.marketData.MarketTradingMode == proto.Market_TRADING_MODE_CONTINUOUS {
+			if b.strategy.PriceSteerOrderSize > 0 && b.canPlaceTrades() {
 				externalPriceResponse, err = b.pricingEngine.GetPrice(ppcfg)
 				if err != nil {
 					b.log.WithFields(log.Fields{
 						"error": err.Error(),
 					}).Warning("Failed to get external price")
+					externalPrice = 0
 				} else {
 					externalPrice = uint64(externalPriceResponse.Price * math.Pow10(int(b.market.DecimalPlaces)))
 				}
 
-				if err == nil {
+				if err == nil && externalPrice != 0 {
 					shouldMove := "no"
 					// We only want to steer the price if the external and market price
 					// are greater than a certain percentage apart
