@@ -160,7 +160,7 @@ func (b *Bot) Start() error {
 
 	err = b.initialiseData()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to initialise data: %w", err)
 	}
 	go b.runPositionManagement()
 	go b.runPriceSteering()
@@ -230,10 +230,7 @@ func (b *Bot) submitLiquidityProvision(sub *api.PrepareLiquidityProvisionRequest
 }
 
 func (b *Bot) canPlaceTrades() bool {
-	if b.marketData.MarketTradingMode == proto.Market_TRADING_MODE_CONTINUOUS {
-		return true
-	}
-	return false
+	return b.marketData.MarketTradingMode == proto.Market_TRADING_MODE_CONTINUOUS
 }
 
 func (b *Bot) submitOrder(sub *api.PrepareSubmitOrderRequest) error {
@@ -303,7 +300,7 @@ func (b *Bot) checkForShapeChange() {
 	if (b.openVolume > 0 && b.previousOpenVolume <= 0) ||
 		(b.openVolume < 0 && b.previousOpenVolume >= 0) {
 
-		b.log.Debugln("Flipping LP direction:", shape)
+		b.log.WithFields(log.Fields{"shape": shape}).Debug("Flipping LP direction")
 		err := b.sendLiquidityProvision(b.buyShape, b.sellShape)
 		if err != nil {
 			b.log.WithFields(log.Fields{
