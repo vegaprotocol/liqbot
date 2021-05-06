@@ -9,7 +9,6 @@ import (
 
 	"code.vegaprotocol.io/liqbot/config"
 	"code.vegaprotocol.io/liqbot/node"
-	"go.uber.org/zap"
 
 	"code.vegaprotocol.io/go-wallet/wallet"
 	ppconfig "code.vegaprotocol.io/priceproxy/config"
@@ -157,7 +156,12 @@ func (b *Bot) Start() error {
 	if err != nil {
 		return fmt.Errorf("unable to look up asset details for %s", b.settlementAssetID)
 	}
-	b.settlementAssetAddress = assetResponse.Asset.Source.GetErc20().ContractAddress
+	erc20 := assetResponse.Asset.Source.GetErc20()
+	if erc20 != nil {
+		b.settlementAssetAddress = erc20.ContractAddress
+	} else {
+		b.settlementAssetAddress = ""
+	}
 
 	b.balanceGeneral = 0
 	b.balanceMargin = 0
@@ -459,13 +463,17 @@ func (b *Bot) runPositionManagement() {
 				err = b.checkInitialMargin()
 				if err != nil {
 					b.active = false
-					b.log.Error("Failed initial margin check", zap.Error(err))
+					b.log.WithFields(log.Fields{
+						"error": err.Error(),
+					}).Error("Failed initial margin check")
 					return
 				}
 				// Submit LP order to market.
 				err = b.sendLiquidityProvision(b.buyShape, b.sellShape)
 				if err != nil {
-					b.log.Error("Failed to send liquidity provision order", zap.Error(err))
+					b.log.WithFields(log.Fields{
+						"error": err.Error(),
+					}).Error("Failed to send liquidity provision order")
 					return
 				}
 				firstTime = false
