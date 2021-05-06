@@ -36,10 +36,16 @@ func (b *Bot) lookupInitialValues() error {
 	if err != nil {
 		return fmt.Errorf("Failed to get position details: %w", err)
 	}
-	if len(positions) != 1 {
-		return errors.New("One position item required")
+
+	// If we have not traded yet then we won't have a position
+	if positions == nil {
+		b.openVolume = 0
+	} else {
+		if len(positions) != 1 {
+			return errors.New("One position item required")
+		}
+		b.openVolume = positions[0].OpenVolume
 	}
-	b.openVolume = positions[0].OpenVolume
 	return nil
 }
 
@@ -128,5 +134,6 @@ func (b *Bot) getMarketData() error {
 		return errors.Wrap(err, "Failed to get market data by id")
 	}
 	b.marketData = response.MarketData
+	b.currentPrice = response.MarketData.StaticMidPrice
 	return nil
 }
