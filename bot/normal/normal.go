@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"math"
+	"math/rand"
 	"net/url"
 	"time"
 
@@ -86,6 +87,9 @@ type Bot struct {
 	// the app know if they are up and working
 	eventStreamLive    bool
 	positionStreamLive bool
+
+	// Flag to indicate if we have already placed auction orders
+	auctionOrdersPlaced bool
 }
 
 // New returns a new instance of Bot.
@@ -96,10 +100,11 @@ func New(config config.BotConfig, pe PricingEngine, ws wallet.WalletHandler) (b 
 			"bot":  config.Name,
 			"node": config.Location,
 		}),
-		pricingEngine:      pe,
-		walletServer:       ws,
-		eventStreamLive:    false,
-		positionStreamLive: false,
+		pricingEngine:       pe,
+		walletServer:        ws,
+		eventStreamLive:     false,
+		positionStreamLive:  false,
+		auctionOrdersPlaced: false,
 	}
 
 	b.strategy, err = validateStrategyConfig(config.StrategyDetails)
@@ -170,6 +175,10 @@ func (b *Bot) Start() error {
 	b.stopPosMgmt = make(chan bool)
 	b.stopPriceSteer = make(chan bool)
 
+	err = b.initialiseData()
+	if err != nil {
+		return fmt.Errorf("failed to initialise data: %w", err)
+	}
 	go b.runPositionManagement()
 	go b.runPriceSteering()
 
@@ -249,6 +258,10 @@ func (b *Bot) submitLiquidityProvision(sub *api.PrepareLiquidityProvisionRequest
 	return nil
 }
 
+func (b *Bot) canPlaceTrades() bool {
+	return b.marketData.MarketTradingMode == proto.Market_TRADING_MODE_CONTINUOUS
+}
+
 func (b *Bot) submitOrder(sub *api.PrepareSubmitOrderRequest) error {
 	// Prepare tx, without talking to a Vega node
 	prepared, err := txn.PrepareSubmitOrder(sub)
@@ -316,17 +329,23 @@ func (b *Bot) checkForShapeChange() {
 	if (b.openVolume > 0 && b.previousOpenVolume <= 0) ||
 		(b.openVolume < 0 && b.previousOpenVolume >= 0) {
 
+		b.log.WithFields(log.Fields{"shape": shape}).Debug("Flipping LP direction")
 		err := b.sendLiquidityProvision(b.buyShape, b.sellShape)
 		if err != nil {
 			b.log.WithFields(log.Fields{
 				"error": err.Error(),
 			}).Warning("Failed to send liquidity provision")
+		} else {
+			b.previousOpenVolume = b.openVolume
 		}
 	}
-	b.previousOpenVolume = b.openVolume
 }
 
 func (b *Bot) checkPositionManagement() {
+	if !b.canPlaceTrades() {
+		// Only allow position management during continuous trading
+		return
+	}
 	posMarginCost := calculatePositionMarginCost(b.openVolume, b.currentPrice, nil)
 	var shouldBuy, shouldSell bool
 	if posMarginCost > uint64((1.0-b.strategy.StakeFraction-b.strategy.OrdersFraction)*float64(b.balanceGeneral)) {
@@ -342,40 +361,53 @@ func (b *Bot) checkPositionManagement() {
 	}
 
 	if shouldBuy {
-		request := &api.PrepareSubmitOrderRequest{
-			Submission: &commandspb.OrderSubmission{
-				MarketId:    b.market.Id,
-				Size:        uint64(float64(abs(b.openVolume)) * b.strategy.PosManagementFraction),
-				Side:        proto.Side_SIDE_BUY,
-				TimeInForce: proto.Order_TIME_IN_FORCE_IOC,
-				Type:        proto.Order_TYPE_MARKET,
-				Reference:   "PosManagement",
-			},
-		}
-		err := b.submitOrder(request)
+		size := uint64(float64(abs(b.openVolume)) * b.strategy.PosManagementFraction)
+		err := b.sendOrder(size, 0, proto.Side_SIDE_BUY, proto.Order_TIME_IN_FORCE_IOC, proto.Order_TYPE_MARKET, "PosManagement", 0)
 		if err != nil {
-			b.log.WithFields(log.Fields{
-				"error": err.Error(),
-			}).Warning("Failed to submit order")
+			log.Warningln("Failed to place a position management buy")
 		}
 	} else if shouldSell {
-		request := &api.PrepareSubmitOrderRequest{
-			Submission: &commandspb.OrderSubmission{
-				MarketId:    b.market.Id,
-				Size:        uint64(float64(abs(b.openVolume)) * b.strategy.PosManagementFraction),
-				Side:        proto.Side_SIDE_SELL,
-				TimeInForce: proto.Order_TIME_IN_FORCE_IOC,
-				Type:        proto.Order_TYPE_MARKET,
-				Reference:   "PosManagement",
-			},
-		}
-		err := b.submitOrder(request)
+		size := uint64(float64(abs(b.openVolume)) * b.strategy.PosManagementFraction)
+		err := b.sendOrder(size, 0, proto.Side_SIDE_SELL, proto.Order_TIME_IN_FORCE_IOC, proto.Order_TYPE_MARKET, "PosManagement", 0)
 		if err != nil {
-			b.log.WithFields(log.Fields{
-				"error": err.Error(),
-			}).Warning("Failed to submit order")
+			log.Warningln("Failed to place a position management sell")
 		}
 	}
+}
+
+func (b *Bot) sendOrder(
+	size, price uint64,
+	side proto.Side,
+	tif proto.Order_TimeInForce,
+	orderType proto.Order_Type,
+	reference string,
+	secondsFromNow int64,
+) error {
+	request := &api.PrepareSubmitOrderRequest{
+		Submission: &commandspb.OrderSubmission{
+			MarketId:    b.market.Id,
+			Size:        size,
+			Side:        side,
+			TimeInForce: tif,
+			Type:        orderType,
+			Reference:   reference,
+		},
+	}
+	if tif == proto.Order_TIME_IN_FORCE_GTT {
+		request.Submission.ExpiresAt = time.Now().UnixNano() + (secondsFromNow * 1000000000)
+	}
+
+	if orderType != proto.Order_TYPE_MARKET {
+		request.Submission.Price = price
+	}
+
+	err := b.submitOrder(request)
+	if err != nil {
+		b.log.WithFields(log.Fields{
+			"error": err.Error(),
+		}).Warning("Failed to submit order")
+	}
+	return err
 }
 
 func (b *Bot) checkInitialMargin() error {
@@ -433,16 +465,44 @@ func (b *Bot) initialiseData() error {
 	return nil
 }
 
+// Divide the auction amount into 10 orders and place them randomly
+// around the current price at upto 50+/- from it.
+func (b *Bot) placeAuctionOrders() {
+	// Check we have not placed them already
+	if b.auctionOrdersPlaced == true {
+		return
+	}
+	// Check we have a currentPrice we can use
+	if b.currentPrice == 0 {
+		return
+	}
+
+	// Place the random orders split into
+	var totalVolume uint64
+	r := rand.New(rand.NewSource(1)) // #nosec G404 This suboptimal rand generator is fine for now
+
+	for totalVolume < b.config.StrategyDetails.AuctionVolume {
+		remaining := b.config.StrategyDetails.AuctionVolume - totalVolume
+		size := min(1+(b.config.StrategyDetails.AuctionVolume/10), remaining)
+		price := b.currentPrice + (uint64(r.Int63n(100) - 50))
+		side := proto.Side_SIDE_BUY
+		if r.Intn(2) == 0 {
+			side = proto.Side_SIDE_SELL
+		}
+		err := b.sendOrder(size, price, side, proto.Order_TIME_IN_FORCE_GTT, proto.Order_TYPE_LIMIT, "AuctionOrder", 330)
+		if err == nil {
+			totalVolume += size
+		} else {
+			// We failed to send an order so stop trying to send anymore
+			break
+		}
+	}
+	b.auctionOrdersPlaced = true
+}
+
 func (b *Bot) runPositionManagement() {
 	var err error
 	var firstTime bool = true
-
-	err = b.initialiseData()
-	if err != nil {
-		b.log.Debug("Stopping position management as we could not get initial the data system")
-		b.active = false
-		return
-	}
 
 	// We always start off with longening shapes
 	b.buyShape = b.strategy.LongeningShape.Buys
@@ -479,8 +539,14 @@ func (b *Bot) runPositionManagement() {
 				firstTime = false
 			}
 
-			b.checkForShapeChange()
-			b.checkPositionManagement()
+			// Only update liquidity and position if we are not in auction
+			if b.canPlaceTrades() {
+				b.auctionOrdersPlaced = false
+				b.checkForShapeChange()
+				b.checkPositionManagement()
+			} else {
+				b.placeAuctionOrders()
+			}
 
 			// If we have lost the incoming streams we should attempt to reconnect
 			for !b.positionStreamLive || !b.eventStreamLive {
@@ -577,66 +643,63 @@ func (b *Bot) runPriceSteering() {
 			return
 
 		default:
-			externalPriceResponse, err = b.pricingEngine.GetPrice(ppcfg)
-			if err != nil {
-				b.log.WithFields(log.Fields{
-					"error": err.Error(),
-				}).Warning("Failed to get external price")
-			} else {
-				externalPrice = uint64(externalPriceResponse.Price * math.Pow10(int(b.market.DecimalPlaces)))
-			}
+			if b.strategy.PriceSteerOrderSize > 0 && b.canPlaceTrades() {
+				externalPriceResponse, err = b.pricingEngine.GetPrice(ppcfg)
+				if err != nil {
+					b.log.WithFields(log.Fields{
+						"error": err.Error(),
+					}).Warning("Failed to get external price")
+					externalPrice = 0
+				} else {
+					externalPrice = uint64(externalPriceResponse.Price * math.Pow10(int(b.market.DecimalPlaces)))
+				}
 
-			if err == nil {
-				shouldMove := "no"
-				// We only want to steer the price if the external and market price
-				// are greater than a certain percentage apart
-				currentDiff := math.Abs(float64(currentPrice-externalPrice) / float64(externalPrice))
-				if currentDiff > b.strategy.MinPriceSteerFraction {
-					var side proto.Side
-					if externalPrice > currentPrice {
-						side = proto.Side_SIDE_BUY
-						shouldMove = "UP"
-					} else {
-						side = proto.Side_SIDE_SELL
-						shouldMove = "DN"
-					}
-					req := &api.PrepareSubmitOrderRequest{
-						Submission: &commandspb.OrderSubmission{
-							MarketId:    b.market.Id,
-							Size:        b.strategy.PriceSteerOrderSize,
-							Side:        side,
-							TimeInForce: proto.Order_TIME_IN_FORCE_IOC,
-							Type:        proto.Order_TYPE_MARKET,
-							Reference:   "",
-						},
+				if err == nil && externalPrice != 0 {
+					shouldMove := "no"
+					// We only want to steer the price if the external and market price
+					// are greater than a certain percentage apart
+					currentDiff := math.Abs(float64(currentPrice-externalPrice) / float64(externalPrice))
+					if currentDiff > b.strategy.MinPriceSteerFraction {
+						var side proto.Side
+						if externalPrice > currentPrice {
+							side = proto.Side_SIDE_BUY
+							shouldMove = "UP"
+						} else {
+							side = proto.Side_SIDE_SELL
+							shouldMove = "DN"
+						}
+						b.log.WithFields(log.Fields{
+							"size": b.strategy.PriceSteerOrderSize,
+							"side": side,
+						}).Debug("Submitting order")
+						err = b.sendOrder(b.strategy.PriceSteerOrderSize,
+							0,
+							side,
+							proto.Order_TIME_IN_FORCE_IOC,
+							proto.Order_TYPE_MARKET,
+							"PriceSteeringOrder",
+							0)
 					}
 					b.log.WithFields(log.Fields{
-						"price": req.Submission.Price,
-						"size":  req.Submission.Size,
-						"side":  req.Submission.Side,
-					}).Debug("Submitting order")
-					err = b.submitOrder(req)
+						"currentPrice":  currentPrice,
+						"externalPrice": externalPrice,
+						"diff":          int(externalPrice) - int(currentPrice),
+						"shouldMove":    shouldMove,
+					}).Debug("Steering info")
 				}
-				b.log.WithFields(log.Fields{
-					"currentPrice":  currentPrice,
-					"externalPrice": externalPrice,
-					"diff":          int(externalPrice) - int(currentPrice),
-					"shouldMove":    shouldMove,
-				}).Debug("Steering info")
-			}
 
-			if err == nil {
-				sleepTime = 1000.0 / b.strategy.MarketPriceSteeringRatePerSecond
-			} else {
-				if sleepTime < 29000 {
-					sleepTime += 1000
+				if err == nil {
+					sleepTime = 1000.0 / b.strategy.MarketPriceSteeringRatePerSecond
+				} else {
+					if sleepTime < 29000 {
+						sleepTime += 1000
+					}
+					b.log.WithFields(log.Fields{
+						"error":     err.Error(),
+						"sleepTime": sleepTime,
+					}).Warning("Error during price steering")
 				}
-				b.log.WithFields(log.Fields{
-					"error":     err.Error(),
-					"sleepTime": sleepTime,
-				}).Warning("Error during price steering")
 			}
-
 			err = doze(time.Duration(sleepTime)*time.Millisecond, b.stopPriceSteer)
 			if err != nil {
 				b.log.Debug("Stopping bot market price steering")

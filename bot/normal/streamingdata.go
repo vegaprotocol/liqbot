@@ -79,19 +79,14 @@ func (b *Bot) processEventBusData(stream api.TradingDataService_ObserveEventBusC
 				}
 				switch acct.Type {
 				case proto.AccountType_ACCOUNT_TYPE_GENERAL:
-					b.log.Debugln("Setting general account to ", acct.Balance)
 					b.balanceGeneral = acct.Balance
 				case proto.AccountType_ACCOUNT_TYPE_MARGIN:
-					b.log.Debugln("Setting margin account to ", acct.Balance)
 					b.balanceMargin = acct.Balance
 				case proto.AccountType_ACCOUNT_TYPE_BOND:
-					b.log.Debugln("Setting bond account to ", acct.Balance)
 					b.balanceBond = acct.Balance
 				}
 			case eventspb.BusEventType_BUS_EVENT_TYPE_MARKET_DATA:
-				b.log.Debugln("Updating market data")
 				b.marketData = event.GetMarketData()
-				b.log.Debugln(b.marketData)
 				b.currentPrice = b.marketData.MarkPrice
 			}
 		}
@@ -128,7 +123,6 @@ func (b *Bot) processPositions(stream api.TradingDataService_PositionsSubscribeC
 			break
 		}
 		b.openVolume = o.GetPosition().OpenVolume
-		b.log.Debugln("Setting OpenVolume to ", b.openVolume)
 	}
 	// Let the app know we have stopped receiving position updates
 	b.positionStreamLive = false
