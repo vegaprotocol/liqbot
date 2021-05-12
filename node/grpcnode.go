@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
 	e "code.vegaprotocol.io/liqbot/errors"
@@ -11,6 +12,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto/api"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/status"
 )
 
 // GRPCNode stores state for a Vega node.
@@ -33,7 +35,7 @@ func NewGRPCNode(addr url.URL, connectTimeout time.Duration, callTimeout time.Du
 	defer cancel()
 	conn, err := grpc.DialContext(ctx, hostPort, grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {
-		return nil, errors.Wrap(err, fmt.Sprintf("failed to dial gRPC node: %s", hostPort))
+		return nil, errors.Wrap(GRPCErrorDetail(err), fmt.Sprintf("failed to dial gRPC node: %s", hostPort))
 	}
 	node.conn = conn
 	return &node, nil
@@ -63,7 +65,7 @@ func (n *GRPCNode) SubmitTransaction(req *api.SubmitTransactionRequest) (resp *a
 
 	resp, err = c.SubmitTransaction(ctx, req)
 	if err != nil {
-		err = errors.Wrap(err, msg)
+		err = errors.Wrap(GRPCErrorDetail(err), msg)
 		return
 	}
 	return
@@ -84,7 +86,7 @@ func (n *GRPCNode) GetVegaTime() (t time.Time, err error) {
 	defer cancel()
 	response, err := c.GetVegaTime(ctx, &api.GetVegaTimeRequest{})
 	if err != nil {
-		err = errors.Wrap(err, msg)
+		err = errors.Wrap(GRPCErrorDetail(err), msg)
 		return
 	}
 	nsec := response.Timestamp
@@ -109,7 +111,7 @@ func (n *GRPCNode) MarketByID(req *api.MarketByIDRequest) (response *api.MarketB
 	defer cancel()
 	response, err = c.MarketByID(ctx, req)
 	if err != nil {
-		err = errors.Wrap(err, msg)
+		err = errors.Wrap(GRPCErrorDetail(err), msg)
 		return
 	}
 	return
@@ -128,7 +130,7 @@ func (n *GRPCNode) MarketDataByID(req *api.MarketDataByIDRequest) (response *api
 	defer cancel()
 	response, err = c.MarketDataByID(ctx, req)
 	if err != nil {
-		err = errors.Wrap(err, msg)
+		err = errors.Wrap(GRPCErrorDetail(err), msg)
 		return
 	}
 	return
@@ -147,7 +149,7 @@ func (n *GRPCNode) LiquidityProvisions(req *api.LiquidityProvisionsRequest) (res
 	defer cancel()
 	response, err = c.LiquidityProvisions(ctx, req)
 	if err != nil {
-		err = errors.Wrap(err, msg)
+		err = errors.Wrap(GRPCErrorDetail(err), msg)
 		return
 	}
 	return
@@ -166,7 +168,7 @@ func (n *GRPCNode) MarketDepth(req *api.MarketDepthRequest) (response *api.Marke
 	defer cancel()
 	response, err = c.MarketDepth(ctx, req)
 	if err != nil {
-		err = errors.Wrap(err, msg)
+		err = errors.Wrap(GRPCErrorDetail(err), msg)
 		return
 	}
 	return
@@ -185,7 +187,7 @@ func (n *GRPCNode) PartyAccounts(req *api.PartyAccountsRequest) (response *api.P
 	defer cancel()
 	response, err = c.PartyAccounts(ctx, req)
 	if err != nil {
-		err = errors.Wrap(err, msg)
+		err = errors.Wrap(GRPCErrorDetail(err), msg)
 		return
 	}
 	return
@@ -204,7 +206,7 @@ func (n *GRPCNode) PositionsByParty(req *api.PositionsByPartyRequest) (response 
 	defer cancel()
 	response, err = c.PositionsByParty(ctx, req)
 	if err != nil {
-		err = errors.Wrap(err, msg)
+		err = errors.Wrap(GRPCErrorDetail(err), msg)
 		return
 	}
 	return
@@ -221,7 +223,7 @@ func (n *GRPCNode) ObserveEventBus() (stream api.TradingDataService_ObserveEvent
 	c := api.NewTradingDataServiceClient(n.conn)
 	stream, err = c.ObserveEventBus(context.Background())
 	if err != nil {
-		err = errors.Wrap(err, msg)
+		err = errors.Wrap(GRPCErrorDetail(err), msg)
 		return
 	}
 	return
@@ -238,7 +240,7 @@ func (n *GRPCNode) PositionsSubscribe(req *api.PositionsSubscribeRequest) (strea
 	c := api.NewTradingDataServiceClient(n.conn)
 	stream, err = c.PositionsSubscribe(context.Background(), req)
 	if err != nil {
-		err = errors.Wrap(err, msg)
+		err = errors.Wrap(GRPCErrorDetail(err), msg)
 		return
 	}
 	return
@@ -261,9 +263,34 @@ func (n *GRPCNode) AssetByID(assetID string) (response *api.AssetByIDResponse, e
 	}
 	response, err = c.AssetByID(ctx, req)
 	if err != nil {
-		err = errors.Wrap(err, msg)
+		err = errors.Wrap(GRPCErrorDetail(err), msg)
 		return
 	}
 	return
 
+}
+
+// GRPCErrorDetail takes an error, converts it to a gRPC Status object, and pulls out the code, message, and (most
+// importantly) the details list.
+func GRPCErrorDetail(err error) error {
+	errStatus, _ := status.FromError(err)
+	var b strings.Builder
+	b.WriteString("gRPCError{code=")
+	b.WriteString(errStatus.Code().String())
+	b.WriteString(" message='")
+	b.WriteString(errStatus.Message())
+	b.WriteString("'")
+	details := errStatus.Details()
+	if len(details) > 0 {
+		b.WriteString(" details=[")
+		for i, d := range details {
+			if i > 0 {
+				b.WriteString(", ")
+			}
+			b.WriteString(fmt.Sprintf("%v", d))
+		}
+		b.WriteString("]")
+	}
+	b.WriteString("}")
+	return errors.New(b.String())
 }
