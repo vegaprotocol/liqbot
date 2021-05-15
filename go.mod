@@ -3,7 +3,7 @@ module code.vegaprotocol.io/liqbot
 go 1.16
 
 require (
-	code.vegaprotocol.io/go-wallet v0.6.7-pre1
+	code.vegaprotocol.io/go-wallet v0.6.7
 	code.vegaprotocol.io/priceproxy v0.0.2
 	github.com/golang/mock v1.5.0
 	github.com/hashicorp/go-multierror v1.1.1
