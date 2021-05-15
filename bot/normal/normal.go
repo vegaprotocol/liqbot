@@ -427,17 +427,17 @@ func (b *Bot) checkInitialMargin() error {
 	avail := int64(float64(b.balanceGeneral) * b.strategy.OrdersFraction)
 	cost := int64(float64(shapeMarginCost))
 	if avail < cost {
-		var missing_percent string
+		var missingPercent string
 		if avail == 0 {
-			missing_percent = "Inf"
+			missingPercent = "Inf"
 		} else {
-			missing_percent = fmt.Sprintf("%.2f%%", float32((cost-avail)*100)/float32(avail))
+			missingPercent = fmt.Sprintf("%.2f%%", float32((cost-avail)*100)/float32(avail))
 		}
 		b.log.WithFields(log.Fields{
-			"available":       avail,
-			"cost":            cost,
-			"missing":         avail - cost,
-			"missing_percent": missing_percent,
+			"available":      avail,
+			"cost":           cost,
+			"missing":        avail - cost,
+			"missingPercent": missingPercent,
 		}).Error("Not enough collateral to safely keep orders up given current price, risk parameters and supplied default shapes.")
 		return errors.New("not enough collateral")
 	}
