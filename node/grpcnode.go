@@ -63,7 +63,7 @@ func (n *GRPCNode) SubmitTransaction(req *api.SubmitTransactionRequest) (respons
 
 	response, err = c.SubmitTransaction(ctx, req)
 	if err != nil {
-		err = fmt.Errorf(msg, apigrpc.GRPCErrorDetail(err))
+		err = fmt.Errorf(msg, apigrpc.ErrorDetail(err))
 	}
 	return
 }
@@ -83,7 +83,7 @@ func (n *GRPCNode) GetVegaTime() (t time.Time, err error) {
 	defer cancel()
 	response, err := c.GetVegaTime(ctx, &api.GetVegaTimeRequest{})
 	if err != nil {
-		err = fmt.Errorf(msg, apigrpc.GRPCErrorDetail(err))
+		err = fmt.Errorf(msg, apigrpc.ErrorDetail(err))
 		return
 	}
 	nsec := response.Timestamp
@@ -109,7 +109,7 @@ func (n *GRPCNode) MarketByID(req *api.MarketByIDRequest) (response *api.MarketB
 	defer cancel()
 	response, err = c.MarketByID(ctx, req)
 	if err != nil {
-		err = fmt.Errorf(msg, apigrpc.GRPCErrorDetail(err))
+		err = fmt.Errorf(msg, apigrpc.ErrorDetail(err))
 	}
 	return
 }
@@ -127,7 +127,7 @@ func (n *GRPCNode) MarketDataByID(req *api.MarketDataByIDRequest) (response *api
 	defer cancel()
 	response, err = c.MarketDataByID(ctx, req)
 	if err != nil {
-		err = fmt.Errorf(msg, apigrpc.GRPCErrorDetail(err))
+		err = fmt.Errorf(msg, apigrpc.ErrorDetail(err))
 	}
 	return
 }
@@ -145,7 +145,7 @@ func (n *GRPCNode) LiquidityProvisions(req *api.LiquidityProvisionsRequest) (res
 	defer cancel()
 	response, err = c.LiquidityProvisions(ctx, req)
 	if err != nil {
-		err = fmt.Errorf(msg, apigrpc.GRPCErrorDetail(err))
+		err = fmt.Errorf(msg, apigrpc.ErrorDetail(err))
 	}
 	return
 }
@@ -163,7 +163,7 @@ func (n *GRPCNode) MarketDepth(req *api.MarketDepthRequest) (response *api.Marke
 	defer cancel()
 	response, err = c.MarketDepth(ctx, req)
 	if err != nil {
-		err = fmt.Errorf(msg, apigrpc.GRPCErrorDetail(err))
+		err = fmt.Errorf(msg, apigrpc.ErrorDetail(err))
 	}
 	return
 }
@@ -181,7 +181,7 @@ func (n *GRPCNode) PartyAccounts(req *api.PartyAccountsRequest) (response *api.P
 	defer cancel()
 	response, err = c.PartyAccounts(ctx, req)
 	if err != nil {
-		err = fmt.Errorf(msg, apigrpc.GRPCErrorDetail(err))
+		err = fmt.Errorf(msg, apigrpc.ErrorDetail(err))
 	}
 	return
 }
@@ -199,7 +199,7 @@ func (n *GRPCNode) PositionsByParty(req *api.PositionsByPartyRequest) (response 
 	defer cancel()
 	response, err = c.PositionsByParty(ctx, req)
 	if err != nil {
-		err = fmt.Errorf(msg, apigrpc.GRPCErrorDetail(err))
+		err = fmt.Errorf(msg, apigrpc.ErrorDetail(err))
 	}
 	return
 }
@@ -215,7 +215,7 @@ func (n *GRPCNode) ObserveEventBus() (stream api.TradingDataService_ObserveEvent
 	c := api.NewTradingDataServiceClient(n.conn)
 	stream, err = c.ObserveEventBus(context.Background())
 	if err != nil {
-		err = fmt.Errorf(msg, apigrpc.GRPCErrorDetail(err))
+		err = fmt.Errorf(msg, apigrpc.ErrorDetail(err))
 	}
 	return
 }
@@ -231,7 +231,7 @@ func (n *GRPCNode) PositionsSubscribe(req *api.PositionsSubscribeRequest) (strea
 	c := api.NewTradingDataServiceClient(n.conn)
 	stream, err = c.PositionsSubscribe(context.Background(), req)
 	if err != nil {
-		err = fmt.Errorf(msg, apigrpc.GRPCErrorDetail(err))
+		err = fmt.Errorf(msg, apigrpc.ErrorDetail(err))
 	}
 	return
 }
@@ -253,7 +253,7 @@ func (n *GRPCNode) AssetByID(assetID string) (response *api.AssetByIDResponse, e
 	}
 	response, err = c.AssetByID(ctx, req)
 	if err != nil {
-		err = fmt.Errorf(msg, apigrpc.GRPCErrorDetail(err))
+		err = fmt.Errorf(msg, apigrpc.ErrorDetail(err))
 	}
 	return
 
