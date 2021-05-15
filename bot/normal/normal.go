@@ -431,7 +431,7 @@ func (b *Bot) checkInitialMargin() error {
 		if avail == 0 {
 			missing_percent = "Inf"
 		} else {
-			missing_percent = fmt.Sprintf("%.2f%%", (cost-avail)*100/avail)
+			missing_percent = fmt.Sprintf("%.2f%%", float32((cost-avail)*100)/float32(avail))
 		}
 		b.log.WithFields(log.Fields{
 			"available":       avail,
