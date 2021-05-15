@@ -17,6 +17,7 @@ import (
 type Bot interface {
 	Start() error
 	Stop()
+	GetTraderDetails() string
 }
 
 // PricingEngine is the source of price information from the price proxy.

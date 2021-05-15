@@ -2,14 +2,13 @@ package normal
 
 import (
 	"encoding/base64"
-	"encoding/hex"
 	"fmt"
 	"math"
+	"math/rand"
 	"net/url"
 	"time"
 
 	"code.vegaprotocol.io/liqbot/config"
-	e "code.vegaprotocol.io/liqbot/errors"
 	"code.vegaprotocol.io/liqbot/node"
 
 	"code.vegaprotocol.io/go-wallet/wallet"
@@ -19,8 +18,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto"
 	"github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto/api"
+	commandspb "github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto/commands/v1"
 	"github.com/vegaprotocol/api/grpc/clients/go/txn"
-	"go.uber.org/zap"
 )
 
 // Node is a Vega gRPC node
@@ -38,6 +37,11 @@ type Node interface {
 	MarketDataByID(req *api.MarketDataByIDRequest) (response *api.MarketDataByIDResponse, err error)
 	PartyAccounts(req *api.PartyAccountsRequest) (response *api.PartyAccountsResponse, err error)
 	PositionsByParty(req *api.PositionsByPartyRequest) (response *api.PositionsByPartyResponse, err error)
+	AssetByID(assetID string) (response *api.AssetByIDResponse, err error)
+
+	// Events
+	ObserveEventBus() (stream api.TradingDataService_ObserveEventBusClient, err error)
+	PositionsSubscribe(req *api.PositionsSubscribeRequest) (stream api.TradingDataService_PositionsSubscribeClient, err error)
 }
 
 // PricingEngine is the source of price information from the price proxy.
@@ -48,16 +52,17 @@ type PricingEngine interface {
 
 // Bot represents one Normal liquidity bot.
 type Bot struct {
-	config          config.BotConfig
-	active          bool
-	log             *log.Entry
-	pricingEngine   PricingEngine
-	settlementAsset string
-	stopPosMgmt     chan bool
-	stopPriceSteer  chan bool
-	strategy        *Strategy
-	market          *proto.Market
-	node            Node
+	config                 config.BotConfig
+	active                 bool
+	log                    *log.Entry
+	pricingEngine          PricingEngine
+	settlementAssetID      string
+	settlementAssetAddress string
+	stopPosMgmt            chan bool
+	stopPriceSteer         chan bool
+	strategy               *Strategy
+	market                 *proto.Market
+	node                   Node
 
 	balanceGeneral uint64
 	balanceMargin  uint64
@@ -68,20 +73,23 @@ type Bot struct {
 	walletPubKeyRaw  []byte // "XYZ" ...
 	walletPubKeyHex  string // "58595a" ...
 	walletToken      string
-}
 
-func max(a, b uint64) uint64 {
-	if a > b {
-		return a
-	}
-	return b
-}
+	buyShape   []*proto.LiquidityOrder
+	sellShape  []*proto.LiquidityOrder
+	marketData *proto.MarketData
+	positions  []*proto.Position
 
-func abs(a int64) int64 {
-	if a < 0 {
-		return -a
-	}
-	return a
+	currentPrice       uint64
+	openVolume         int64
+	previousOpenVolume int64
+
+	// These flags are used for the streaming systems to let
+	// the app know if they are up and working
+	eventStreamLive    bool
+	positionStreamLive bool
+
+	// Flag to indicate if we have already placed auction orders
+	auctionOrdersPlaced bool
 }
 
 // New returns a new instance of Bot.
@@ -92,8 +100,11 @@ func New(config config.BotConfig, pe PricingEngine, ws wallet.WalletHandler) (b 
 			"bot":  config.Name,
 			"node": config.Location,
 		}),
-		pricingEngine: pe,
-		walletServer:  ws,
+		pricingEngine:       pe,
+		walletServer:        ws,
+		eventStreamLive:     false,
+		positionStreamLive:  false,
+		auctionOrdersPlaced: false,
 	}
 
 	b.strategy, err = validateStrategyConfig(config.StrategyDetails)
@@ -112,7 +123,7 @@ func New(config config.BotConfig, pe PricingEngine, ws wallet.WalletHandler) (b 
 func (b *Bot) Start() error {
 	err := b.setupWallet()
 	if err != nil {
-		return errors.Wrap(err, "failed to start bot")
+		return errors.Wrap(err, "failed to setup wallet")
 	}
 
 	b.node, err = node.NewGRPCNode(
@@ -131,24 +142,43 @@ func (b *Bot) Start() error {
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("failed to get market %s", b.config.MarketID))
 	}
+	if marketResponse.Market == nil {
+		return fmt.Errorf("No market that matchs our ID: %s", b.config.MarketID)
+	}
 	b.market = marketResponse.Market
 	future := b.market.TradableInstrument.Instrument.GetFuture()
 	if future == nil {
 		return errors.New("market is not a Futures market")
 	}
-	b.settlementAsset = future.SettlementAsset
+	b.settlementAssetID = future.SettlementAsset
 	b.log.WithFields(log.Fields{
-		"marketID":        b.config.MarketID,
-		"settlementAsset": b.settlementAsset,
+		"marketID":          b.config.MarketID,
+		"settlementAssetID": b.settlementAssetID,
 	}).Debug("Fetched market info")
+
+	// Use the settlementAssetID to lookup the settlement ethereum address
+	assetResponse, err := b.node.AssetByID(b.settlementAssetID)
+	if err != nil {
+		return fmt.Errorf("unable to look up asset details for %s", b.settlementAssetID)
+	}
+	erc20 := assetResponse.Asset.Source.GetErc20()
+	if erc20 != nil {
+		b.settlementAssetAddress = erc20.ContractAddress
+	} else {
+		b.settlementAssetAddress = ""
+	}
 
 	b.balanceGeneral = 0
 	b.balanceMargin = 0
 
 	b.active = true
 	b.stopPosMgmt = make(chan bool)
-	// b.stopPriceSteer = make(chan bool)
+	b.stopPriceSteer = make(chan bool)
 
+	err = b.initialiseData()
+	if err != nil {
+		return fmt.Errorf("failed to initialise data: %w", err)
+	}
 	go b.runPositionManagement()
 	go b.runPriceSteering()
 
@@ -167,23 +197,20 @@ func (b *Bot) Stop() {
 	close(b.stopPriceSteer)
 }
 
+// GetTraderDetails returns information relating to the trader
+func (b *Bot) GetTraderDetails() string {
+	name := b.config.Name
+	pubKey := b.walletPubKeyHex
+	settlementVegaAssetID := b.settlementAssetID
+	settlementEthereumContractAddress := b.settlementAssetAddress
+
+	return "{\"name\":\"" + name + "\",\"pubKey\":\"" + pubKey + "\",\"settlementVegaAssetID\":\"" +
+		settlementVegaAssetID + "\",\"settlementEthereumContractAddress\":\"" +
+		settlementEthereumContractAddress + "\"}"
+}
+
 // ConvertSignedBundle converts from trading-core.wallet.SignedBundle to trading-core.proto.api.SignedBundle
 func ConvertSignedBundle(sb *wallet.SignedBundle) *proto.SignedBundle {
-	/*
-		From: wallet.SignedBundle:
-
-		type SignedBundle struct {
-			Tx  []byte
-			Sig *wallet.Signature
-		}
-
-		To: proto.api.SignedBundle:
-
-		type SignedBundle struct {
-			Tx  []byte
-			Sig *proto.Signature
-		}
-	*/
 	return &proto.SignedBundle{
 		Tx: sb.Tx,
 		Sig: &proto.Signature{
@@ -231,6 +258,10 @@ func (b *Bot) submitLiquidityProvision(sub *api.PrepareLiquidityProvisionRequest
 	return nil
 }
 
+func (b *Bot) canPlaceTrades() bool {
+	return b.marketData.MarketTradingMode == proto.Market_TRADING_MODE_CONTINUOUS
+}
+
 func (b *Bot) submitOrder(sub *api.PrepareSubmitOrderRequest) error {
 	// Prepare tx, without talking to a Vega node
 	prepared, err := txn.PrepareSubmitOrder(sub)
@@ -250,7 +281,7 @@ func (b *Bot) sendLiquidityProvision(buys, sells []*proto.LiquidityOrder) error 
 	commitment := b.strategy.CommitmentFraction * float64(b.balanceGeneral+b.balanceMargin+b.balanceBond)
 
 	sub := &api.PrepareLiquidityProvisionRequest{
-		Submission: &proto.LiquidityProvisionSubmission{
+		Submission: &commandspb.LiquidityProvisionSubmission{
 			Fee:              b.config.StrategyDetails.Fee,
 			MarketId:         b.market.Id,
 			CommitmentAmount: uint64(commitment),
@@ -270,138 +301,218 @@ func (b *Bot) sendLiquidityProvision(buys, sells []*proto.LiquidityOrder) error 
 	return nil
 }
 
-// getAccountGeneral get this bot's general account balance.
-func (b *Bot) getAccountGeneral() error {
-	response, err := b.node.PartyAccounts(&api.PartyAccountsRequest{
-		// MarketId: general account is not per market
-		PartyId: b.walletPubKeyHex,
-		Asset:   b.settlementAsset,
-		Type:    proto.AccountType_ACCOUNT_TYPE_GENERAL,
-	})
-	if err != nil {
-		return errors.Wrap(err, "failed to get general account")
-	}
-	if len(response.Accounts) == 0 {
-		return errors.Wrap(err, "found zero general accounts for party")
-	}
-	if len(response.Accounts) > 1 {
-		return fmt.Errorf("found too many general accounts for party: %d", len(response.Accounts))
-	}
-	b.balanceGeneral = response.Accounts[0].Balance
-	return nil
-}
-
-// getAccountMargin get this bot's margin account balance.
-func (b *Bot) getAccountMargin() error {
-	response, err := b.node.PartyAccounts(&api.PartyAccountsRequest{
-		PartyId:  b.walletPubKeyHex,
-		MarketId: b.market.Id,
-		Asset:    b.settlementAsset,
-		Type:     proto.AccountType_ACCOUNT_TYPE_MARGIN,
-	})
-	if err != nil {
-		return errors.Wrap(err, "failed to get margin account")
-	}
-	if len(response.Accounts) == 0 {
-		return errors.Wrap(err, "found zero margin accounts for party")
-	}
-	if len(response.Accounts) > 1 {
-		return fmt.Errorf("found too many margin accounts for party: %d", len(response.Accounts))
-	}
-	b.balanceMargin = response.Accounts[0].Balance
-	return nil
-}
-
-// getAccountBond get this bot's bond account balance.
-func (b *Bot) getAccountBond() error {
-	b.balanceBond = 0
-	response, err := b.node.PartyAccounts(&api.PartyAccountsRequest{
-		PartyId:  b.walletPubKeyHex,
-		MarketId: b.market.Id,
-		Asset:    b.settlementAsset,
-		Type:     proto.AccountType_ACCOUNT_TYPE_BOND,
-	})
-	if err != nil {
-		return errors.Wrap(err, "failed to get bond account")
-	}
-	if len(response.Accounts) == 0 {
-		return errors.Wrap(err, "found zero bond accounts for party")
-	}
-	if len(response.Accounts) > 1 {
-		return fmt.Errorf("found too many bond accounts for party: %d", len(response.Accounts))
-	}
-	b.balanceBond = response.Accounts[0].Balance
-	return nil
-}
-
-// getMarketData get the market data for the market that this bot trades on.
-func (b *Bot) getMarketData() (*proto.MarketData, error) {
-	response, err := b.node.MarketDataByID(&api.MarketDataByIDRequest{
-		MarketId: b.market.Id,
-	})
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get market data")
-	}
-	return response.MarketData, nil
-}
-
-// getPositions get this bot's positions.
-func (b *Bot) getPositions() ([]*proto.Position, error) {
-	response, err := b.node.PositionsByParty(&api.PositionsByPartyRequest{
-		PartyId:  b.walletPubKeyHex,
-		MarketId: b.market.Id,
-	})
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get positions by party")
-	}
-	return response.Positions, nil
-}
-
 func calculatePositionMarginCost(openVolume int64, currentPrice uint64, riskParameters *struct{}) uint64 {
 	return 1
 }
 
-func (b *Bot) waitForGeneralAccountBalance() {
-	sleepTime := b.strategy.PosManagementSleepMilliseconds
-	for {
-		err := b.getAccountGeneral()
+func (b *Bot) checkForShapeChange() {
+	var shape string
+	if b.openVolume <= 0 {
+		shape = "longening"
+		b.buyShape = b.strategy.LongeningShape.Buys
+		b.sellShape = b.strategy.LongeningShape.Sells
+	} else {
+		shape = "shortening"
+		b.buyShape = b.strategy.ShorteningShape.Buys
+		b.sellShape = b.strategy.ShorteningShape.Sells
+	}
+
+	b.log.WithFields(log.Fields{
+		"currentPrice":   b.currentPrice,
+		"balanceGeneral": b.balanceGeneral,
+		"balanceMargin":  b.balanceMargin,
+		"openVolume":     b.openVolume,
+		"shape":          shape,
+	}).Debug("Position management info")
+
+	// If we flipped then send the new LP order
+	if (b.openVolume > 0 && b.previousOpenVolume <= 0) ||
+		(b.openVolume < 0 && b.previousOpenVolume >= 0) {
+
+		b.log.WithFields(log.Fields{"shape": shape}).Debug("Flipping LP direction")
+		err := b.sendLiquidityProvision(b.buyShape, b.sellShape)
 		if err != nil {
 			b.log.WithFields(log.Fields{
 				"error": err.Error(),
-			}).Debug("Failed to get general balance")
+			}).Warning("Failed to send liquidity provision")
 		} else {
-			if b.balanceGeneral > 0 {
-				b.log.WithFields(log.Fields{
-					"general": b.balanceGeneral,
-				}).Debug("Fetched general balance")
-				break
-			} else {
-				b.log.WithFields(log.Fields{
-					"asset": b.settlementAsset,
-				}).Warning("Waiting for positive general balance")
-			}
+			b.previousOpenVolume = b.openVolume
 		}
-
-		if sleepTime < 9000 {
-			sleepTime += 1000
-		}
-		time.Sleep(time.Duration(sleepTime) * time.Millisecond)
 	}
 }
 
-func (b *Bot) runPositionManagement() {
-	var buyShape, sellShape []*proto.LiquidityOrder
-	var marketData *proto.MarketData
-	var positions []*proto.Position
+func (b *Bot) checkPositionManagement() {
+	if !b.canPlaceTrades() {
+		// Only allow position management during continuous trading
+		return
+	}
+	posMarginCost := calculatePositionMarginCost(b.openVolume, b.currentPrice, nil)
+	var shouldBuy, shouldSell bool
+	if posMarginCost > uint64((1.0-b.strategy.StakeFraction-b.strategy.OrdersFraction)*float64(b.balanceGeneral)) {
+		if b.openVolume > 0 {
+			shouldSell = true
+		} else if b.openVolume < 0 {
+			shouldBuy = true
+		}
+	} else if b.openVolume >= 0 && uint64(b.openVolume) > b.strategy.MaxLong {
+		shouldSell = true
+	} else if b.openVolume < 0 && uint64(-b.openVolume) > b.strategy.MaxShort {
+		shouldBuy = true
+	}
+
+	if shouldBuy {
+		size := uint64(float64(abs(b.openVolume)) * b.strategy.PosManagementFraction)
+		err := b.sendOrder(size, 0, proto.Side_SIDE_BUY, proto.Order_TIME_IN_FORCE_IOC, proto.Order_TYPE_MARKET, "PosManagement", 0)
+		if err != nil {
+			log.Warningln("Failed to place a position management buy")
+		}
+	} else if shouldSell {
+		size := uint64(float64(abs(b.openVolume)) * b.strategy.PosManagementFraction)
+		err := b.sendOrder(size, 0, proto.Side_SIDE_SELL, proto.Order_TIME_IN_FORCE_IOC, proto.Order_TYPE_MARKET, "PosManagement", 0)
+		if err != nil {
+			log.Warningln("Failed to place a position management sell")
+		}
+	}
+}
+
+func (b *Bot) sendOrder(
+	size, price uint64,
+	side proto.Side,
+	tif proto.Order_TimeInForce,
+	orderType proto.Order_Type,
+	reference string,
+	secondsFromNow int64,
+) error {
+	request := &api.PrepareSubmitOrderRequest{
+		Submission: &commandspb.OrderSubmission{
+			MarketId:    b.market.Id,
+			Size:        size,
+			Side:        side,
+			TimeInForce: tif,
+			Type:        orderType,
+			Reference:   reference,
+		},
+	}
+	if tif == proto.Order_TIME_IN_FORCE_GTT {
+		request.Submission.ExpiresAt = time.Now().UnixNano() + (secondsFromNow * 1000000000)
+	}
+
+	if orderType != proto.Order_TYPE_MARKET {
+		request.Submission.Price = price
+	}
+
+	err := b.submitOrder(request)
+	if err != nil {
+		b.log.WithFields(log.Fields{
+			"error": err.Error(),
+		}).Warning("Failed to submit order")
+	}
+	return err
+}
+
+func (b *Bot) checkInitialMargin() error {
+	// Turn the shapes into a set of orders scaled by commitment
+	obligation := b.strategy.CommitmentFraction * float64(b.balanceMargin+b.balanceBond+b.balanceGeneral)
+	buyOrders := b.calculateOrderSizes(b.config.MarketID, b.walletPubKeyHex, obligation, b.buyShape, b.marketData.MidPrice)
+	sellOrders := b.calculateOrderSizes(b.config.MarketID, b.walletPubKeyHex, obligation, b.sellShape, b.marketData.MidPrice)
+
+	buyRisk := float64(0.01)
+	sellRisk := float64(0.01)
+
+	buyCost := b.calculateMarginCost(buyRisk, b.marketData.MarkPrice, buyOrders)
+	sellCost := b.calculateMarginCost(sellRisk, b.marketData.MarkPrice, sellOrders)
+
+	shapeMarginCost := max(buyCost, sellCost)
+
+	avail := int64(float64(b.balanceGeneral) * b.strategy.OrdersFraction)
+	cost := int64(float64(shapeMarginCost))
+	if avail < cost {
+		var missingPercent string
+		if avail == 0 {
+			missingPercent = "Inf"
+		} else {
+			missingPercent = fmt.Sprintf("%.2f%%", float32((cost-avail)*100)/float32(avail))
+		}
+		b.log.WithFields(log.Fields{
+			"available":      avail,
+			"cost":           cost,
+			"missing":        avail - cost,
+			"missingPercent": missingPercent,
+		}).Error("Not enough collateral to safely keep orders up given current price, risk parameters and supplied default shapes.")
+		return errors.New("not enough collateral")
+	}
+	return nil
+}
+
+func (b *Bot) initialiseData() error {
 	var err error
-	var currentPrice uint64
-	var openVolume int64
-	var previousOpenVolume int64
+
+	err = b.lookupInitialValues()
+	if err != nil {
+		b.log.Debug("Stopping position management as we could not get initial values")
+		return err
+	}
+
+	if !b.eventStreamLive {
+		err = b.subscribeToEvents()
+		if err != nil {
+			b.log.Debug("Unable to subscribe to event bus feeds")
+			return err
+		}
+	}
+
+	if !b.positionStreamLive {
+		err = b.subscribePositions()
+		if err != nil {
+			b.log.Debug("Unable to subscribe to event bus feeds")
+			return err
+		}
+	}
+	return nil
+}
+
+// Divide the auction amount into 10 orders and place them randomly
+// around the current price at upto 50+/- from it.
+func (b *Bot) placeAuctionOrders() {
+	// Check we have not placed them already
+	if b.auctionOrdersPlaced == true {
+		return
+	}
+	// Check we have a currentPrice we can use
+	if b.currentPrice == 0 {
+		return
+	}
+
+	// Place the random orders split into
+	var totalVolume uint64
+	r := rand.New(rand.NewSource(1)) // #nosec G404 This suboptimal rand generator is fine for now
+
+	for totalVolume < b.config.StrategyDetails.AuctionVolume {
+		remaining := b.config.StrategyDetails.AuctionVolume - totalVolume
+		size := min(1+(b.config.StrategyDetails.AuctionVolume/10), remaining)
+		price := b.currentPrice + (uint64(r.Int63n(100) - 50))
+		side := proto.Side_SIDE_BUY
+		if r.Intn(2) == 0 {
+			side = proto.Side_SIDE_SELL
+		}
+		err := b.sendOrder(size, price, side, proto.Order_TIME_IN_FORCE_GTT, proto.Order_TYPE_LIMIT, "AuctionOrder", 330)
+		if err == nil {
+			totalVolume += size
+		} else {
+			// We failed to send an order so stop trying to send anymore
+			break
+		}
+	}
+	b.auctionOrdersPlaced = true
+}
+
+func (b *Bot) runPositionManagement() {
+	var err error
 	var firstTime bool = true
 
 	// We always start off with longening shapes
-	buyShape = b.strategy.LongeningShape.Buys
-	sellShape = b.strategy.LongeningShape.Sells
+	b.buyShape = b.strategy.LongeningShape.Buys
+	b.sellShape = b.strategy.LongeningShape.Sells
 
 	sleepTime := b.strategy.PosManagementSleepMilliseconds
 	for {
@@ -414,180 +525,48 @@ func (b *Bot) runPositionManagement() {
 		default:
 			// At the start of each loop, wait for positive general account balance. This is in case the network has
 			// been restarted.
-			b.waitForGeneralAccountBalance()
-
-			err = b.getAccountMargin()
-			if err != nil {
-				b.log.WithFields(log.Fields{
-					"error": err.Error(),
-				}).Warning("Failed to get margin account balance")
-			}
-
-			err = b.getAccountBond()
-			if err != nil {
-				b.log.WithFields(log.Fields{
-					"error": err.Error(),
-				}).Warning("Failed to get bond account balance")
-			}
-
-			if err == nil {
-				marketData, err = b.getMarketData()
-				if err != nil {
-					b.log.WithFields(log.Fields{
-						"error": err.Error(),
-					}).Warning("Failed to get market data")
-				} else {
-					currentPrice = marketData.MarkPrice
-				}
-			}
-
 			if firstTime {
-				// Turn the shapes into a set of orders scaled by commitment
-				obligation := b.strategy.CommitmentFraction * float64(b.balanceMargin+b.balanceBond+b.balanceGeneral)
-				buyOrders := b.CalculateOrderSizes(b.config.MarketID, b.walletPubKeyHex, obligation, buyShape, marketData.MidPrice)
-				sellOrders := b.CalculateOrderSizes(b.config.MarketID, b.walletPubKeyHex, obligation, sellShape, marketData.MidPrice)
-
-				buyRisk := float64(0.01)
-				sellRisk := float64(0.01)
-
-				buyCost := b.CalculateMarginCost(buyRisk, marketData.MarkPrice, buyOrders)
-				sellCost := b.CalculateMarginCost(sellRisk, marketData.MarkPrice, sellOrders)
-
-				shapeMarginCost := max(buyCost, sellCost)
-
-				avail := int64(float64(b.balanceGeneral) * b.strategy.OrdersFraction)
-				cost := int64(float64(shapeMarginCost))
-				if avail < cost {
+				err = b.checkInitialMargin()
+				if err != nil {
+					b.active = false
 					b.log.WithFields(log.Fields{
-						"available":       avail,
-						"cost":            cost,
-						"missing":         avail - cost,
-						"missing_percent": (cost - avail) * 100 / avail,
-					}).Error("Not enough collateral to safely keep orders up given current price, risk parameters and supplied default shapes.")
-					err = errors.New("not enough collateral")
-				} else {
-					// Submit LP order to market.
-					err = b.sendLiquidityProvision(buyShape, sellShape)
-					if err != nil {
-						b.log.Error("Failed to send liquidity provision order", zap.Error(err))
-					}
-					firstTime = false
+						"error": err.Error(),
+					}).Error("Failed initial margin check")
+					return
 				}
-			}
-
-			if err == nil {
-				positions, err = b.getPositions()
+				// Submit LP order to market.
+				err = b.sendLiquidityProvision(b.buyShape, b.sellShape)
 				if err != nil {
 					b.log.WithFields(log.Fields{
 						"error": err.Error(),
-					}).Warning("Failed to get positions")
-				} else {
-					if len(positions) == 0 {
-						openVolume = 0
-					} else {
-						openVolume = positions[0].OpenVolume
-					}
+					}).Error("Failed to send liquidity provision order")
+					return
 				}
+				firstTime = false
 			}
 
-			if err == nil {
-				var shape string
-				if openVolume <= 0 {
-					shape = "longening"
-					buyShape = b.strategy.LongeningShape.Buys
-					sellShape = b.strategy.LongeningShape.Sells
-				} else {
-					shape = "shortening"
-					buyShape = b.strategy.ShorteningShape.Buys
-					sellShape = b.strategy.ShorteningShape.Sells
-				}
-
-				b.log.WithFields(log.Fields{
-					"currentPrice":   currentPrice,
-					"balanceGeneral": b.balanceGeneral,
-					"balanceMargin":  b.balanceMargin,
-					"openVolume":     openVolume,
-					"shape":          shape,
-				}).Debug("Position management info")
-
-				// If we flipped then send the new LP order
-				if (openVolume > 0 && previousOpenVolume <= 0) ||
-					(openVolume < 0 && previousOpenVolume >= 0) {
-
-					err = b.sendLiquidityProvision(buyShape, sellShape)
-					if err != nil {
-						b.log.WithFields(log.Fields{
-							"error": err.Error(),
-						}).Warning("Failed to send liquidity provision")
-					}
-				}
-				previousOpenVolume = openVolume
-			}
-
-			if err == nil {
-				posMarginCost := calculatePositionMarginCost(openVolume, currentPrice, nil)
-				var shouldBuy, shouldSell bool
-				if posMarginCost > uint64((1.0-b.strategy.StakeFraction-b.strategy.OrdersFraction)*float64(b.balanceGeneral)) {
-					if openVolume > 0 {
-						shouldSell = true
-					} else if openVolume < 0 {
-						shouldBuy = true
-					}
-				} else if openVolume >= 0 && uint64(openVolume) > b.strategy.MaxLong {
-					shouldSell = true
-				} else if openVolume < 0 && uint64(-openVolume) > b.strategy.MaxShort {
-					shouldBuy = true
-				}
-
-				if shouldBuy {
-					request := &api.PrepareSubmitOrderRequest{
-						Submission: &proto.OrderSubmission{
-							MarketId:    b.market.Id,
-							PartyId:     b.walletPubKeyHex,
-							Size:        uint64(float64(abs(openVolume)) * b.strategy.PosManagementFraction),
-							Side:        proto.Side_SIDE_BUY,
-							TimeInForce: proto.Order_TIME_IN_FORCE_IOC,
-							Type:        proto.Order_TYPE_MARKET,
-							Reference:   "PosManagement",
-						},
-					}
-					err = b.submitOrder(request)
-					if err != nil {
-						b.log.WithFields(log.Fields{
-							"error": err.Error(),
-						}).Warning("Failed to submit order")
-					}
-				} else if shouldSell {
-					request := &api.PrepareSubmitOrderRequest{
-						Submission: &proto.OrderSubmission{
-							MarketId:    b.market.Id,
-							PartyId:     b.walletPubKeyHex,
-							Size:        uint64(float64(abs(openVolume)) * b.strategy.PosManagementFraction),
-							Side:        proto.Side_SIDE_SELL,
-							TimeInForce: proto.Order_TIME_IN_FORCE_IOC,
-							Type:        proto.Order_TYPE_MARKET,
-							Reference:   "PosManagement",
-						},
-					}
-					err = b.submitOrder(request)
-					if err != nil {
-						b.log.WithFields(log.Fields{
-							"error": err.Error(),
-						}).Warning("Failed to submit order")
-					}
-				}
-			}
-
-			if err == nil {
-				sleepTime = b.strategy.PosManagementSleepMilliseconds
+			// Only update liquidity and position if we are not in auction
+			if b.canPlaceTrades() {
+				b.auctionOrdersPlaced = false
+				b.checkForShapeChange()
+				b.checkPositionManagement()
 			} else {
-				if sleepTime < 29000 {
-					sleepTime += 1000
+				b.placeAuctionOrders()
+			}
+
+			// If we have lost the incoming streams we should attempt to reconnect
+			for !b.positionStreamLive || !b.eventStreamLive {
+				err = doze(time.Duration(sleepTime)*time.Millisecond, b.stopPosMgmt)
+				if err != nil {
+					b.log.Debug("Stopping bot position management")
+					b.active = false
+					return
 				}
-				b.log.WithFields(log.Fields{
-					"error":     err.Error(),
-					"sleepTime": sleepTime,
-				}).Warning("Error during position management")
+
+				err = b.initialiseData()
+				if err != nil {
+					continue
+				}
 			}
 
 			err = doze(time.Duration(sleepTime)*time.Millisecond, b.stopPosMgmt)
@@ -600,9 +579,9 @@ func (b *Bot) runPositionManagement() {
 	}
 }
 
-// CalculateOrderSizes calculates the size of the orders using the total commitment, price, distance from mid and chance
+// calculateOrderSizes calculates the size of the orders using the total commitment, price, distance from mid and chance
 // of trading liquidity.supplied.updateSizes(obligation, currentPrice, liquidityOrders, true, minPrice, maxPrice)
-func (b *Bot) CalculateOrderSizes(marketID, partyID string, obligation float64, liquidityOrders []*proto.LiquidityOrder, midPrice uint64) []*proto.Order {
+func (b *Bot) calculateOrderSizes(marketID, partyID string, obligation float64, liquidityOrders []*proto.LiquidityOrder, midPrice uint64) []*proto.Order {
 	orders := make([]*proto.Order, 0, len(liquidityOrders))
 	// Work out the total proportion for the shape
 	var totalProportion uint32
@@ -616,8 +595,6 @@ func (b *Bot) CalculateOrderSizes(marketID, partyID string, obligation float64, 
 		fraction := float64(lo.Proportion) / float64(totalProportion)
 		scaling := fraction / prob
 		size := uint64(math.Ceil(obligation * scaling / float64(midPrice)))
-
-		//		b.log.Debugf("Sizing Info: Size:%d Offset:%d\n", size, lo.Offset)
 
 		peggedOrder := proto.PeggedOrder{
 			Reference: lo.Reference,
@@ -639,8 +616,8 @@ func (b *Bot) CalculateOrderSizes(marketID, partyID string, obligation float64, 
 	return orders
 }
 
-// CalculateMarginCost estimates the margin cost of the set of orders
-func (b *Bot) CalculateMarginCost(risk float64, markPrice uint64, orders []*proto.Order) uint64 {
+// calculateMarginCost estimates the margin cost of the set of orders
+func (b *Bot) calculateMarginCost(risk float64, markPrice uint64, orders []*proto.Order) uint64 {
 	var totalMargin uint64
 	for _, order := range orders {
 		if order.Side == proto.Side_SIDE_BUY {
@@ -655,7 +632,6 @@ func (b *Bot) CalculateMarginCost(risk float64, markPrice uint64, orders []*prot
 func (b *Bot) runPriceSteering() {
 	var currentPrice, externalPrice uint64
 	var err error
-	var marketData *proto.MarketData
 	var externalPriceResponse ppservice.PriceResponse
 
 	ppcfg := ppconfig.PriceConfig{
@@ -673,83 +649,63 @@ func (b *Bot) runPriceSteering() {
 			return
 
 		default:
-			// At the start of each loop, wait for positive general account balance. This is in case the network has
-			// been restarted.
-			b.waitForGeneralAccountBalance()
-
-			externalPriceResponse, err = b.pricingEngine.GetPrice(ppcfg)
-			if err != nil {
-				b.log.WithFields(log.Fields{
-					"error": err.Error(),
-				}).Warning("Failed to get external price")
-			} else {
-				externalPrice = uint64(externalPriceResponse.Price * math.Pow10(int(b.market.DecimalPlaces)))
-			}
-
-			if err == nil {
-				marketData, err = b.getMarketData()
+			if b.strategy.PriceSteerOrderSize > 0 && b.canPlaceTrades() {
+				externalPriceResponse, err = b.pricingEngine.GetPrice(ppcfg)
 				if err != nil {
 					b.log.WithFields(log.Fields{
 						"error": err.Error(),
-					}).Warning("Failed to get market data")
+					}).Warning("Failed to get external price")
+					externalPrice = 0
 				} else {
-					currentPrice = marketData.MarkPrice
+					externalPrice = uint64(externalPriceResponse.Price * math.Pow10(int(b.market.DecimalPlaces)))
 				}
-			}
 
-			if err == nil {
-				shouldMove := "no"
-				// We only want to steer the price if the external and market price
-				// are greater than a certain percentage apart
-				currentDiff := math.Abs(float64(currentPrice-externalPrice) / float64(externalPrice))
-				if currentDiff > b.strategy.MinPriceSteerFraction {
-					var side proto.Side
-					if externalPrice > currentPrice {
-						side = proto.Side_SIDE_BUY
-						shouldMove = "UP"
-					} else {
-						side = proto.Side_SIDE_SELL
-						shouldMove = "DN"
-					}
-					req := &api.PrepareSubmitOrderRequest{
-						Submission: &proto.OrderSubmission{
-							Id:          "",
-							MarketId:    b.market.Id,
-							PartyId:     b.walletPubKeyHex,
-							Size:        b.strategy.PriceSteerOrderSize,
-							Side:        side,
-							TimeInForce: proto.Order_TIME_IN_FORCE_IOC,
-							Type:        proto.Order_TYPE_MARKET,
-							Reference:   "",
-						},
+				if err == nil && externalPrice != 0 {
+					shouldMove := "no"
+					// We only want to steer the price if the external and market price
+					// are greater than a certain percentage apart
+					currentDiff := math.Abs(float64(currentPrice-externalPrice) / float64(externalPrice))
+					if currentDiff > b.strategy.MinPriceSteerFraction {
+						var side proto.Side
+						if externalPrice > currentPrice {
+							side = proto.Side_SIDE_BUY
+							shouldMove = "UP"
+						} else {
+							side = proto.Side_SIDE_SELL
+							shouldMove = "DN"
+						}
+						b.log.WithFields(log.Fields{
+							"size": b.strategy.PriceSteerOrderSize,
+							"side": side,
+						}).Debug("Submitting order")
+						err = b.sendOrder(b.strategy.PriceSteerOrderSize,
+							0,
+							side,
+							proto.Order_TIME_IN_FORCE_IOC,
+							proto.Order_TYPE_MARKET,
+							"PriceSteeringOrder",
+							0)
 					}
 					b.log.WithFields(log.Fields{
-						"price": req.Submission.Price,
-						"size":  req.Submission.Size,
-						"side":  req.Submission.Side,
-					}).Debug("Submitting order")
-					err = b.submitOrder(req)
+						"currentPrice":  currentPrice,
+						"externalPrice": externalPrice,
+						"diff":          int(externalPrice) - int(currentPrice),
+						"shouldMove":    shouldMove,
+					}).Debug("Steering info")
 				}
-				b.log.WithFields(log.Fields{
-					"currentPrice":  currentPrice,
-					"externalPrice": externalPrice,
-					"diff":          int(externalPrice) - int(currentPrice),
-					"shouldMove":    shouldMove,
-				}).Debug("Steering info")
-			}
 
-			if err == nil {
-				sleepTime = 1000.0 / b.strategy.MarketPriceSteeringRatePerSecond
-			} else {
-				if sleepTime < 29000 {
-					sleepTime += 1000
+				if err == nil {
+					sleepTime = 1000.0 / b.strategy.MarketPriceSteeringRatePerSecond
+				} else {
+					if sleepTime < 29000 {
+						sleepTime += 1000
+					}
+					b.log.WithFields(log.Fields{
+						"error":     err.Error(),
+						"sleepTime": sleepTime,
+					}).Warning("Error during price steering")
 				}
-				b.log.WithFields(log.Fields{
-					"error":     err.Error(),
-					"sleepTime": sleepTime,
-				}).Warning("Error during price steering")
 			}
-
 			err = doze(time.Duration(sleepTime)*time.Millisecond, b.stopPriceSteer)
 			if err != nil {
 				b.log.Debug("Stopping bot market price steering")
@@ -807,32 +763,4 @@ func (b *Bot) setupWallet() (err error) {
 	}
 	b.log = b.log.WithFields(log.Fields{"pubkey": b.walletPubKeyHex})
 	return
-}
-
-func doze(d time.Duration, stop chan bool) error {
-	interval := 100 * time.Millisecond
-	for d > interval {
-		select {
-		case <-stop:
-			return e.ErrInterrupted
-
-		default:
-			time.Sleep(interval)
-			d -= interval
-		}
-	}
-	time.Sleep(d)
-	return nil
-}
-
-func hexToRaw(hexBytes []byte) ([]byte, error) {
-	raw := make([]byte, hex.DecodedLen(len(hexBytes)))
-	n, err := hex.Decode(raw, hexBytes)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to decode hex")
-	}
-	if n != len(raw) {
-		return nil, fmt.Errorf("failed to decode hex: decoded %d bytes, expected to decode %d bytes", n, len(raw))
-	}
-	return raw, nil
 }
