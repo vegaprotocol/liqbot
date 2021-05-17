@@ -18,9 +18,16 @@ type ShapeConfig struct {
 	Buys  []*proto.LiquidityOrder
 }
 
-// LODParamsConfig is ... TBD: a little data structure which sets the algo and params for how limits
+// LODParamsConfig is a little data structure which sets the algo and params for how limits
 // orders are generated.
-type LODParamsConfig struct{}
+type LODParamsConfig struct {
+	Method             string
+	GttLength          uint64
+	TgtTimeHorizon     uint64
+	NumTicksFromMid    uint64
+	TgtOrdersPerSecond float64
+	NumIdenticalBots   int
+}
 
 // Strategy configures the normal strategy.
 type Strategy struct {
@@ -166,7 +173,13 @@ func validateStrategyConfig(details config.Strategy) (s *Strategy, err error) {
 
 	s.PriceSteerOrderSize = details.PriceSteerOrderSize
 	s.MinPriceSteerFraction = details.MinPriceSteerFraction
-	// LimitOrderDistributionParams TBD
+	s.LimitOrderDistributionParams = &LODParamsConfig{}
+	s.LimitOrderDistributionParams.Method = details.LimitOrderDistributionParams.Method
+	s.LimitOrderDistributionParams.GttLength = details.LimitOrderDistributionParams.GttLength
+	s.LimitOrderDistributionParams.NumIdenticalBots = details.LimitOrderDistributionParams.NumIdenticalBots
+	s.LimitOrderDistributionParams.NumTicksFromMid = details.LimitOrderDistributionParams.NumTicksFromMid
+	s.LimitOrderDistributionParams.TgtOrdersPerSecond = details.LimitOrderDistributionParams.TgtOrdersPerSecond
+	s.LimitOrderDistributionParams.TgtTimeHorizon = details.LimitOrderDistributionParams.TgtTimeHorizon
 
 	s.TargetLNVol = details.TargetLNVol
 	err = errs.ErrorOrNil()

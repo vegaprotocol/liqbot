@@ -68,11 +68,21 @@ type Strategy struct {
 	MinPriceSteerFraction            float64 `yaml:"minPriceSteerFraction"`
 	PriceSteerOrderSize              uint64  `yaml:"priceSteerOrderSize"`
 
-	LimitOrderDistributionParams string  `yaml:"limitOrderDistributionParams"`
-	TargetLNVol                  float64 `yaml:"targetLNVol"`
+	LimitOrderDistributionParams LimitOrderDistParams `yaml:"limitOrderDistributionParams"`
+	TargetLNVol                  float64              `yaml:"targetLNVol"`
 
 	ShorteningShape Shape `yaml:"shorteningShape"`
 	LongeningShape  Shape `yaml:"longeningShape"`
+}
+
+// Params for configuring the way price steering orders are sent
+type LimitOrderDistParams struct {
+	Method             string  `yaml:"method"`
+	GttLength          uint64  `yaml:"gttLengthSeconds"`
+	TgtTimeHorizon     uint64  `yaml:"tgtTimeHorizonSeconds"`
+	NumTicksFromMid    uint64  `yaml:"numTicksFromMid"`
+	TgtOrdersPerSecond float64 `yaml:"tgtOrdersPerSecond"`
+	NumIdenticalBots   int     `yaml:"numIdenticalBots"`
 }
 
 // Shape describes the buy and sell sides of a Liquidity Provision instruction
