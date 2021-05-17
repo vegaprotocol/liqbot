@@ -668,13 +668,18 @@ func (b *Bot) runPriceSteering() {
 							"size": b.strategy.PriceSteerOrderSize,
 							"side": side,
 						}).Debug("Submitting order")
-						err = b.sendOrder(b.strategy.PriceSteerOrderSize,
-							0,
+
+						// Now we call into the maths heavy function to find out
+						// what price and size of the order we should place
+						price, size := b.GetRealisticOrderDetails(externalPrice, side)
+
+						err = b.sendOrder(size,
+							price,
 							side,
-							proto.Order_TIME_IN_FORCE_IOC,
-							proto.Order_TYPE_MARKET,
+							proto.Order_TIME_IN_FORCE_GTT,
+							proto.Order_TYPE_LIMIT,
 							"PriceSteeringOrder",
-							0)
+							int64(b.strategy.LimitOrderDistributionParams.GttLength))
 					}
 					b.log.WithFields(log.Fields{
 						"currentPrice":  currentPrice,
@@ -704,6 +709,21 @@ func (b *Bot) runPriceSteering() {
 			}
 		}
 	}
+}
+
+// This is the function for David to fill out
+// The params he needs are:
+//
+// targetPrice -> given as paramater externalPrice
+// direction -> given as parameter side (buy to move up, sell to move down)
+// LimitOrderDistributionParams -> 	b.strategy.LimitOrderDistributionParams
+// tickSize -> Calculated from market decimal places value
+// target volatility -> b.strategy.TargetLNVol
+func (b *Bot) GetRealisticOrderDetails(externalPrice uint64, side proto.Side) (price, size uint64) {
+	//	tickSize := float64(1 / math.Pow(10, float64(b.market.DecimalPlaces)))
+
+	return price, size
+
 }
 
 func (b *Bot) setupWallet() (err error) {

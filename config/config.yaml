@@ -63,6 +63,6 @@ bots:
         gttLengthSeconds: 60
         tgtTimeHorizonSeconds: 3600
         numTicksFromMid: 5
-        tgtOrdersPerSecond: 2.1
+        tgtOrdersPerSecond: 2.0
         numIdenticalBots: 1
       targetLNVol: 0.0
