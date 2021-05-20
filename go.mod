@@ -14,6 +14,7 @@ require (
 	github.com/stretchr/testify v1.7.0
 	github.com/vegaprotocol/api v0.35.0
 	go.uber.org/zap v1.16.0
+	gonum.org/v1/gonum v0.9.1
 	google.golang.org/grpc v1.37.0
 	gopkg.in/yaml.v2 v2.2.5 // indirect
 )

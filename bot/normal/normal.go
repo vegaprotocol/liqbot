@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/rand"
 	"net/url"
+	"strings"
 	"time"
 
 	"code.vegaprotocol.io/liqbot/config"
@@ -425,7 +426,7 @@ func (b *Bot) checkInitialMargin() error {
 		if avail == 0 {
 			missing_percent = "Inf"
 		} else {
-			missing_percent = fmt.Sprintf("%.2f%%", (cost-avail)*100/avail)
+			missing_percent = fmt.Sprintf("%v", (cost-avail)*100.0/avail)
 		}
 		b.log.WithFields(log.Fields{
 			"available":       avail,
@@ -671,7 +672,11 @@ func (b *Bot) runPriceSteering() {
 
 						// Now we call into the maths heavy function to find out
 						// what price and size of the order we should place
-						price, size := b.GetRealisticOrderDetails(externalPrice, side)
+						price, size, priceError := b.GetRealisticOrderDetails(externalPrice)
+
+						if priceError != nil {
+							// deal with the error please, probably by complaining and dying.
+						}
 
 						err = b.sendOrder(size,
 							price,
@@ -719,11 +724,33 @@ func (b *Bot) runPriceSteering() {
 // LimitOrderDistributionParams -> 	b.strategy.LimitOrderDistributionParams
 // tickSize -> Calculated from market decimal places value
 // target volatility -> b.strategy.TargetLNVol
-func (b *Bot) GetRealisticOrderDetails(externalPrice uint64, side proto.Side) (price, size uint64) {
-	//	tickSize := float64(1 / math.Pow(10, float64(b.market.DecimalPlaces)))
+func (b *Bot) GetRealisticOrderDetails(externalPrice uint64) (price, size uint64, err error) {
+	err = nil
 
-	return price, size
+	// Collect stuff from config that's common to all methods
+	method := b.strategy.LimitOrderDistributionParams.Method
 
+	sigma := b.strategy.TargetLNVol
+	tgtTimeHorizonHours := 1.0 // should be from parameters but I didn't find it
+	tgtTimeHorizonYrFrac := tgtTimeHorizonHours / 24.0 / 365.25
+	numOrdersPerSec := 0.5 // should be from parameters but I didn't find it
+	N := 3600 * numOrdersPerSec / tgtTimeHorizonHours
+	tickSize := float64(1 / math.Pow(10, float64(b.market.DecimalPlaces)))
+	delta := float64(b.strategy.LimitOrderDistributionParams.NumTicksFromMid) * tickSize
+	M0 := float64(externalPrice)
+
+	// This is crazy inefficient;
+	// We should do something else instead of comparing a string every time we want a price
+	if strings.Compare(method, "discreteThreeLevel") == 0 {
+		// do more pre-calculation
+		price, err = GeneratePriceUsingDiscreteThreeLevel(M0, delta, sigma, tgtTimeHorizonYrFrac, N)
+		return price, 1, err
+	} else if strings.Compare(method, "coinAndBinomial") == 0 {
+		return externalPrice, 1, err
+	} else {
+		errors.Wrap(err, "Method for generating price distributions not recognised")
+		return 0, 0, err
+	}
 }
 
 func (b *Bot) setupWallet() (err error) {
