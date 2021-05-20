@@ -21,12 +21,12 @@ type ShapeConfig struct {
 // LODParamsConfig is a little data structure which sets the algo and params for how limits
 // orders are generated.
 type LODParamsConfig struct {
-	Method             SteeringMethod
-	GttLength          uint64
-	TgtTimeHorizon     uint64
-	NumTicksFromMid    uint64
-	TgtOrdersPerSecond float64
-	NumIdenticalBots   int
+	Method              SteeringMethod
+	GttLength           uint64
+	TgtTimeHorizonHours float64
+	NumTicksFromMid     uint64
+	TgtOrdersPerSecond  float64
+	NumIdenticalBots    int
 }
 
 // Strategy configures the normal strategy.
@@ -201,7 +201,7 @@ func validateStrategyConfig(details config.Strategy) (s *Strategy, err error) {
 	s.LimitOrderDistributionParams.NumIdenticalBots = details.LimitOrderDistributionParams.NumIdenticalBots
 	s.LimitOrderDistributionParams.NumTicksFromMid = details.LimitOrderDistributionParams.NumTicksFromMid
 	s.LimitOrderDistributionParams.TgtOrdersPerSecond = details.LimitOrderDistributionParams.TgtOrdersPerSecond
-	s.LimitOrderDistributionParams.TgtTimeHorizon = details.LimitOrderDistributionParams.TgtTimeHorizon
+	s.LimitOrderDistributionParams.TgtTimeHorizonHours = details.LimitOrderDistributionParams.TgtTimeHorizonHours
 
 	s.TargetLNVol = details.TargetLNVol
 	err = errs.ErrorOrNil()

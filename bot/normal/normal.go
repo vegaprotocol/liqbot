@@ -758,9 +758,9 @@ func (b *Bot) GetRealisticOrderDetails(externalPrice uint64) (price, size uint64
 	method := b.strategy.LimitOrderDistributionParams.Method
 
 	sigma := b.strategy.TargetLNVol
-	tgtTimeHorizonHours := 1.0 // should be from parameters but I didn't find it
+	tgtTimeHorizonHours := b.strategy.LimitOrderDistributionParams.TgtTimeHorizonHours
 	tgtTimeHorizonYrFrac := tgtTimeHorizonHours / 24.0 / 365.25
-	numOrdersPerSec := 0.5 // should be from parameters but I didn't find it
+	numOrdersPerSec := b.strategy.LimitOrderDistributionParams.TgtOrdersPerSecond
 	N := 3600 * numOrdersPerSec / tgtTimeHorizonHours
 	tickSize := float64(1 / math.Pow(10, float64(b.market.DecimalPlaces)))
 	delta := float64(b.strategy.LimitOrderDistributionParams.NumTicksFromMid) * tickSize
