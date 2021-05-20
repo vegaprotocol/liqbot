@@ -620,14 +620,40 @@ func (b *Bot) calculateMarginCost(risk float64, markPrice uint64, orders []*prot
 	return totalMargin
 }
 
+func (b *Bot) getPriceParts() (base, quote string) {
+	// Set the defaults
+	base = "BTC"
+	quote = "USD"
+
+	// Find out the underlying assets for this market
+	instrument := b.market.TradableInstrument.GetInstrument()
+	if instrument != nil {
+		md := instrument.Metadata
+		for _, tag := range md.Tags {
+			parts := strings.Split(tag, ":")
+			if len(parts) == 2 {
+				if parts[0] == "quote" {
+					quote = parts[1]
+				}
+				if parts[0] == "base" {
+					base = parts[1]
+				}
+			}
+		}
+	}
+	return
+}
+
 func (b *Bot) runPriceSteering() {
-	var currentPrice, externalPrice uint64
+	var externalPrice uint64
 	var err error
 	var externalPriceResponse ppservice.PriceResponse
 
+	base, quote := b.getPriceParts()
+
 	ppcfg := ppconfig.PriceConfig{
-		Base:   "BTC",
-		Quote:  "USD",
+		Base:   base,
+		Quote:  quote,
 		Wander: true,
 	}
 
@@ -655,28 +681,29 @@ func (b *Bot) runPriceSteering() {
 					shouldMove := "no"
 					// We only want to steer the price if the external and market price
 					// are greater than a certain percentage apart
-					currentDiff := math.Abs(float64(currentPrice-externalPrice) / float64(externalPrice))
+					currentDiff := math.Abs((float64(b.currentPrice) - float64(externalPrice)) / float64(externalPrice))
 					if currentDiff > b.strategy.MinPriceSteerFraction {
 						var side proto.Side
-						if externalPrice > currentPrice {
+						if externalPrice > b.currentPrice {
 							side = proto.Side_SIDE_BUY
 							shouldMove = "UP"
 						} else {
 							side = proto.Side_SIDE_SELL
 							shouldMove = "DN"
 						}
-						b.log.WithFields(log.Fields{
-							"size": b.strategy.PriceSteerOrderSize,
-							"side": side,
-						}).Debug("Submitting order")
 
 						// Now we call into the maths heavy function to find out
 						// what price and size of the order we should place
 						price, size, priceError := b.GetRealisticOrderDetails(externalPrice)
 
 						if priceError != nil {
-							// deal with the error please, probably by complaining and dying.
+							b.log.Fatalln("Unable to get realistic order details for price steering")
 						}
+
+						b.log.WithFields(log.Fields{
+							"size": b.strategy.PriceSteerOrderSize,
+							"side": side,
+						}).Debug("Submitting order")
 
 						err = b.sendOrder(size,
 							price,
@@ -687,9 +714,9 @@ func (b *Bot) runPriceSteering() {
 							int64(b.strategy.LimitOrderDistributionParams.GttLength))
 					}
 					b.log.WithFields(log.Fields{
-						"currentPrice":  currentPrice,
+						"currentPrice":  b.currentPrice,
 						"externalPrice": externalPrice,
-						"diff":          int(externalPrice) - int(currentPrice),
+						"diff":          int(externalPrice) - int(b.currentPrice),
 						"shouldMove":    shouldMove,
 					}).Debug("Steering info")
 				}
