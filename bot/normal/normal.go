@@ -769,17 +769,16 @@ func (b *Bot) GetRealisticOrderDetails(externalPrice uint64) (price, size uint64
 	// to 39123.12345 float.
 	M0 := float64(externalPrice) / math.Pow(10, float64(b.market.DecimalPlaces))
 
-	// This is crazy inefficient;
-	// We should do something else instead of comparing a string every time we want a price
-	if strings.Compare(method, "discreteThreeLevel") == 0 {
+	switch method {
+	case DiscreteThreeLevel:
 		priceFloat, err := GeneratePriceUsingDiscreteThreeLevel(M0, delta, sigma, tgtTimeHorizonYrFrac, N)
 
 		// we need to add back decimals
 		price = uint64(math.Round(priceFloat * math.Pow(10, float64(b.market.DecimalPlaces))))
 		return price, 1, err
-	} else if strings.Compare(method, "coinAndBinomial") == 0 {
+	case CoinAndBinomial:
 		return externalPrice, 1, err
-	} else {
+	default:
 		errors.Wrap(err, "Method for generating price distributions not recognised")
 		return 0, 0, err
 	}

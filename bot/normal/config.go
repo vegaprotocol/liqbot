@@ -21,7 +21,7 @@ type ShapeConfig struct {
 // LODParamsConfig is a little data structure which sets the algo and params for how limits
 // orders are generated.
 type LODParamsConfig struct {
-	Method             string
+	Method             SteeringMethod
 	GttLength          uint64
 	TgtTimeHorizon     uint64
 	NumTicksFromMid    uint64
@@ -105,6 +105,24 @@ func refStringToEnum(reference string) proto.PeggedReference {
 	}
 }
 
+type SteeringMethod int
+
+const (
+	NotSet SteeringMethod = iota
+	DiscreteThreeLevel
+	CoinAndBinomial
+)
+
+func steeringMethodToEnum(method string) (SteeringMethod, error) {
+	switch method {
+	case "discreteThreeLevel":
+		return DiscreteThreeLevel, nil
+	case "coinAndBinomial":
+		return CoinAndBinomial, nil
+	}
+	return NotSet, fmt.Errorf("Steering method unknown:%s", method)
+}
+
 func validateStrategyConfig(details config.Strategy) (s *Strategy, err error) {
 	s = &Strategy{}
 	errInvalid := "invalid strategy config for %s"
@@ -174,7 +192,11 @@ func validateStrategyConfig(details config.Strategy) (s *Strategy, err error) {
 	s.PriceSteerOrderSize = details.PriceSteerOrderSize
 	s.MinPriceSteerFraction = details.MinPriceSteerFraction
 	s.LimitOrderDistributionParams = &LODParamsConfig{}
-	s.LimitOrderDistributionParams.Method = details.LimitOrderDistributionParams.Method
+	sm, err := steeringMethodToEnum(details.LimitOrderDistributionParams.Method)
+	if err != nil {
+		errs = multierror.Append(errs, err)
+	}
+	s.LimitOrderDistributionParams.Method = sm
 	s.LimitOrderDistributionParams.GttLength = details.LimitOrderDistributionParams.GttLength
 	s.LimitOrderDistributionParams.NumIdenticalBots = details.LimitOrderDistributionParams.NumIdenticalBots
 	s.LimitOrderDistributionParams.NumTicksFromMid = details.LimitOrderDistributionParams.NumTicksFromMid
