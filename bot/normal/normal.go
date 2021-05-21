@@ -665,13 +665,14 @@ func (b *Bot) runPriceSteering() {
 			return
 
 		default:
-			if b.strategy.PriceSteerOrderSize > 0 && b.canPlaceTrades() || true {
+			if b.strategy.PriceSteerOrderScale > 0 && b.canPlaceTrades() {
 				externalPriceResponse, err = b.pricingEngine.GetPrice(ppcfg)
 				if err != nil {
 					b.log.WithFields(log.Fields{
 						"error": err.Error(),
 					}).Warning("Failed to get external price")
 					externalPrice = 0
+					currentPrice = 0
 				} else {
 					externalPrice = uint64(externalPriceResponse.Price * math.Pow10(int(b.market.DecimalPlaces)))
 					currentPrice = b.marketData.StaticMidPrice
@@ -700,6 +701,7 @@ func (b *Bot) runPriceSteering() {
 							b.log.Fatalln("Unable to get realistic order details for price steering")
 						}
 
+						size = uint64(float64(size) * b.strategy.PriceSteerOrderScale)
 						b.log.WithFields(log.Fields{
 							"size":  size,
 							"side":  side,

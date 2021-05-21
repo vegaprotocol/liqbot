@@ -66,7 +66,7 @@ type Strategy struct {
 	PosManagementSleepMilliseconds   int     `yaml:"posManagementSleepMilliseconds"`
 	MarketPriceSteeringRatePerSecond float64 `yaml:"marketPriceSteeringRatePerSecond"`
 	MinPriceSteerFraction            float64 `yaml:"minPriceSteerFraction"`
-	PriceSteerOrderSize              uint64  `yaml:"priceSteerOrderSize"`
+	PriceSteerOrderScale             float64 `yaml:"priceSteerOrderScale"`
 
 	LimitOrderDistributionParams LimitOrderDistParams `yaml:"limitOrderDistributionParams"`
 	TargetLNVol                  float64              `yaml:"targetLNVol"`

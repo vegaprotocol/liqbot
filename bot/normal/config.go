@@ -80,8 +80,8 @@ type Strategy struct {
 	// allow a price steering order to be placed.
 	MinPriceSteerFraction float64
 
-	// PriceSteerOrderSize is the size of a steering order when placed
-	PriceSteerOrderSize uint64
+	// PriceSteerOrderScale is the scaling factor used when placing a steering order
+	PriceSteerOrderScale float64
 
 	// LimitOrderDistributionParams ...
 	LimitOrderDistributionParams *LODParamsConfig
@@ -188,7 +188,7 @@ func validateStrategyConfig(details config.Strategy) (s *Strategy, err error) {
 		errs = multierror.Append(errs, errors.Wrap(fmt.Errorf("must be <=10"), fmt.Sprintf(errInvalid, "MarketPriceSteeringRatePerSecond")))
 	}
 
-	s.PriceSteerOrderSize = details.PriceSteerOrderSize
+	s.PriceSteerOrderScale = details.PriceSteerOrderScale
 	s.MinPriceSteerFraction = details.MinPriceSteerFraction
 	s.LimitOrderDistributionParams = &LODParamsConfig{}
 	sm, err := steeringMethodToEnum(details.LimitOrderDistributionParams.Method)
@@ -207,7 +207,7 @@ func validateStrategyConfig(details config.Strategy) (s *Strategy, err error) {
 }
 
 func (s *Strategy) String() string {
-	return fmt.Sprintf("normal.Strategy{ExpectedMarkPrice=%d, AuctionVolume=%d, MaxLong=%d, MaxShort=%d, PosManagementFraction=%f, StakeFraction=%f, OrdersFraction=%f, ShorteningShape=TBD(*ShapeConfig), LongeningShape=TBD(*ShapeConfig), PosManagementSleepMilliseconds=%d, MarketPriceSteeringRatePerSecond=%f, MinPriceSteerFraction=%f, PriceSteerOrderSize=%d, LimitOrderDistributionParams=TBD(*LODParamsConfig), TargetLNVol=%f}",
+	return fmt.Sprintf("normal.Strategy{ExpectedMarkPrice=%d, AuctionVolume=%d, MaxLong=%d, MaxShort=%d, PosManagementFraction=%f, StakeFraction=%f, OrdersFraction=%f, ShorteningShape=TBD(*ShapeConfig), LongeningShape=TBD(*ShapeConfig), PosManagementSleepMilliseconds=%d, MarketPriceSteeringRatePerSecond=%f, MinPriceSteerFraction=%f, PriceSteerOrderScale=%f, LimitOrderDistributionParams=TBD(*LODParamsConfig), TargetLNVol=%f}",
 		s.ExpectedMarkPrice,
 		s.AuctionVolume,
 		s.MaxLong,
@@ -220,7 +220,7 @@ func (s *Strategy) String() string {
 		s.PosManagementSleepMilliseconds,
 		s.MarketPriceSteeringRatePerSecond,
 		s.MinPriceSteerFraction,
-		s.PriceSteerOrderSize,
+		s.PriceSteerOrderScale,
 		// s.LimitOrderDistributionParams,
 		s.TargetLNVol,
 	)
