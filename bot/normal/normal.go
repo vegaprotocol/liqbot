@@ -20,6 +20,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto"
 	"github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto/api"
+	v1 "github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto/commands/v1"
 	"github.com/vegaprotocol/api/grpc/clients/go/txn"
 )
 
@@ -227,8 +228,7 @@ func (b *Bot) signSubmitTx(blob []byte, typ api.SubmitTransactionRequest_Type) e
 
 	// Submit TX
 	sub := &api.SubmitTransactionRequest{
-		Tx:   ConvertSignedBundle(&signedBundle),
-		Type: typ,
+		Tx: ConvertSignedBundle(&signedBundle),
 	}
 	submitResponse, err := b.node.SubmitTransaction(sub)
 	if err != nil {
@@ -277,7 +277,7 @@ func (b *Bot) sendLiquidityProvision(buys, sells []*proto.LiquidityOrder) error 
 	commitment := b.strategy.CommitmentFraction * float64(b.balanceGeneral+b.balanceMargin+b.balanceBond)
 
 	sub := &api.PrepareLiquidityProvisionRequest{
-		Submission: &proto.LiquidityProvisionSubmission{
+		Submission: &v1.LiquidityProvisionSubmission{
 			Fee:              b.config.StrategyDetails.Fee,
 			MarketId:         b.market.Id,
 			CommitmentAmount: uint64(commitment),
@@ -378,9 +378,8 @@ func (b *Bot) sendOrder(size, price uint64,
 	reference string,
 	secondsFromNow int64) error {
 	request := &api.PrepareSubmitOrderRequest{
-		Submission: &proto.OrderSubmission{
+		Submission: &v1.OrderSubmission{
 			MarketId:    b.market.Id,
-			PartyId:     b.walletPubKeyHex,
 			Size:        size,
 			Side:        side,
 			TimeInForce: tif,
@@ -645,7 +644,7 @@ func (b *Bot) getPriceParts() (base, quote string) {
 }
 
 func (b *Bot) runPriceSteering() {
-	var externalPrice uint64
+	var externalPrice, currentPrice uint64
 	var err error
 	var externalPriceResponse ppservice.PriceResponse
 
@@ -666,7 +665,7 @@ func (b *Bot) runPriceSteering() {
 			return
 
 		default:
-			if b.strategy.PriceSteerOrderSize > 0 && b.canPlaceTrades() {
+			if b.strategy.PriceSteerOrderSize > 0 && b.canPlaceTrades() || true {
 				externalPriceResponse, err = b.pricingEngine.GetPrice(ppcfg)
 				if err != nil {
 					b.log.WithFields(log.Fields{
@@ -675,16 +674,17 @@ func (b *Bot) runPriceSteering() {
 					externalPrice = 0
 				} else {
 					externalPrice = uint64(externalPriceResponse.Price * math.Pow10(int(b.market.DecimalPlaces)))
+					currentPrice = b.marketData.StaticMidPrice
 				}
 
 				if err == nil && externalPrice != 0 {
 					shouldMove := "no"
 					// We only want to steer the price if the external and market price
 					// are greater than a certain percentage apart
-					currentDiff := math.Abs((float64(b.currentPrice) - float64(externalPrice)) / float64(externalPrice))
+					currentDiff := math.Abs((float64(currentPrice) - float64(externalPrice)) / float64(externalPrice))
 					if currentDiff > b.strategy.MinPriceSteerFraction {
 						var side proto.Side
-						if externalPrice > b.currentPrice {
+						if externalPrice > currentPrice {
 							side = proto.Side_SIDE_BUY
 							shouldMove = "UP"
 						} else {
@@ -701,8 +701,9 @@ func (b *Bot) runPriceSteering() {
 						}
 
 						b.log.WithFields(log.Fields{
-							"size": b.strategy.PriceSteerOrderSize,
-							"side": side,
+							"size":  size,
+							"side":  side,
+							"price": price,
 						}).Debug("Submitting order")
 
 						err = b.sendOrder(size,
@@ -714,7 +715,7 @@ func (b *Bot) runPriceSteering() {
 							int64(b.strategy.LimitOrderDistributionParams.GttLength))
 					}
 					b.log.WithFields(log.Fields{
-						"currentPrice":  b.currentPrice,
+						"currentPrice":  currentPrice,
 						"externalPrice": externalPrice,
 						"diff":          int(externalPrice) - int(b.currentPrice),
 						"shouldMove":    shouldMove,

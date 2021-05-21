@@ -19,7 +19,7 @@ bots:
     location: localhost:1002
     connectTimeout: 30000  # milliseconds
     callTimeout: 10000  # milliseconds
-    marketID: f5f9bc4ba9a789a5e368a05f5bc0771de991c040052f3b5aa605167cabee90cb  # BTC/USD
+    marketID: a3a4138ff7b0209d24c7473fa4be94a351acff118434460f505fdb24cd96e10a  # BTC/USD
     strategy: normal
     strategyDetails:
       expectedMarkPrice: 0
@@ -55,14 +55,14 @@ bots:
           - {reference: Bid, proportion: 20, offset: -4}
           - {reference: Bid, proportion: 10, offset: -8}
       posManagementSleepMilliseconds: 5050
-      marketPriceSteeringRatePerSecond: 0.1
-      minPriceSteerFraction: 0.001
-      priceSteerOrderSize: 0
+      marketPriceSteeringRatePerSecond: 1.0
+      minPriceSteerFraction: 0.00001
+      priceSteerOrderSize: 1
       limitOrderDistributionParams:
         method: "discreteThreeLevel"
         gttLengthSeconds: 60
-        tgtTimeHorizonSeconds: 3600
+        tgtTimeHorizonHours: 1.0
         numTicksFromMid: 5
-        tgtOrdersPerSecond: 2.0
+        tgtOrdersPerSecond: 1.0
         numIdenticalBots: 1
-      targetLNVol: 0.0
+      targetLNVol: 0.25
