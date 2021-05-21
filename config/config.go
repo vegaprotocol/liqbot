@@ -75,7 +75,7 @@ type Strategy struct {
 	LongeningShape  Shape `yaml:"longeningShape"`
 }
 
-// Params for configuring the way price steering orders are sent
+// LimitOrderDistParams for configuring the way price steering orders are sent
 type LimitOrderDistParams struct {
 	Method              string  `yaml:"method"`
 	GttLength           uint64  `yaml:"gttLengthSeconds"`

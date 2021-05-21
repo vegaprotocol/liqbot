@@ -56,8 +56,8 @@ func TestRandomChoice(t *testing.T) {
 	}
 
 	for sampleIdx := 0; sampleIdx < numSamples; sampleIdx++ {
-		i := RandomChoice(probs)
-		buckets[i] += 1
+		i := randomChoice(probs)
+		buckets[i]++
 	}
 
 	sampleProbs := make([]float64, 3)

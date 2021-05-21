@@ -62,6 +62,7 @@ func doze(d time.Duration, stop chan bool) error {
 	return nil
 }
 
+// DiscreteThreeLevelProbabilities is a method for calculating price levels
 func DiscreteThreeLevelProbabilities(V []float64, muHat float64, sigmaHat float64) ([]float64, error) {
 	Vsq := make([]float64, len(V))
 	A := mat.NewDense(3, len(V), nil)
@@ -129,6 +130,7 @@ func DiscreteThreeLevelProbabilities(V []float64, muHat float64, sigmaHat float6
 	return p, err
 }
 
+// GeneratePriceUsingDiscreteThreeLevel is a method for calculating price levels
 // input is a float price (so divide uint64 price  by 10^{num of decimals})
 // it returns a float price which you want to multiply by 10^{num of decimals} and then round
 func GeneratePriceUsingDiscreteThreeLevel(M0, delta, sigma, tgtTimeHorizonYrFrac, N float64) (price float64, err error) {
@@ -144,14 +146,14 @@ func GeneratePriceUsingDiscreteThreeLevel(M0, delta, sigma, tgtTimeHorizonYrFrac
 		return 0, err
 	}
 	// now we have the probabilities - we just need to generate a random sample
-	shockX := V[RandomChoice(probabilities)]
+	shockX := V[randomChoice(probabilities)]
 	Y := math.Exp(shockX / float64(N))
 	price = M0 * Y
 	return price, err
 
 }
 
-func RandomChoice(probabilities []float64) uint64 {
+func randomChoice(probabilities []float64) uint64 {
 	x := distuv.UnitUniform.Rand()
 	for i := uint64(0); i < uint64(len(probabilities)); i++ {
 		x -= probabilities[i]

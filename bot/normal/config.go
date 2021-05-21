@@ -104,11 +104,15 @@ func refStringToEnum(reference string) proto.PeggedReference {
 	}
 }
 
+// SteeringMethod is an enum for all the possible price calculations methods for price steering
 type SteeringMethod int
 
 const (
+	// NotSet for when we cannot parse the input string
 	NotSet SteeringMethod = iota
+	// DiscreteThreeLevel uses the discrete three level method
 	DiscreteThreeLevel
+	// CoinAndBinomial uses the coin and binomial method
 	CoinAndBinomial
 )
 

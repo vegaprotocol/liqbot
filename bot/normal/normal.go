@@ -756,14 +756,7 @@ func (b *Bot) runPriceSteering() {
 	}
 }
 
-// This is the function for David to fill out
-// The params he needs are:
-//
-// targetPrice -> given as paramater externalPrice
-// direction -> given as parameter side (buy to move up, sell to move down)
-// LimitOrderDistributionParams -> 	b.strategy.LimitOrderDistributionParams
-// tickSize -> Calculated from market decimal places value
-// target volatility -> b.strategy.TargetLNVol
+// GetRealisticOrderDetails uses magic to return a realistic order price and size
 func (b *Bot) GetRealisticOrderDetails(externalPrice uint64) (price, size uint64, err error) {
 	err = nil
 
