@@ -11,7 +11,6 @@ import (
 
 	"code.vegaprotocol.io/liqbot/config"
 	"code.vegaprotocol.io/liqbot/node"
-	"go.uber.org/zap"
 
 	"code.vegaprotocol.io/go-wallet/wallet"
 	ppconfig "code.vegaprotocol.io/priceproxy/config"
@@ -20,7 +19,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto"
 	"github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto/api"
-	v1 "github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto/commands/v1"
+	commandspb "github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto/commands/v1"
 	"github.com/vegaprotocol/api/grpc/clients/go/txn"
 )
 
@@ -163,7 +162,12 @@ func (b *Bot) Start() error {
 	if err != nil {
 		return fmt.Errorf("unable to look up asset details for %s", b.settlementAssetID)
 	}
-	b.settlementAssetAddress = assetResponse.Asset.Source.GetErc20().ContractAddress
+	erc20 := assetResponse.Asset.Source.GetErc20()
+	if erc20 != nil {
+		b.settlementAssetAddress = erc20.ContractAddress
+	} else {
+		b.settlementAssetAddress = ""
+	}
 
 	b.balanceGeneral = 0
 	b.balanceMargin = 0
@@ -277,7 +281,7 @@ func (b *Bot) sendLiquidityProvision(buys, sells []*proto.LiquidityOrder) error 
 	commitment := b.strategy.CommitmentFraction * float64(b.balanceGeneral+b.balanceMargin+b.balanceBond)
 
 	sub := &api.PrepareLiquidityProvisionRequest{
-		Submission: &v1.LiquidityProvisionSubmission{
+		Submission: &commandspb.LiquidityProvisionSubmission{
 			Fee:              b.config.StrategyDetails.Fee,
 			MarketId:         b.market.Id,
 			CommitmentAmount: uint64(commitment),
@@ -371,14 +375,16 @@ func (b *Bot) checkPositionManagement() {
 	}
 }
 
-func (b *Bot) sendOrder(size, price uint64,
+func (b *Bot) sendOrder(
+	size, price uint64,
 	side proto.Side,
 	tif proto.Order_TimeInForce,
 	orderType proto.Order_Type,
 	reference string,
-	secondsFromNow int64) error {
+	secondsFromNow int64,
+) error {
 	request := &api.PrepareSubmitOrderRequest{
-		Submission: &v1.OrderSubmission{
+		Submission: &commandspb.OrderSubmission{
 			MarketId:    b.market.Id,
 			Size:        size,
 			Side:        side,
@@ -421,17 +427,17 @@ func (b *Bot) checkInitialMargin() error {
 	avail := int64(float64(b.balanceGeneral) * b.strategy.OrdersFraction)
 	cost := int64(float64(shapeMarginCost))
 	if avail < cost {
-		var missing_percent string
+		var missingPercent string
 		if avail == 0 {
-			missing_percent = "Inf"
+			missingPercent = "Inf"
 		} else {
-			missing_percent = fmt.Sprintf("%v", (cost-avail)*100.0/avail)
+			missingPercent = fmt.Sprintf("%.2f%%", float32((cost-avail)*100)/float32(avail))
 		}
 		b.log.WithFields(log.Fields{
-			"available":       avail,
-			"cost":            cost,
-			"missing":         avail - cost,
-			"missing_percent": missing_percent,
+			"available":      avail,
+			"cost":           cost,
+			"missing":        avail - cost,
+			"missingPercent": missingPercent,
 		}).Error("Not enough collateral to safely keep orders up given current price, risk parameters and supplied default shapes.")
 		return errors.New("not enough collateral")
 	}
@@ -523,13 +529,17 @@ func (b *Bot) runPositionManagement() {
 				err = b.checkInitialMargin()
 				if err != nil {
 					b.active = false
-					b.log.Error("Failed initial margin check", zap.Error(err))
+					b.log.WithFields(log.Fields{
+						"error": err.Error(),
+					}).Error("Failed initial margin check")
 					return
 				}
 				// Submit LP order to market.
 				err = b.sendLiquidityProvision(b.buyShape, b.sellShape)
 				if err != nil {
-					b.log.Error("Failed to send liquidity provision order", zap.Error(err))
+					b.log.WithFields(log.Fields{
+						"error": err.Error(),
+					}).Error("Failed to send liquidity provision order")
 					return
 				}
 				firstTime = false
