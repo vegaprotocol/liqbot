@@ -81,7 +81,6 @@ type LimitOrderDistParams struct {
 	GttLength           uint64  `yaml:"gttLengthSeconds"`
 	TgtTimeHorizonHours float64 `yaml:"tgtTimeHorizonHours"`
 	NumTicksFromMid     uint64  `yaml:"numTicksFromMid"`
-	TgtOrdersPerSecond  float64 `yaml:"tgtOrdersPerSecond"`
 	NumIdenticalBots    int     `yaml:"numIdenticalBots"`
 }
 

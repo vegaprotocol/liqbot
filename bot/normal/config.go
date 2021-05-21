@@ -25,7 +25,6 @@ type LODParamsConfig struct {
 	GttLength           uint64
 	TgtTimeHorizonHours float64
 	NumTicksFromMid     uint64
-	TgtOrdersPerSecond  float64
 	NumIdenticalBots    int
 }
 
@@ -200,7 +199,6 @@ func validateStrategyConfig(details config.Strategy) (s *Strategy, err error) {
 	s.LimitOrderDistributionParams.GttLength = details.LimitOrderDistributionParams.GttLength
 	s.LimitOrderDistributionParams.NumIdenticalBots = details.LimitOrderDistributionParams.NumIdenticalBots
 	s.LimitOrderDistributionParams.NumTicksFromMid = details.LimitOrderDistributionParams.NumTicksFromMid
-	s.LimitOrderDistributionParams.TgtOrdersPerSecond = details.LimitOrderDistributionParams.TgtOrdersPerSecond
 	s.LimitOrderDistributionParams.TgtTimeHorizonHours = details.LimitOrderDistributionParams.TgtTimeHorizonHours
 
 	s.TargetLNVol = details.TargetLNVol
