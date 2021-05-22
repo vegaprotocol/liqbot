@@ -785,7 +785,7 @@ func (b *Bot) GetRealisticOrderDetails(externalPrice uint64) (price, size uint64
 	case CoinAndBinomial:
 		return externalPrice, 1, err
 	default:
-		errors.Wrap(err, "Method for generating price distributions not recognised")
+		err = errors.Wrap(err, "Method for generating price distributions not recognised")
 		return 0, 0, err
 	}
 }
