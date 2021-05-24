@@ -716,7 +716,7 @@ func (b *Bot) runPriceSteering() {
 						price, size, priceError := b.GetRealisticOrderDetails(externalPrice)
 
 						if priceError != nil {
-							b.log.Fatalln("Unable to get realistic order details for price steering: %v", priceError)
+							b.log.Fatalln("Unable to get realistic order details for price steering: %s", priceError)
 						}
 
 						size = uint64(float64(size) * b.strategy.PriceSteerOrderScale)
