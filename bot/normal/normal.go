@@ -629,10 +629,12 @@ func (b *Bot) calculateMarginCost(risk float64, markPrice uint64, orders []*prot
 	return totalMargin
 }
 
-func (b *Bot) getPriceParts() (base, quote string) {
-	// Set the defaults
-	base = "BTC"
-	quote = "USD"
+func (b *Bot) getPriceParts() (base, quote string, err error) {
+	// If we have been passed in the values, use those
+	if len(b.config.InstrumentBase) > 0 &&
+		len(b.config.InstrumentQuote) > 0 {
+		return b.config.InstrumentBase, b.config.InstrumentQuote, nil
+	}
 
 	// Find out the underlying assets for this market
 	instrument := b.market.TradableInstrument.GetInstrument()
@@ -650,6 +652,9 @@ func (b *Bot) getPriceParts() (base, quote string) {
 			}
 		}
 	}
+	if len(quote) == 0 || len(base) == 0 {
+		return "", "", fmt.Errorf("Unable to work out price assets from market metadata")
+	}
 	return
 }
 
@@ -658,7 +663,10 @@ func (b *Bot) runPriceSteering() {
 	var err error
 	var externalPriceResponse ppservice.PriceResponse
 
-	base, quote := b.getPriceParts()
+	base, quote, err := b.getPriceParts()
+	if err != nil {
+		b.log.Fatalf("Unable to build instrument for external price feed: %v", err)
+	}
 
 	ppcfg := ppconfig.PriceConfig{
 		Base:   base,
@@ -708,7 +716,7 @@ func (b *Bot) runPriceSteering() {
 						price, size, priceError := b.GetRealisticOrderDetails(externalPrice)
 
 						if priceError != nil {
-							b.log.Fatalln("Unable to get realistic order details for price steering")
+							b.log.Fatalln("Unable to get realistic order details for price steering: %v", priceError)
 						}
 
 						size = uint64(float64(size) * b.strategy.PriceSteerOrderScale)
@@ -758,8 +766,6 @@ func (b *Bot) runPriceSteering() {
 
 // GetRealisticOrderDetails uses magic to return a realistic order price and size
 func (b *Bot) GetRealisticOrderDetails(externalPrice uint64) (price, size uint64, err error) {
-	err = nil
-
 	// Collect stuff from config that's common to all methods
 	method := b.strategy.LimitOrderDistributionParams.Method
 
@@ -775,18 +781,20 @@ func (b *Bot) GetRealisticOrderDetails(externalPrice uint64) (price, size uint64
 	// to 39123.12345 float.
 	M0 := float64(externalPrice) / math.Pow(10, float64(b.market.DecimalPlaces))
 
+	var priceFloat float64
+	size = 1
 	switch method {
 	case DiscreteThreeLevel:
-		priceFloat, err := GeneratePriceUsingDiscreteThreeLevel(M0, delta, sigma, tgtTimeHorizonYrFrac, N)
+		priceFloat, err = GeneratePriceUsingDiscreteThreeLevel(M0, delta, sigma, tgtTimeHorizonYrFrac, N)
 
 		// we need to add back decimals
 		price = uint64(math.Round(priceFloat * math.Pow(10, float64(b.market.DecimalPlaces))))
-		return price, 1, err
+		return
 	case CoinAndBinomial:
-		return externalPrice, 1, err
+		return externalPrice, 1, nil
 	default:
-		err = errors.Wrap(err, "Method for generating price distributions not recognised")
-		return 0, 0, err
+		err = fmt.Errorf("Method for generating price distributions not recognised: %w", err)
+		return
 	}
 }
 
