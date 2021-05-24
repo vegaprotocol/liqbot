@@ -251,7 +251,7 @@ func (b *Bot) submitLiquidityProvision(sub *api.PrepareLiquidityProvisionRequest
 		return errors.Wrap(err, "failed to prepare tx")
 	}
 
-	err = b.signSubmitTx(prepared.Blob, api.SubmitTransactionRequest_TYPE_COMMIT)
+	err = b.signSubmitTx(prepared.Blob, api.SubmitTransactionRequest_TYPE_ASYNC)
 	if err != nil {
 		return errors.Wrap(err, "failed to sign and submit tx")
 	}
@@ -269,7 +269,7 @@ func (b *Bot) submitOrder(sub *api.PrepareSubmitOrderRequest) error {
 		return errors.Wrap(err, "failed to prepare tx")
 	}
 
-	err = b.signSubmitTx(prepared.Blob, api.SubmitTransactionRequest_TYPE_COMMIT)
+	err = b.signSubmitTx(prepared.Blob, api.SubmitTransactionRequest_TYPE_ASYNC)
 	if err != nil {
 		return errors.Wrap(err, "failed to sign and submit tx")
 	}
