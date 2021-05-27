@@ -51,20 +51,20 @@ build:
 install:
 	@go install $(GO_FLAGS) ./cmd/liqbot
 
-.PHONY: release-linux
-release-linux:
+.PHONY: release-ubuntu-latest
+release-ubuntu-latest:
 	@mkdir -p build
 	@env GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build -v -o build/liqbot-linux-amd64 $(GO_FLAGS) ./cmd/liqbot
 	@cd build && zip liqbot-linux-amd64.zip liqbot-linux-amd64
 
-.PHONY: release-macos
-release-macos:
+.PHONY: release-macos-latest
+release-macos-latest:
 	@mkdir -p build
 	@env GOOS=darwin GOARCH=amd64 CGO_ENABLED=1 go build -v -o build/liqbot-darwin-amd64 $(GO_FLAGS) ./cmd/liqbot
 	@cd build && zip liqbot-darwin-amd64.zip liqbot-darwin-amd64
 
-.PHONY: release-windows
-release-windows:
+.PHONY: release-windows-latest
+release-windows-latest:
 	@env GOOS=windows GOARCH=amd64 CGO_ENABLED=1 go build -v -o build/liqbot-amd64.exe $(GO_FLAGS) ./cmd/liqbot
 	@cd build && 7z a -tzip liqbot-windows-amd64.zip liqbot-amd64.exe
 
