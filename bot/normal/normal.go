@@ -449,14 +449,16 @@ func (b *Bot) initialiseData() error {
 
 	err = b.lookupInitialValues()
 	if err != nil {
-		b.log.Debugf("Stopping position management as we could not get initial values: %v", err)
+		b.log.WithFields(log.Fields{"error": err.Error()}).
+			Debug("Stopping position management as we could not get initial values")
 		return err
 	}
 
 	if !b.eventStreamLive {
 		err = b.subscribeToEvents()
 		if err != nil {
-			b.log.Debugf("Unable to subscribe to event bus feeds: %v", err)
+			b.log.WithFields(log.Fields{"error": err.Error()}).
+				Debug("Unable to subscribe to event bus feeds")
 			return err
 		}
 	}
@@ -464,7 +466,8 @@ func (b *Bot) initialiseData() error {
 	if !b.positionStreamLive {
 		err = b.subscribePositions()
 		if err != nil {
-			b.log.Debugf("Unable to subscribe to event bus feeds: %v", err)
+			b.log.WithFields(log.Fields{"error": err.Error()}).
+				Debug("Unable to subscribe to event bus feeds")
 			return err
 		}
 	}
@@ -558,7 +561,8 @@ func (b *Bot) runPositionManagement() {
 			for !b.positionStreamLive || !b.eventStreamLive {
 				err = doze(time.Duration(sleepTime)*time.Millisecond, b.stopPosMgmt)
 				if err != nil {
-					b.log.Debugf("Stopping bot position management: %v", err)
+					b.log.WithFields(log.Fields{"error": err.Error()}).
+						Debug("Stopping bot position management")
 					b.active = false
 					return
 				}
@@ -571,7 +575,8 @@ func (b *Bot) runPositionManagement() {
 
 			err = doze(time.Duration(sleepTime)*time.Millisecond, b.stopPosMgmt)
 			if err != nil {
-				b.log.Debugf("Stopping bot position management: %v", err)
+				b.log.WithFields(log.Fields{"error": err.Error()}).
+					Debug("Stopping bot position management")
 				b.active = false
 				return
 			}
@@ -665,7 +670,8 @@ func (b *Bot) runPriceSteering() {
 
 	base, quote, err := b.getPriceParts()
 	if err != nil {
-		b.log.Fatalf("Unable to build instrument for external price feed: %v", err)
+		b.log.WithFields(log.Fields{"error": err.Error()}).
+			Fatal("Unable to build instrument for external price feed")
 	}
 
 	ppcfg := ppconfig.PriceConfig{
@@ -716,7 +722,8 @@ func (b *Bot) runPriceSteering() {
 						price, size, priceError := b.GetRealisticOrderDetails(externalPrice)
 
 						if priceError != nil {
-							b.log.Fatalf("Unable to get realistic order details for price steering: %v\n", priceError)
+							b.log.WithFields(log.Fields{"error": priceError.Error()}).
+								Fatal("Unable to get realistic order details for price steering")
 						}
 
 						size = uint64(float64(size) * b.strategy.PriceSteerOrderScale)
