@@ -486,10 +486,11 @@ func (b *Bot) placeAuctionOrders() {
 	// Place the random orders split into
 	var totalVolume uint64
 	rand.Seed(time.Now().UnixNano())
+	/* #nosec G404 */
 	for totalVolume < b.config.StrategyDetails.AuctionVolume {
 		remaining := b.config.StrategyDetails.AuctionVolume - totalVolume
 		size := min(1+(b.config.StrategyDetails.AuctionVolume/10), remaining)
-		price := b.currentPrice + (uint64(rand.Int63n(100) - 50)) // #nosec G404 This suboptimal rand generator is fine for now
+		price := b.currentPrice + (uint64(rand.Int63n(100) - 50))
 		side := proto.Side_SIDE_BUY
 		if rand.Intn(2) == 0 {
 			side = proto.Side_SIDE_SELL
