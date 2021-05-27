@@ -11,6 +11,7 @@ import (
 	"github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto/api"
 	apigrpc "github.com/vegaprotocol/api/grpc/clients/go/grpc"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 )
 
 // GRPCNode stores state for a Vega node.
@@ -52,7 +53,7 @@ func (n *GRPCNode) GetAddress() (url.URL, error) {
 // SubmitTransaction submits a signed transaction
 func (n *GRPCNode) SubmitTransaction(req *api.SubmitTransactionRequest) (response *api.SubmitTransactionResponse, err error) {
 	msg := "gRPC call failed: SubmitTransaction: %w"
-	if n == nil {
+	if n == nil || n.conn.GetState() != connectivity.Ready {
 		err = fmt.Errorf(msg, e.ErrNil)
 		return
 	}
@@ -73,7 +74,7 @@ func (n *GRPCNode) SubmitTransaction(req *api.SubmitTransactionRequest) (respons
 // GetVegaTime gets the latest block header time from the node.
 func (n *GRPCNode) GetVegaTime() (t time.Time, err error) {
 	msg := "gRPC call failed: GetVegaTime: %w"
-	if n == nil {
+	if n == nil || n.conn.GetState() != connectivity.Ready {
 		err = fmt.Errorf(msg, e.ErrNil)
 		return
 	}
@@ -99,7 +100,7 @@ func (n *GRPCNode) GetVegaTime() (t time.Time, err error) {
 // MarketByID gets a Market from the node
 func (n *GRPCNode) MarketByID(req *api.MarketByIDRequest) (response *api.MarketByIDResponse, err error) {
 	msg := "gRPC call failed: MarketByID: %w"
-	if n == nil {
+	if n == nil || n.conn.GetState() != connectivity.Ready {
 		err = fmt.Errorf(msg, e.ErrNil)
 		return
 	}
@@ -117,7 +118,7 @@ func (n *GRPCNode) MarketByID(req *api.MarketByIDRequest) (response *api.MarketB
 // MarketDataByID gets market data from the node
 func (n *GRPCNode) MarketDataByID(req *api.MarketDataByIDRequest) (response *api.MarketDataByIDResponse, err error) {
 	msg := "gRPC call failed: MarketDataByID: %w"
-	if n == nil {
+	if n == nil || n.conn.GetState() != connectivity.Ready {
 		err = fmt.Errorf(msg, e.ErrNil)
 		return
 	}
@@ -135,7 +136,7 @@ func (n *GRPCNode) MarketDataByID(req *api.MarketDataByIDRequest) (response *api
 // LiquidityProvisions gets the liquidity provisions for a given market and party.
 func (n *GRPCNode) LiquidityProvisions(req *api.LiquidityProvisionsRequest) (response *api.LiquidityProvisionsResponse, err error) {
 	msg := "gRPC call failed: LiquidityProvisions: %w"
-	if n == nil {
+	if n == nil || n.conn.GetState() != connectivity.Ready {
 		err = fmt.Errorf(msg, e.ErrNil)
 		return
 	}
@@ -153,7 +154,7 @@ func (n *GRPCNode) LiquidityProvisions(req *api.LiquidityProvisionsRequest) (res
 // MarketDepth gets the depth for a market.
 func (n *GRPCNode) MarketDepth(req *api.MarketDepthRequest) (response *api.MarketDepthResponse, err error) {
 	msg := "gRPC call failed: MarketDepth: %w"
-	if n == nil {
+	if n == nil || n.conn.GetState() != connectivity.Ready {
 		err = fmt.Errorf(msg, e.ErrNil)
 		return
 	}
@@ -171,7 +172,7 @@ func (n *GRPCNode) MarketDepth(req *api.MarketDepthRequest) (response *api.Marke
 // PartyAccounts gets Accounts for a given partyID from the node
 func (n *GRPCNode) PartyAccounts(req *api.PartyAccountsRequest) (response *api.PartyAccountsResponse, err error) {
 	msg := "gRPC call failed: PartyAccounts: %w"
-	if n == nil {
+	if n == nil || n.conn.GetState() != connectivity.Ready {
 		err = fmt.Errorf(msg, e.ErrNil)
 		return
 	}
@@ -189,7 +190,7 @@ func (n *GRPCNode) PartyAccounts(req *api.PartyAccountsRequest) (response *api.P
 // PositionsByParty gets the positions for a party.
 func (n *GRPCNode) PositionsByParty(req *api.PositionsByPartyRequest) (response *api.PositionsByPartyResponse, err error) {
 	msg := "gRPC call failed: PositionsByParty: %w"
-	if n == nil {
+	if n == nil || n.conn.GetState() != connectivity.Ready {
 		err = fmt.Errorf(msg, e.ErrNil)
 		return
 	}
@@ -207,7 +208,7 @@ func (n *GRPCNode) PositionsByParty(req *api.PositionsByPartyRequest) (response 
 // ObserveEventBus starts a network connection to the node to sending event messages on
 func (n *GRPCNode) ObserveEventBus() (stream api.TradingDataService_ObserveEventBusClient, err error) {
 	msg := "gRPC call failed: ObserveEventBus: %w"
-	if n == nil {
+	if n == nil || n.conn.GetState() != connectivity.Ready {
 		err = fmt.Errorf(msg, e.ErrNil)
 		return
 	}
@@ -223,7 +224,7 @@ func (n *GRPCNode) ObserveEventBus() (stream api.TradingDataService_ObserveEvent
 // PositionsSubscribe starts a network connection to receive the party position as it updates
 func (n *GRPCNode) PositionsSubscribe(req *api.PositionsSubscribeRequest) (stream api.TradingDataService_PositionsSubscribeClient, err error) {
 	msg := "gRPC call failed: PositionsSubscribe: %w"
-	if n == nil {
+	if n == nil || n.conn.GetState() != connectivity.Ready {
 		err = fmt.Errorf(msg, e.ErrNil)
 		return
 	}
@@ -239,7 +240,7 @@ func (n *GRPCNode) PositionsSubscribe(req *api.PositionsSubscribeRequest) (strea
 // AssetByID returns information about a given asset
 func (n *GRPCNode) AssetByID(assetID string) (response *api.AssetByIDResponse, err error) {
 	msg := "gRPC call failed: AssetByID: %w"
-	if n == nil {
+	if n == nil || n.conn.GetState() != connectivity.Ready {
 		err = fmt.Errorf(msg, e.ErrNil)
 		return
 	}
@@ -256,5 +257,4 @@ func (n *GRPCNode) AssetByID(assetID string) (response *api.AssetByIDResponse, e
 		err = fmt.Errorf(msg, apigrpc.ErrorDetail(err))
 	}
 	return
-
 }

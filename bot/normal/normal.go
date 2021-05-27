@@ -449,14 +449,14 @@ func (b *Bot) initialiseData() error {
 
 	err = b.lookupInitialValues()
 	if err != nil {
-		b.log.Debug("Stopping position management as we could not get initial values")
+		b.log.Debugf("Stopping position management as we could not get initial values: %w", err)
 		return err
 	}
 
 	if !b.eventStreamLive {
 		err = b.subscribeToEvents()
 		if err != nil {
-			b.log.Debug("Unable to subscribe to event bus feeds")
+			b.log.Debugf("Unable to subscribe to event bus feeds: %w", err)
 			return err
 		}
 	}
@@ -464,7 +464,7 @@ func (b *Bot) initialiseData() error {
 	if !b.positionStreamLive {
 		err = b.subscribePositions()
 		if err != nil {
-			b.log.Debug("Unable to subscribe to event bus feeds")
+			b.log.Debugf("Unable to subscribe to event bus feeds: %w", err)
 			return err
 		}
 	}
@@ -485,14 +485,13 @@ func (b *Bot) placeAuctionOrders() {
 
 	// Place the random orders split into
 	var totalVolume uint64
-	r := rand.New(rand.NewSource(1)) // #nosec G404 This suboptimal rand generator is fine for now
-
+	rand.Seed(time.Now().UnixNano())
 	for totalVolume < b.config.StrategyDetails.AuctionVolume {
 		remaining := b.config.StrategyDetails.AuctionVolume - totalVolume
 		size := min(1+(b.config.StrategyDetails.AuctionVolume/10), remaining)
-		price := b.currentPrice + (uint64(r.Int63n(100) - 50))
+		price := b.currentPrice + (uint64(rand.Int63n(100) - 50))
 		side := proto.Side_SIDE_BUY
-		if r.Intn(2) == 0 {
+		if rand.Intn(2) == 0 {
 			side = proto.Side_SIDE_SELL
 		}
 		err := b.sendOrder(size, price, side, proto.Order_TIME_IN_FORCE_GTT, proto.Order_TYPE_LIMIT, "AuctionOrder", 330)
@@ -558,7 +557,7 @@ func (b *Bot) runPositionManagement() {
 			for !b.positionStreamLive || !b.eventStreamLive {
 				err = doze(time.Duration(sleepTime)*time.Millisecond, b.stopPosMgmt)
 				if err != nil {
-					b.log.Debug("Stopping bot position management")
+					b.log.Debugf("Stopping bot position management: %w", err)
 					b.active = false
 					return
 				}
