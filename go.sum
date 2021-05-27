@@ -182,6 +182,8 @@ github.com/ugorji/go v1.1.4/go.mod h1:uQMGLiO92mf5W77hV/PUCpI3pbzQx3CRekS0kk+RGr
 github.com/vegaprotocol/api v0.36.0/go.mod h1:eATqFtE+5saElgsaQNDedquKTLloWupuIqzNBjO57q0=
 github.com/vegaprotocol/api v0.37.0-pre1 h1:tjAyMauS4TGsCEl9pD8WjOS0QrXAb5k9VAFlpCo9hJI=
 github.com/vegaprotocol/api v0.37.0-pre1/go.mod h1:+8PtL1A2sffb3zJyt2gUERRD1DLEjdVQXli0aSbZFMw=
+github.com/vegaprotocol/api v0.37.0 h1:95M1BHUsV2fH0nzvxzJKijyqUNMaJJFcUFP+zk7TFyM=
+github.com/vegaprotocol/api v0.37.0/go.mod h1:gTuIdftBS9QydSD8XUpaTU2h3tWtQmthFZVvoE2gK/c=
 github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2/go.mod h1:UETIi67q53MR2AWcXfiuqkDkRtnGDLqkBTpCHuJHxtU=
 github.com/xordataexchange/crypt v0.0.3-0.20170626215501-b2862e3d0a77/go.mod h1:aYKd//L2LvnjZzWKhF00oedf4jCCReLcmhLdhm1A27Q=
 github.com/yuin/goldmark v1.2.1/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
@@ -328,6 +330,8 @@ google.golang.org/genproto v0.0.0-20190819201941-24fa4b261c55/go.mod h1:DMBHOl98
 google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013/go.mod h1:NbSheEEYHJ7i3ixzK3sjbqSGDJWnxyFXZblF3eUsNvo=
 google.golang.org/genproto v0.0.0-20210521181308-5ccab8a35a9a h1:FaCiYXNZoBH/gnmVjMAHgOgdmpVVROBYOA+qCOHh6Hc=
 google.golang.org/genproto v0.0.0-20210521181308-5ccab8a35a9a/go.mod h1:P3QM42oQyzQSnHPnZ/vqoCdDmzH28fzWByN9asMeM8A=
+google.golang.org/genproto v0.0.0-20210524171403-669157292da3 h1:xFyh6GBb+NO1L0xqb978I3sBPQpk6FrKO0jJGRvdj/0=
+google.golang.org/genproto v0.0.0-20210524171403-669157292da3/go.mod h1:P3QM42oQyzQSnHPnZ/vqoCdDmzH28fzWByN9asMeM8A=
 google.golang.org/grpc v1.19.0/go.mod h1:mqu4LbDTu4XGKhr4mRzUsmM4RtVoemTSY81AxZiDr8c=
 google.golang.org/grpc v1.21.0/go.mod h1:oYelfM1adQP15Ek0mdvEgi9Df8B9CZIaU1084ijfRaM=
 google.golang.org/grpc v1.23.0/go.mod h1:Y5yQAOtifL1yxbo5wqy6BxZv8vAUGQwXBOALyacEbxg=
