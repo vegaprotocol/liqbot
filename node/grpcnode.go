@@ -11,6 +11,7 @@ import (
 	"github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto/api"
 	apigrpc "github.com/vegaprotocol/api/grpc/clients/go/grpc"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 )
 
 // GRPCNode stores state for a Vega node.
@@ -57,6 +58,11 @@ func (n *GRPCNode) SubmitTransaction(req *api.SubmitTransactionRequest) (respons
 		return
 	}
 
+	if n.conn.GetState() != connectivity.Ready {
+		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
+		return
+	}
+
 	c := api.NewTradingServiceClient(n.conn)
 	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
 	defer cancel()
@@ -75,6 +81,11 @@ func (n *GRPCNode) GetVegaTime() (t time.Time, err error) {
 	msg := "gRPC call failed: GetVegaTime: %w"
 	if n == nil {
 		err = fmt.Errorf(msg, e.ErrNil)
+		return
+	}
+
+	if n.conn.GetState() != connectivity.Ready {
+		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
 		return
 	}
 
@@ -104,6 +115,11 @@ func (n *GRPCNode) MarketByID(req *api.MarketByIDRequest) (response *api.MarketB
 		return
 	}
 
+	if n.conn.GetState() != connectivity.Ready {
+		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
+		return
+	}
+
 	c := api.NewTradingDataServiceClient(n.conn)
 	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
 	defer cancel()
@@ -119,6 +135,11 @@ func (n *GRPCNode) MarketDataByID(req *api.MarketDataByIDRequest) (response *api
 	msg := "gRPC call failed: MarketDataByID: %w"
 	if n == nil {
 		err = fmt.Errorf(msg, e.ErrNil)
+		return
+	}
+
+	if n.conn.GetState() != connectivity.Ready {
+		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
 		return
 	}
 
@@ -140,6 +161,11 @@ func (n *GRPCNode) LiquidityProvisions(req *api.LiquidityProvisionsRequest) (res
 		return
 	}
 
+	if n.conn.GetState() != connectivity.Ready {
+		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
+		return
+	}
+
 	c := api.NewTradingDataServiceClient(n.conn)
 	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
 	defer cancel()
@@ -155,6 +181,11 @@ func (n *GRPCNode) MarketDepth(req *api.MarketDepthRequest) (response *api.Marke
 	msg := "gRPC call failed: MarketDepth: %w"
 	if n == nil {
 		err = fmt.Errorf(msg, e.ErrNil)
+		return
+	}
+
+	if n.conn.GetState() != connectivity.Ready {
+		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
 		return
 	}
 
@@ -176,6 +207,11 @@ func (n *GRPCNode) PartyAccounts(req *api.PartyAccountsRequest) (response *api.P
 		return
 	}
 
+	if n.conn.GetState() != connectivity.Ready {
+		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
+		return
+	}
+
 	c := api.NewTradingDataServiceClient(n.conn)
 	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
 	defer cancel()
@@ -191,6 +227,11 @@ func (n *GRPCNode) PositionsByParty(req *api.PositionsByPartyRequest) (response 
 	msg := "gRPC call failed: PositionsByParty: %w"
 	if n == nil {
 		err = fmt.Errorf(msg, e.ErrNil)
+		return
+	}
+
+	if n.conn.GetState() != connectivity.Ready {
+		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
 		return
 	}
 
@@ -212,6 +253,11 @@ func (n *GRPCNode) ObserveEventBus() (stream api.TradingDataService_ObserveEvent
 		return
 	}
 
+	if n.conn.GetState() != connectivity.Ready {
+		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
+		return
+	}
+
 	c := api.NewTradingDataServiceClient(n.conn)
 	stream, err = c.ObserveEventBus(context.Background())
 	if err != nil {
@@ -225,6 +271,11 @@ func (n *GRPCNode) PositionsSubscribe(req *api.PositionsSubscribeRequest) (strea
 	msg := "gRPC call failed: PositionsSubscribe: %w"
 	if n == nil {
 		err = fmt.Errorf(msg, e.ErrNil)
+		return
+	}
+
+	if n.conn.GetState() != connectivity.Ready {
+		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
 		return
 	}
 
@@ -244,6 +295,11 @@ func (n *GRPCNode) AssetByID(assetID string) (response *api.AssetByIDResponse, e
 		return
 	}
 
+	if n.conn.GetState() != connectivity.Ready {
+		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
+		return
+	}
+
 	c := api.NewTradingDataServiceClient(n.conn)
 	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
 	defer cancel()
@@ -256,5 +312,4 @@ func (n *GRPCNode) AssetByID(assetID string) (response *api.AssetByIDResponse, e
 		err = fmt.Errorf(msg, apigrpc.ErrorDetail(err))
 	}
 	return
-
 }
