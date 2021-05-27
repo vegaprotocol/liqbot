@@ -10,14 +10,13 @@ name: Go
 
 jobs:
 
-  build-linux:
-    name: Linux build
-    runs-on: ubuntu-latest
+  build:
+    name: Build on ${{ matrix.os }} with Go ${{ matrix.go }}
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         go: ['1.16', '1.15']
-    env:
-      GO_VER: ${{ matrix.go }}
+        os: [macos-latest, windows-latest, ubuntu-latest]
     steps:
 
       - name: Set up Go ${{ matrix.go }}
@@ -39,80 +38,21 @@ jobs:
         run: make test
 
       - name: Lint
-        run: make lint
+        run: |
+          if ! command -v golint 1>/dev/null ; then
+            go get golang.org/x/lint/golint@latest || exit 1
+          fi
+          make lint
+        if: ${{ matrix.os != 'windows-latest' }}
 
       - name: Vet
         run: make vet
 
       - name: Run Gosec Security Scanner
-        uses: securego/gosec@v2.7.0
+        uses: securego/gosec@v2.8.0
         env:
           GOROOT: /usr/local/go
           GOTOOLDIR: /usr/local/go/pkg/tool/linux_amd64
         with:
           args: ./...
-        if: env.GO_VER == '1.16'
-
-  build-macos:
-    name: MacOS build
-    runs-on: macos-latest
-    strategy:
-      matrix:
-        go: ['1.16', '1.15']
-    steps:
-
-      - name: Set up Go ${{ matrix.go }}
-        uses: actions/setup-go@v2
-        with:
-          go-version: ${{ matrix.go }}
-        id: go
-
-      - name: Check out code
-        uses: actions/checkout@v2
-
-      - name: Get dependencies
-        run: make deps
-
-      - name: Build
-        run: make build
-
-      - name: Tests
-        run: make test
-
-      - name: Lint
-        run: make lint
-
-      - name: Vet
-        run: make vet
-
-  build-windows:
-    name: Windows Build
-    runs-on: windows-latest
-    strategy:
-      matrix:
-        go: ['1.16', '1.15']
-    steps:
-
-      - name: Set up Go ${{ matrix.go }}
-        uses: actions/setup-go@v2
-        with:
-          go-version: ${{ matrix.go }}
-        id: go
-
-      - name: Check out code
-        uses: actions/checkout@v2
-
-      - name: Get dependencies
-        run: make deps
-
-      - name: Build
-        run: make build
-
-      - name: Tests
-        run: make test
-
-      - name: Lint
-        run: make lint
-
-      - name: Vet
-        run: make vet
+        if: ${{ matrix.go == '1.16' && matrix.os == 'ubuntu-latest' }}

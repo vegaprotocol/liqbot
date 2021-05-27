@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/rand"
 	"net/url"
+	"strings"
 	"time"
 
 	"code.vegaprotocol.io/liqbot/config"
@@ -231,8 +232,7 @@ func (b *Bot) signSubmitTx(blob []byte, typ api.SubmitTransactionRequest_Type) e
 
 	// Submit TX
 	sub := &api.SubmitTransactionRequest{
-		Tx:   ConvertSignedBundle(&signedBundle),
-		Type: typ,
+		Tx: ConvertSignedBundle(&signedBundle),
 	}
 	submitResponse, err := b.node.SubmitTransaction(sub)
 	if err != nil {
@@ -251,7 +251,7 @@ func (b *Bot) submitLiquidityProvision(sub *api.PrepareLiquidityProvisionRequest
 		return errors.Wrap(err, "failed to prepare tx")
 	}
 
-	err = b.signSubmitTx(prepared.Blob, api.SubmitTransactionRequest_TYPE_COMMIT)
+	err = b.signSubmitTx(prepared.Blob, api.SubmitTransactionRequest_TYPE_ASYNC)
 	if err != nil {
 		return errors.Wrap(err, "failed to sign and submit tx")
 	}
@@ -269,7 +269,7 @@ func (b *Bot) submitOrder(sub *api.PrepareSubmitOrderRequest) error {
 		return errors.Wrap(err, "failed to prepare tx")
 	}
 
-	err = b.signSubmitTx(prepared.Blob, api.SubmitTransactionRequest_TYPE_COMMIT)
+	err = b.signSubmitTx(prepared.Blob, api.SubmitTransactionRequest_TYPE_ASYNC)
 	if err != nil {
 		return errors.Wrap(err, "failed to sign and submit tx")
 	}
@@ -629,14 +629,48 @@ func (b *Bot) calculateMarginCost(risk float64, markPrice uint64, orders []*prot
 	return totalMargin
 }
 
+func (b *Bot) getPriceParts() (base, quote string, err error) {
+	// If we have been passed in the values, use those
+	if len(b.config.InstrumentBase) > 0 &&
+		len(b.config.InstrumentQuote) > 0 {
+		return b.config.InstrumentBase, b.config.InstrumentQuote, nil
+	}
+
+	// Find out the underlying assets for this market
+	instrument := b.market.TradableInstrument.GetInstrument()
+	if instrument != nil {
+		md := instrument.Metadata
+		for _, tag := range md.Tags {
+			parts := strings.Split(tag, ":")
+			if len(parts) == 2 {
+				if parts[0] == "quote" {
+					quote = parts[1]
+				}
+				if parts[0] == "base" {
+					base = parts[1]
+				}
+			}
+		}
+	}
+	if len(quote) == 0 || len(base) == 0 {
+		return "", "", fmt.Errorf("Unable to work out price assets from market metadata")
+	}
+	return
+}
+
 func (b *Bot) runPriceSteering() {
-	var currentPrice, externalPrice uint64
+	var externalPrice, currentPrice uint64
 	var err error
 	var externalPriceResponse ppservice.PriceResponse
 
+	base, quote, err := b.getPriceParts()
+	if err != nil {
+		b.log.Fatalf("Unable to build instrument for external price feed: %v", err)
+	}
+
 	ppcfg := ppconfig.PriceConfig{
-		Base:   "BTC",
-		Quote:  "USD",
+		Base:   base,
+		Quote:  quote,
 		Wander: true,
 	}
 
@@ -649,22 +683,24 @@ func (b *Bot) runPriceSteering() {
 			return
 
 		default:
-			if b.strategy.PriceSteerOrderSize > 0 && b.canPlaceTrades() {
+			if b.strategy.PriceSteerOrderScale > 0 && b.canPlaceTrades() {
 				externalPriceResponse, err = b.pricingEngine.GetPrice(ppcfg)
 				if err != nil {
 					b.log.WithFields(log.Fields{
 						"error": err.Error(),
 					}).Warning("Failed to get external price")
 					externalPrice = 0
+					currentPrice = 0
 				} else {
 					externalPrice = uint64(externalPriceResponse.Price * math.Pow10(int(b.market.DecimalPlaces)))
+					currentPrice = b.marketData.StaticMidPrice
 				}
 
 				if err == nil && externalPrice != 0 {
 					shouldMove := "no"
 					// We only want to steer the price if the external and market price
 					// are greater than a certain percentage apart
-					currentDiff := math.Abs(float64(currentPrice-externalPrice) / float64(externalPrice))
+					currentDiff := math.Abs((float64(currentPrice) - float64(externalPrice)) / float64(externalPrice))
 					if currentDiff > b.strategy.MinPriceSteerFraction {
 						var side proto.Side
 						if externalPrice > currentPrice {
@@ -674,22 +710,34 @@ func (b *Bot) runPriceSteering() {
 							side = proto.Side_SIDE_SELL
 							shouldMove = "DN"
 						}
+
+						// Now we call into the maths heavy function to find out
+						// what price and size of the order we should place
+						price, size, priceError := b.GetRealisticOrderDetails(externalPrice)
+
+						if priceError != nil {
+							b.log.Fatalf("Unable to get realistic order details for price steering: %v\n", priceError)
+						}
+
+						size = uint64(float64(size) * b.strategy.PriceSteerOrderScale)
 						b.log.WithFields(log.Fields{
-							"size": b.strategy.PriceSteerOrderSize,
-							"side": side,
+							"size":  size,
+							"side":  side,
+							"price": price,
 						}).Debug("Submitting order")
-						err = b.sendOrder(b.strategy.PriceSteerOrderSize,
-							0,
+
+						err = b.sendOrder(size,
+							price,
 							side,
-							proto.Order_TIME_IN_FORCE_IOC,
-							proto.Order_TYPE_MARKET,
+							proto.Order_TIME_IN_FORCE_GTT,
+							proto.Order_TYPE_LIMIT,
 							"PriceSteeringOrder",
-							0)
+							int64(b.strategy.LimitOrderDistributionParams.GttLength))
 					}
 					b.log.WithFields(log.Fields{
 						"currentPrice":  currentPrice,
 						"externalPrice": externalPrice,
-						"diff":          int(externalPrice) - int(currentPrice),
+						"diff":          int(externalPrice) - int(b.currentPrice),
 						"shouldMove":    shouldMove,
 					}).Debug("Steering info")
 				}
@@ -713,6 +761,40 @@ func (b *Bot) runPriceSteering() {
 				return
 			}
 		}
+	}
+}
+
+// GetRealisticOrderDetails uses magic to return a realistic order price and size
+func (b *Bot) GetRealisticOrderDetails(externalPrice uint64) (price, size uint64, err error) {
+	// Collect stuff from config that's common to all methods
+	method := b.strategy.LimitOrderDistributionParams.Method
+
+	sigma := b.strategy.TargetLNVol
+	tgtTimeHorizonHours := b.strategy.LimitOrderDistributionParams.TgtTimeHorizonHours
+	tgtTimeHorizonYrFrac := tgtTimeHorizonHours / 24.0 / 365.25
+	numOrdersPerSec := b.strategy.MarketPriceSteeringRatePerSecond
+	N := 3600 * numOrdersPerSec / tgtTimeHorizonHours
+	tickSize := float64(1 / math.Pow(10, float64(b.market.DecimalPlaces)))
+	delta := float64(b.strategy.LimitOrderDistributionParams.NumTicksFromMid) * tickSize
+
+	// this converts something like BTCUSD 3912312345 (five decimal places)
+	// to 39123.12345 float.
+	M0 := float64(externalPrice) / math.Pow(10, float64(b.market.DecimalPlaces))
+
+	var priceFloat float64
+	size = 1
+	switch method {
+	case DiscreteThreeLevel:
+		priceFloat, err = GeneratePriceUsingDiscreteThreeLevel(M0, delta, sigma, tgtTimeHorizonYrFrac, N)
+
+		// we need to add back decimals
+		price = uint64(math.Round(priceFloat * math.Pow(10, float64(b.market.DecimalPlaces))))
+		return
+	case CoinAndBinomial:
+		return externalPrice, 1, nil
+	default:
+		err = fmt.Errorf("Method for generating price distributions not recognised: %w", err)
+		return
 	}
 }
 

@@ -44,6 +44,12 @@ type BotConfig struct {
 	// MarketID is the Vega Market ID.
 	MarketID string `yaml:"marketID"`
 
+	// InstrumentBase is the base asset of the instrument
+	InstrumentBase string `yaml:"instrumentBase"`
+
+	// InstrumentQuote is the quote asset of the instrument
+	InstrumentQuote string `yaml:"instrumentQuote"`
+
 	// Strategy specifies which algorithm the bot is to use.
 	Strategy string `yaml:"strategy"`
 
@@ -66,13 +72,22 @@ type Strategy struct {
 	PosManagementSleepMilliseconds   int     `yaml:"posManagementSleepMilliseconds"`
 	MarketPriceSteeringRatePerSecond float64 `yaml:"marketPriceSteeringRatePerSecond"`
 	MinPriceSteerFraction            float64 `yaml:"minPriceSteerFraction"`
-	PriceSteerOrderSize              uint64  `yaml:"priceSteerOrderSize"`
+	PriceSteerOrderScale             float64 `yaml:"priceSteerOrderScale"`
 
-	LimitOrderDistributionParams string  `yaml:"limitOrderDistributionParams"`
-	TargetLNVol                  float64 `yaml:"targetLNVol"`
+	LimitOrderDistributionParams LimitOrderDistParams `yaml:"limitOrderDistributionParams"`
+	TargetLNVol                  float64              `yaml:"targetLNVol"`
 
 	ShorteningShape Shape `yaml:"shorteningShape"`
 	LongeningShape  Shape `yaml:"longeningShape"`
+}
+
+// LimitOrderDistParams for configuring the way price steering orders are sent
+type LimitOrderDistParams struct {
+	Method              string  `yaml:"method"`
+	GttLength           uint64  `yaml:"gttLengthSeconds"`
+	TgtTimeHorizonHours float64 `yaml:"tgtTimeHorizonHours"`
+	NumTicksFromMid     uint64  `yaml:"numTicksFromMid"`
+	NumIdenticalBots    int     `yaml:"numIdenticalBots"`
 }
 
 // Shape describes the buy and sell sides of a Liquidity Provision instruction
