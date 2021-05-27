@@ -449,14 +449,14 @@ func (b *Bot) initialiseData() error {
 
 	err = b.lookupInitialValues()
 	if err != nil {
-		b.log.Debugf("Stopping position management as we could not get initial values: %w", err)
+		b.log.Debugf("Stopping position management as we could not get initial values: %v", err)
 		return err
 	}
 
 	if !b.eventStreamLive {
 		err = b.subscribeToEvents()
 		if err != nil {
-			b.log.Debugf("Unable to subscribe to event bus feeds: %w", err)
+			b.log.Debugf("Unable to subscribe to event bus feeds: %v", err)
 			return err
 		}
 	}
@@ -464,7 +464,7 @@ func (b *Bot) initialiseData() error {
 	if !b.positionStreamLive {
 		err = b.subscribePositions()
 		if err != nil {
-			b.log.Debugf("Unable to subscribe to event bus feeds: %w", err)
+			b.log.Debugf("Unable to subscribe to event bus feeds: %v", err)
 			return err
 		}
 	}
@@ -557,7 +557,7 @@ func (b *Bot) runPositionManagement() {
 			for !b.positionStreamLive || !b.eventStreamLive {
 				err = doze(time.Duration(sleepTime)*time.Millisecond, b.stopPosMgmt)
 				if err != nil {
-					b.log.Debugf("Stopping bot position management: %w", err)
+					b.log.Debugf("Stopping bot position management: %v", err)
 					b.active = false
 					return
 				}
@@ -570,7 +570,7 @@ func (b *Bot) runPositionManagement() {
 
 			err = doze(time.Duration(sleepTime)*time.Millisecond, b.stopPosMgmt)
 			if err != nil {
-				b.log.Debug("Stopping bot position management")
+				b.log.Debugf("Stopping bot position management: %v", err)
 				b.active = false
 				return
 			}
