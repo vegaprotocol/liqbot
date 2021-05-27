@@ -489,9 +489,9 @@ func (b *Bot) placeAuctionOrders() {
 	for totalVolume < b.config.StrategyDetails.AuctionVolume {
 		remaining := b.config.StrategyDetails.AuctionVolume - totalVolume
 		size := min(1+(b.config.StrategyDetails.AuctionVolume/10), remaining)
-		price := b.currentPrice + (uint64(rand.Int63n(100) - 50))
+		price := b.currentPrice + (uint64(rand.Int63n(100) - 50)) // #nosec G404 This suboptimal rand generator is fine for now
 		side := proto.Side_SIDE_BUY
-		if rand.Intn(2) == 0 {
+		if rand.Intn(2) == 0 { // #nosec G404 This suboptimal rand generator is fine for now
 			side = proto.Side_SIDE_SELL
 		}
 		err := b.sendOrder(size, price, side, proto.Order_TIME_IN_FORCE_GTT, proto.Order_TYPE_LIMIT, "AuctionOrder", 330)
