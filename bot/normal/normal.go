@@ -162,7 +162,7 @@ func (b *Bot) Start() error {
 	if err != nil {
 		return fmt.Errorf("unable to look up asset details for %s", b.settlementAssetID)
 	}
-	erc20 := assetResponse.Asset.Source.GetErc20()
+	erc20 := assetResponse.Asset.Details.GetErc20()
 	if erc20 != nil {
 		b.settlementAssetAddress = erc20.ContractAddress
 	} else {
