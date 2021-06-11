@@ -107,6 +107,29 @@ func (n *GRPCNode) GetVegaTime() (t time.Time, err error) {
 	return
 }
 
+// LastBlockHeight gets the latest blockchain height (used for replay protection)
+func (n *GRPCNode) LastBlockHeight(req *api.LastBlockHeightRequest) (response *api.LastBlockHeightResponse, err error) {
+	msg := "gRPC call failed: LastBlockHeight: %w"
+	if n == nil {
+		err = fmt.Errorf(msg, e.ErrNil)
+		return
+	}
+
+	if n.conn.GetState() != connectivity.Ready {
+		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
+		return
+	}
+
+	c := api.NewTradingDataServiceClient(n.conn)
+	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
+	defer cancel()
+	response, err = c.LastBlockHeight(ctx, req)
+	if err != nil {
+		err = fmt.Errorf(msg, apigrpc.ErrorDetail(err))
+	}
+	return
+}
+
 // MarketByID gets a Market from the node
 func (n *GRPCNode) MarketByID(req *api.MarketByIDRequest) (response *api.MarketByIDResponse, err error) {
 	msg := "gRPC call failed: MarketByID: %w"

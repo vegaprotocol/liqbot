@@ -33,6 +33,7 @@ type Node interface {
 
 	// Trading Data
 	GetVegaTime() (time.Time, error)
+	LastBlockHeight(req *api.LastBlockHeightRequest) (response *api.LastBlockHeightResponse, err error)
 	LiquidityProvisions(req *api.LiquidityProvisionsRequest) (response *api.LiquidityProvisionsResponse, err error)
 	MarketByID(req *api.MarketByIDRequest) (response *api.MarketByIDResponse, err error)
 	MarketDataByID(req *api.MarketDataByIDRequest) (response *api.MarketDataByIDResponse, err error)
@@ -223,9 +224,14 @@ func ConvertSignedBundle(sb *wallet.SignedBundle) *proto.SignedBundle {
 }
 
 func (b *Bot) signSubmitTx(blob []byte, typ api.SubmitTransactionRequest_Type) error {
+	blockHeightResponse, err := b.node.LastBlockHeight(&api.LastBlockHeightRequest{})
+	if err != nil {
+		return fmt.Errorf("failed to get block height: %w", err)
+	}
+
 	// Sign, using internal wallet server
 	blobBase64 := base64.StdEncoding.EncodeToString(blob)
-	signedBundle, err := b.walletServer.SignTx(b.walletToken, blobBase64, b.walletPubKeyHex)
+	signedBundle, err := b.walletServer.SignTx(b.walletToken, blobBase64, b.walletPubKeyHex, blockHeightResponse.Height)
 	if err != nil {
 		return errors.Wrap(err, "failed to sign tx")
 	}
