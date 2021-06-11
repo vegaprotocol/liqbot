@@ -3,7 +3,7 @@ module code.vegaprotocol.io/liqbot
 go 1.16
 
 require (
-	code.vegaprotocol.io/go-wallet v0.6.8
+	code.vegaprotocol.io/go-wallet v0.7.0
 	code.vegaprotocol.io/priceproxy v0.0.2
 	github.com/golang/mock v1.5.0
 	github.com/hashicorp/go-multierror v1.1.1
@@ -12,7 +12,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.0
-	github.com/vegaprotocol/api v0.37.0
+	github.com/vegaprotocol/api v0.38.0
 	go.uber.org/zap v1.17.0
 	golang.org/x/exp v0.0.0-20191030013958-a1ab85dbe136 // indirect
 	gonum.org/v1/gonum v0.9.1

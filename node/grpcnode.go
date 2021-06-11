@@ -11,6 +11,7 @@ import (
 	"github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto/api"
 	apigrpc "github.com/vegaprotocol/api/grpc/clients/go/grpc"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 )
 
 // GRPCNode stores state for a Vega node.
@@ -57,6 +58,11 @@ func (n *GRPCNode) SubmitTransaction(req *api.SubmitTransactionRequest) (respons
 		return
 	}
 
+	if n.conn.GetState() != connectivity.Ready {
+		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
+		return
+	}
+
 	c := api.NewTradingServiceClient(n.conn)
 	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
 	defer cancel()
@@ -78,6 +84,11 @@ func (n *GRPCNode) GetVegaTime() (t time.Time, err error) {
 		return
 	}
 
+	if n.conn.GetState() != connectivity.Ready {
+		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
+		return
+	}
+
 	c := api.NewTradingDataServiceClient(n.conn)
 	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
 	defer cancel()
@@ -96,11 +107,39 @@ func (n *GRPCNode) GetVegaTime() (t time.Time, err error) {
 	return
 }
 
+// LastBlockHeight gets the latest blockchain height (used for replay protection)
+func (n *GRPCNode) LastBlockHeight(req *api.LastBlockHeightRequest) (response *api.LastBlockHeightResponse, err error) {
+	msg := "gRPC call failed: LastBlockHeight: %w"
+	if n == nil {
+		err = fmt.Errorf(msg, e.ErrNil)
+		return
+	}
+
+	if n.conn.GetState() != connectivity.Ready {
+		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
+		return
+	}
+
+	c := api.NewTradingDataServiceClient(n.conn)
+	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
+	defer cancel()
+	response, err = c.LastBlockHeight(ctx, req)
+	if err != nil {
+		err = fmt.Errorf(msg, apigrpc.ErrorDetail(err))
+	}
+	return
+}
+
 // MarketByID gets a Market from the node
 func (n *GRPCNode) MarketByID(req *api.MarketByIDRequest) (response *api.MarketByIDResponse, err error) {
 	msg := "gRPC call failed: MarketByID: %w"
 	if n == nil {
 		err = fmt.Errorf(msg, e.ErrNil)
+		return
+	}
+
+	if n.conn.GetState() != connectivity.Ready {
+		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
 		return
 	}
 
@@ -122,6 +161,11 @@ func (n *GRPCNode) MarketDataByID(req *api.MarketDataByIDRequest) (response *api
 		return
 	}
 
+	if n.conn.GetState() != connectivity.Ready {
+		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
+		return
+	}
+
 	c := api.NewTradingDataServiceClient(n.conn)
 	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
 	defer cancel()
@@ -137,6 +181,11 @@ func (n *GRPCNode) LiquidityProvisions(req *api.LiquidityProvisionsRequest) (res
 	msg := "gRPC call failed: LiquidityProvisions: %w"
 	if n == nil {
 		err = fmt.Errorf(msg, e.ErrNil)
+		return
+	}
+
+	if n.conn.GetState() != connectivity.Ready {
+		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
 		return
 	}
 
@@ -158,6 +207,11 @@ func (n *GRPCNode) MarketDepth(req *api.MarketDepthRequest) (response *api.Marke
 		return
 	}
 
+	if n.conn.GetState() != connectivity.Ready {
+		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
+		return
+	}
+
 	c := api.NewTradingDataServiceClient(n.conn)
 	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
 	defer cancel()
@@ -173,6 +227,11 @@ func (n *GRPCNode) PartyAccounts(req *api.PartyAccountsRequest) (response *api.P
 	msg := "gRPC call failed: PartyAccounts: %w"
 	if n == nil {
 		err = fmt.Errorf(msg, e.ErrNil)
+		return
+	}
+
+	if n.conn.GetState() != connectivity.Ready {
+		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
 		return
 	}
 
@@ -194,6 +253,11 @@ func (n *GRPCNode) PositionsByParty(req *api.PositionsByPartyRequest) (response 
 		return
 	}
 
+	if n.conn.GetState() != connectivity.Ready {
+		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
+		return
+	}
+
 	c := api.NewTradingDataServiceClient(n.conn)
 	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
 	defer cancel()
@@ -209,6 +273,11 @@ func (n *GRPCNode) ObserveEventBus() (stream api.TradingDataService_ObserveEvent
 	msg := "gRPC call failed: ObserveEventBus: %w"
 	if n == nil {
 		err = fmt.Errorf(msg, e.ErrNil)
+		return
+	}
+
+	if n.conn.GetState() != connectivity.Ready {
+		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
 		return
 	}
 
@@ -228,6 +297,11 @@ func (n *GRPCNode) PositionsSubscribe(req *api.PositionsSubscribeRequest) (strea
 		return
 	}
 
+	if n.conn.GetState() != connectivity.Ready {
+		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
+		return
+	}
+
 	c := api.NewTradingDataServiceClient(n.conn)
 	stream, err = c.PositionsSubscribe(context.Background(), req)
 	if err != nil {
@@ -244,6 +318,11 @@ func (n *GRPCNode) AssetByID(assetID string) (response *api.AssetByIDResponse, e
 		return
 	}
 
+	if n.conn.GetState() != connectivity.Ready {
+		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
+		return
+	}
+
 	c := api.NewTradingDataServiceClient(n.conn)
 	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
 	defer cancel()
@@ -256,5 +335,4 @@ func (n *GRPCNode) AssetByID(assetID string) (response *api.AssetByIDResponse, e
 		err = fmt.Errorf(msg, apigrpc.ErrorDetail(err))
 	}
 	return
-
 }

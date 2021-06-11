@@ -33,6 +33,7 @@ type Node interface {
 
 	// Trading Data
 	GetVegaTime() (time.Time, error)
+	LastBlockHeight(req *api.LastBlockHeightRequest) (response *api.LastBlockHeightResponse, err error)
 	LiquidityProvisions(req *api.LiquidityProvisionsRequest) (response *api.LiquidityProvisionsResponse, err error)
 	MarketByID(req *api.MarketByIDRequest) (response *api.MarketByIDResponse, err error)
 	MarketDataByID(req *api.MarketDataByIDRequest) (response *api.MarketDataByIDResponse, err error)
@@ -162,7 +163,7 @@ func (b *Bot) Start() error {
 	if err != nil {
 		return fmt.Errorf("unable to look up asset details for %s", b.settlementAssetID)
 	}
-	erc20 := assetResponse.Asset.Source.GetErc20()
+	erc20 := assetResponse.Asset.Details.GetErc20()
 	if erc20 != nil {
 		b.settlementAssetAddress = erc20.ContractAddress
 	} else {
@@ -223,9 +224,14 @@ func ConvertSignedBundle(sb *wallet.SignedBundle) *proto.SignedBundle {
 }
 
 func (b *Bot) signSubmitTx(blob []byte, typ api.SubmitTransactionRequest_Type) error {
+	blockHeightResponse, err := b.node.LastBlockHeight(&api.LastBlockHeightRequest{})
+	if err != nil {
+		return fmt.Errorf("failed to get block height: %w", err)
+	}
+
 	// Sign, using internal wallet server
 	blobBase64 := base64.StdEncoding.EncodeToString(blob)
-	signedBundle, err := b.walletServer.SignTx(b.walletToken, blobBase64, b.walletPubKeyHex)
+	signedBundle, err := b.walletServer.SignTx(b.walletToken, blobBase64, b.walletPubKeyHex, blockHeightResponse.Height)
 	if err != nil {
 		return errors.Wrap(err, "failed to sign tx")
 	}
@@ -449,14 +455,16 @@ func (b *Bot) initialiseData() error {
 
 	err = b.lookupInitialValues()
 	if err != nil {
-		b.log.Debug("Stopping position management as we could not get initial values")
+		b.log.WithFields(log.Fields{"error": err.Error()}).
+			Debug("Stopping position management as we could not get initial values")
 		return err
 	}
 
 	if !b.eventStreamLive {
 		err = b.subscribeToEvents()
 		if err != nil {
-			b.log.Debug("Unable to subscribe to event bus feeds")
+			b.log.WithFields(log.Fields{"error": err.Error()}).
+				Debug("Unable to subscribe to event bus feeds")
 			return err
 		}
 	}
@@ -464,7 +472,8 @@ func (b *Bot) initialiseData() error {
 	if !b.positionStreamLive {
 		err = b.subscribePositions()
 		if err != nil {
-			b.log.Debug("Unable to subscribe to event bus feeds")
+			b.log.WithFields(log.Fields{"error": err.Error()}).
+				Debug("Unable to subscribe to event bus feeds")
 			return err
 		}
 	}
@@ -485,14 +494,14 @@ func (b *Bot) placeAuctionOrders() {
 
 	// Place the random orders split into
 	var totalVolume uint64
-	r := rand.New(rand.NewSource(1)) // #nosec G404 This suboptimal rand generator is fine for now
-
+	rand.Seed(time.Now().UnixNano())
+	/* #nosec G404 */
 	for totalVolume < b.config.StrategyDetails.AuctionVolume {
 		remaining := b.config.StrategyDetails.AuctionVolume - totalVolume
 		size := min(1+(b.config.StrategyDetails.AuctionVolume/10), remaining)
-		price := b.currentPrice + (uint64(r.Int63n(100) - 50))
+		price := b.currentPrice + (uint64(rand.Int63n(100) - 50))
 		side := proto.Side_SIDE_BUY
-		if r.Intn(2) == 0 {
+		if rand.Intn(2) == 0 {
 			side = proto.Side_SIDE_SELL
 		}
 		err := b.sendOrder(size, price, side, proto.Order_TIME_IN_FORCE_GTT, proto.Order_TYPE_LIMIT, "AuctionOrder", 330)
@@ -558,7 +567,8 @@ func (b *Bot) runPositionManagement() {
 			for !b.positionStreamLive || !b.eventStreamLive {
 				err = doze(time.Duration(sleepTime)*time.Millisecond, b.stopPosMgmt)
 				if err != nil {
-					b.log.Debug("Stopping bot position management")
+					b.log.WithFields(log.Fields{"error": err.Error()}).
+						Debug("Stopping bot position management")
 					b.active = false
 					return
 				}
@@ -571,7 +581,8 @@ func (b *Bot) runPositionManagement() {
 
 			err = doze(time.Duration(sleepTime)*time.Millisecond, b.stopPosMgmt)
 			if err != nil {
-				b.log.Debug("Stopping bot position management")
+				b.log.WithFields(log.Fields{"error": err.Error()}).
+					Debug("Stopping bot position management")
 				b.active = false
 				return
 			}
@@ -665,7 +676,8 @@ func (b *Bot) runPriceSteering() {
 
 	base, quote, err := b.getPriceParts()
 	if err != nil {
-		b.log.Fatalf("Unable to build instrument for external price feed: %v", err)
+		b.log.WithFields(log.Fields{"error": err.Error()}).
+			Fatal("Unable to build instrument for external price feed")
 	}
 
 	ppcfg := ppconfig.PriceConfig{
@@ -716,7 +728,8 @@ func (b *Bot) runPriceSteering() {
 						price, size, priceError := b.GetRealisticOrderDetails(externalPrice)
 
 						if priceError != nil {
-							b.log.Fatalf("Unable to get realistic order details for price steering: %v\n", priceError)
+							b.log.WithFields(log.Fields{"error": priceError.Error()}).
+								Fatal("Unable to get realistic order details for price steering")
 						}
 
 						size = uint64(float64(size) * b.strategy.PriceSteerOrderScale)
