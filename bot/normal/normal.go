@@ -37,6 +37,7 @@ type Node interface {
 	LiquidityProvisions(req *api.LiquidityProvisionsRequest) (response *api.LiquidityProvisionsResponse, err error)
 	MarketByID(req *api.MarketByIDRequest) (response *api.MarketByIDResponse, err error)
 	MarketDataByID(req *api.MarketDataByIDRequest) (response *api.MarketDataByIDResponse, err error)
+	Markets(req *api.MarketsRequest) (response *api.MarketsResponse, err error)
 	PartyAccounts(req *api.PartyAccountsRequest) (response *api.PartyAccountsResponse, err error)
 	PositionsByParty(req *api.PositionsByPartyRequest) (response *api.PositionsByPartyResponse, err error)
 	AssetByID(assetID string) (response *api.AssetByIDResponse, err error)
