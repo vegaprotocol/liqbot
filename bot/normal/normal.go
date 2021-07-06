@@ -264,7 +264,7 @@ func (b *Bot) submitLiquidityProvision(sub *api.PrepareLiquidityProvisionRequest
 	return nil
 }
 
-func (b *Bot) canPlaceTrades() bool {
+func (b *Bot) canPlaceOrders() bool {
 	return b.marketData.MarketTradingMode == proto.Market_TRADING_MODE_CONTINUOUS
 }
 
@@ -348,7 +348,7 @@ func (b *Bot) checkForShapeChange() {
 }
 
 func (b *Bot) checkPositionManagement() {
-	if !b.canPlaceTrades() {
+	if !b.canPlaceOrders() {
 		// Only allow position management during continuous trading
 		return
 	}
@@ -555,7 +555,7 @@ func (b *Bot) runPositionManagement() {
 			}
 
 			// Only update liquidity and position if we are not in auction
-			if b.canPlaceTrades() {
+			if b.canPlaceOrders() {
 				b.auctionOrdersPlaced = false
 				b.checkForShapeChange()
 				b.checkPositionManagement()
@@ -565,6 +565,10 @@ func (b *Bot) runPositionManagement() {
 
 			// If we have lost the incoming streams we should attempt to reconnect
 			for !b.positionStreamLive || !b.eventStreamLive {
+				b.log.WithFields(log.Fields{
+					"eventStreamLive":    b.eventStreamLive,
+					"positionStreamLive": b.positionStreamLive,
+				}).Debug("Stream info")
 				err = doze(time.Duration(sleepTime)*time.Millisecond, b.stopPosMgmt)
 				if err != nil {
 					b.log.WithFields(log.Fields{"error": err.Error()}).
@@ -575,6 +579,7 @@ func (b *Bot) runPositionManagement() {
 
 				err = b.initialiseData()
 				if err != nil {
+					b.log.WithFields(log.Fields{"error": err.Error()}).Debug("Failed to initialise data")
 					continue
 				}
 			}
@@ -695,7 +700,8 @@ func (b *Bot) runPriceSteering() {
 			return
 
 		default:
-			if b.strategy.PriceSteerOrderScale > 0 && b.canPlaceTrades() {
+			canPlaceOrders := b.canPlaceOrders()
+			if b.strategy.PriceSteerOrderScale > 0 && canPlaceOrders {
 				externalPriceResponse, err = b.pricingEngine.GetPrice(ppcfg)
 				if err != nil {
 					b.log.WithFields(log.Fields{
@@ -766,6 +772,11 @@ func (b *Bot) runPriceSteering() {
 						"sleepTime": sleepTime,
 					}).Warning("Error during price steering")
 				}
+			} else {
+				b.log.WithFields(log.Fields{
+					"PriceSteerOrderScale": b.strategy.PriceSteerOrderScale,
+					"canPlaceOrders":       canPlaceOrders,
+				}).Debug("Price steering: Cannot place orders")
 			}
 			err = doze(time.Duration(sleepTime)*time.Millisecond, b.stopPriceSteer)
 			if err != nil {
