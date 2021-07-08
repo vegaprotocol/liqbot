@@ -1,6 +1,5 @@
 ---
 
-
 # This workflow will inspect a pull request to ensure there is a linked issue or a
 # valid issue is mentioned in the body. If neither is present it fails the check and adds
 # a comment alerting users of this missing requirement. Edit to test.
@@ -18,5 +17,6 @@ jobs:
     steps:
       - name: Verify Linked Issue
         uses: hattan/verify-linked-issue-action@95c0d0150d7e7687e45a76fbf0b0c6aa8daef288
+        if: startsWith(github.head_ref, 'renovate') == false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
