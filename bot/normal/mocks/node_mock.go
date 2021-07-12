@@ -36,6 +36,21 @@ func (m *MockNode) EXPECT() *MockNodeMockRecorder {
 	return m.recorder
 }
 
+// AssetByID mocks base method.
+func (m *MockNode) AssetByID(arg0 string) (*api.AssetByIDResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AssetByID", arg0)
+	ret0, _ := ret[0].(*api.AssetByIDResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AssetByID indicates an expected call of AssetByID.
+func (mr *MockNodeMockRecorder) AssetByID(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AssetByID", reflect.TypeOf((*MockNode)(nil).AssetByID), arg0)
+}
+
 // GetAddress mocks base method.
 func (m *MockNode) GetAddress() (url.URL, error) {
 	m.ctrl.T.Helper()
@@ -64,6 +79,21 @@ func (m *MockNode) GetVegaTime() (time.Time, error) {
 func (mr *MockNodeMockRecorder) GetVegaTime() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVegaTime", reflect.TypeOf((*MockNode)(nil).GetVegaTime))
+}
+
+// LastBlockHeight mocks base method.
+func (m *MockNode) LastBlockHeight(arg0 *api.LastBlockHeightRequest) (*api.LastBlockHeightResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LastBlockHeight", arg0)
+	ret0, _ := ret[0].(*api.LastBlockHeightResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LastBlockHeight indicates an expected call of LastBlockHeight.
+func (mr *MockNodeMockRecorder) LastBlockHeight(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LastBlockHeight", reflect.TypeOf((*MockNode)(nil).LastBlockHeight), arg0)
 }
 
 // LiquidityProvisions mocks base method.
@@ -111,6 +141,36 @@ func (mr *MockNodeMockRecorder) MarketDataByID(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarketDataByID", reflect.TypeOf((*MockNode)(nil).MarketDataByID), arg0)
 }
 
+// Markets mocks base method.
+func (m *MockNode) Markets(arg0 *api.MarketsRequest) (*api.MarketsResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Markets", arg0)
+	ret0, _ := ret[0].(*api.MarketsResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Markets indicates an expected call of Markets.
+func (mr *MockNodeMockRecorder) Markets(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Markets", reflect.TypeOf((*MockNode)(nil).Markets), arg0)
+}
+
+// ObserveEventBus mocks base method.
+func (m *MockNode) ObserveEventBus() (api.TradingDataService_ObserveEventBusClient, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ObserveEventBus")
+	ret0, _ := ret[0].(api.TradingDataService_ObserveEventBusClient)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ObserveEventBus indicates an expected call of ObserveEventBus.
+func (mr *MockNodeMockRecorder) ObserveEventBus() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ObserveEventBus", reflect.TypeOf((*MockNode)(nil).ObserveEventBus))
+}
+
 // PartyAccounts mocks base method.
 func (m *MockNode) PartyAccounts(arg0 *api.PartyAccountsRequest) (*api.PartyAccountsResponse, error) {
 	m.ctrl.T.Helper()
@@ -139,6 +199,21 @@ func (m *MockNode) PositionsByParty(arg0 *api.PositionsByPartyRequest) (*api.Pos
 func (mr *MockNodeMockRecorder) PositionsByParty(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PositionsByParty", reflect.TypeOf((*MockNode)(nil).PositionsByParty), arg0)
+}
+
+// PositionsSubscribe mocks base method.
+func (m *MockNode) PositionsSubscribe(arg0 *api.PositionsSubscribeRequest) (api.TradingDataService_PositionsSubscribeClient, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PositionsSubscribe", arg0)
+	ret0, _ := ret[0].(api.TradingDataService_PositionsSubscribeClient)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PositionsSubscribe indicates an expected call of PositionsSubscribe.
+func (mr *MockNodeMockRecorder) PositionsSubscribe(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PositionsSubscribe", reflect.TypeOf((*MockNode)(nil).PositionsSubscribe), arg0)
 }
 
 // SubmitTransaction mocks base method.

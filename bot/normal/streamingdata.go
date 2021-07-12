@@ -40,7 +40,7 @@ func (b *Bot) subscribeToEvents() error {
 		Type: []eventspb.BusEventType{
 			eventspb.BusEventType_BUS_EVENT_TYPE_MARKET_DATA,
 		},
-		MarketId: b.config.MarketID,
+		MarketId: b.market.Id,
 	}
 	stream2, err := b.node.ObserveEventBus()
 	if err != nil {
@@ -97,7 +97,7 @@ func (b *Bot) processEventBusData(stream api.TradingDataService_ObserveEventBusC
 
 func (b *Bot) subscribePositions() error {
 	req := &api.PositionsSubscribeRequest{
-		MarketId: b.config.MarketID,
+		MarketId: b.market.Id,
 		PartyId:  b.walletPubKeyHex,
 	}
 	stream, err := b.node.PositionsSubscribe(req)

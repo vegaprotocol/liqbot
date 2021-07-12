@@ -176,6 +176,29 @@ func (n *GRPCNode) MarketDataByID(req *api.MarketDataByIDRequest) (response *api
 	return
 }
 
+// Markets gets all Markets from the node
+func (n *GRPCNode) Markets(req *api.MarketsRequest) (response *api.MarketsResponse, err error) {
+	msg := "gRPC call failed: Markets: %w"
+	if n == nil {
+		err = fmt.Errorf(msg, e.ErrNil)
+		return
+	}
+
+	if n.conn.GetState() != connectivity.Ready {
+		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
+		return
+	}
+
+	c := api.NewTradingDataServiceClient(n.conn)
+	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
+	defer cancel()
+	response, err = c.Markets(ctx, req)
+	if err != nil {
+		err = fmt.Errorf(msg, apigrpc.ErrorDetail(err))
+	}
+	return
+}
+
 // LiquidityProvisions gets the liquidity provisions for a given market and party.
 func (n *GRPCNode) LiquidityProvisions(req *api.LiquidityProvisionsRequest) (response *api.LiquidityProvisionsResponse, err error) {
 	msg := "gRPC call failed: LiquidityProvisions: %w"
