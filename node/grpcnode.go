@@ -74,6 +74,30 @@ func (n *GRPCNode) SubmitTransaction(req *api.SubmitTransactionRequest) (respons
 	return
 }
 
+// SubmitTransactionV2 submits a signed v2 transaction
+func (n *GRPCNode) SubmitTransactionV2(req *api.SubmitTransactionV2Request) (response *api.SubmitTransactionV2Response, err error) {
+	msg := "gRPC call failed: SubmitTransactionV2: %w"
+	if n == nil {
+		err = fmt.Errorf(msg, e.ErrNil)
+		return
+	}
+
+	if n.conn.GetState() != connectivity.Ready {
+		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
+		return
+	}
+
+	c := api.NewTradingServiceClient(n.conn)
+	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
+	defer cancel()
+
+	response, err = c.SubmitTransactionV2(ctx, req)
+	if err != nil {
+		err = fmt.Errorf(msg, apigrpc.ErrorDetail(err))
+	}
+	return
+}
+
 // === Trading Data ===
 
 // GetVegaTime gets the latest block header time from the node.
@@ -170,6 +194,29 @@ func (n *GRPCNode) MarketDataByID(req *api.MarketDataByIDRequest) (response *api
 	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
 	defer cancel()
 	response, err = c.MarketDataByID(ctx, req)
+	if err != nil {
+		err = fmt.Errorf(msg, apigrpc.ErrorDetail(err))
+	}
+	return
+}
+
+// Markets gets all Markets from the node
+func (n *GRPCNode) Markets(req *api.MarketsRequest) (response *api.MarketsResponse, err error) {
+	msg := "gRPC call failed: Markets: %w"
+	if n == nil {
+		err = fmt.Errorf(msg, e.ErrNil)
+		return
+	}
+
+	if n.conn.GetState() != connectivity.Ready {
+		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
+		return
+	}
+
+	c := api.NewTradingDataServiceClient(n.conn)
+	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
+	defer cancel()
+	response, err = c.Markets(ctx, req)
 	if err != nil {
 		err = fmt.Errorf(msg, apigrpc.ErrorDetail(err))
 	}

@@ -41,8 +41,8 @@ type BotConfig struct {
 	// CallTimeout is the per-call timeout (in milliseconds) for communicating with the Vega node gRPC endpoint.
 	CallTimeout int `yaml:"callTimeout"`
 
-	// MarketID is the Vega Market ID.
-	MarketID string `yaml:"marketID"`
+	// InstrumentCode is the Vega Market's Instrument Code.
+	InstrumentCode string `yaml:"instrumentCode"`
 
 	// InstrumentBase is the base asset of the instrument
 	InstrumentBase string `yaml:"instrumentBase"`

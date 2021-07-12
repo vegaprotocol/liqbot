@@ -1,7 +1,7 @@
 package normal
 
 import (
-	"encoding/base64"
+	// "encoding/base64"
 	"fmt"
 	"math"
 	"math/rand"
@@ -20,7 +20,7 @@ import (
 	"github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto"
 	"github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto/api"
 	commandspb "github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto/commands/v1"
-	"github.com/vegaprotocol/api/grpc/clients/go/txn"
+	walletpb "github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto/wallet/v1"
 )
 
 // Node is a Vega gRPC node
@@ -29,7 +29,7 @@ type Node interface {
 	GetAddress() (url.URL, error)
 
 	// Trading
-	SubmitTransaction(req *api.SubmitTransactionRequest) (resp *api.SubmitTransactionResponse, err error)
+	SubmitTransactionV2(req *api.SubmitTransactionV2Request) (resp *api.SubmitTransactionV2Response, err error)
 
 	// Trading Data
 	GetVegaTime() (time.Time, error)
@@ -37,6 +37,7 @@ type Node interface {
 	LiquidityProvisions(req *api.LiquidityProvisionsRequest) (response *api.LiquidityProvisionsResponse, err error)
 	MarketByID(req *api.MarketByIDRequest) (response *api.MarketByIDResponse, err error)
 	MarketDataByID(req *api.MarketDataByIDRequest) (response *api.MarketDataByIDResponse, err error)
+	Markets(req *api.MarketsRequest) (response *api.MarketsResponse, err error)
 	PartyAccounts(req *api.PartyAccountsRequest) (response *api.PartyAccountsResponse, err error)
 	PositionsByParty(req *api.PositionsByPartyRequest) (response *api.PositionsByPartyResponse, err error)
 	AssetByID(assetID string) (response *api.AssetByIDResponse, err error)
@@ -70,7 +71,7 @@ type Bot struct {
 	balanceMargin  uint64
 	balanceBond    uint64
 
-	walletServer     wallet.WalletHandler
+	walletServer     *wallet.Handler
 	walletPassphrase string
 	walletPubKeyRaw  []byte // "XYZ" ...
 	walletPubKeyHex  string // "58595a" ...
@@ -95,7 +96,7 @@ type Bot struct {
 }
 
 // New returns a new instance of Bot.
-func New(config config.BotConfig, pe PricingEngine, ws wallet.WalletHandler) (b *Bot, err error) {
+func New(config config.BotConfig, pe PricingEngine, ws *wallet.Handler) (b *Bot, err error) {
 	b = &Bot{
 		config: config,
 		log: log.WithFields(log.Fields{
@@ -139,6 +140,35 @@ func (b *Bot) Start() error {
 	b.log.WithFields(log.Fields{
 		"address": b.config.Location,
 	}).Debug("Connected to Vega gRPC node")
+
+	marketsResponse, err := b.node.Markets(&api.MarketsRequest{})
+	if err != nil {
+		return fmt.Errorf("failed to get markets: %w", err)
+	}
+	for _, mkt := range marketsResponse.Markets {
+		b.log.WithFields(log.Fields{
+			"ID": mkt.Id,
+		}).Warning("market")
+		instrument := mkt.TradableInstrument.GetInstrument()
+		if instrument != nil {
+			md := instrument.Metadata
+			base := ""
+			quote := ""
+			for _, tag := range md.Tags {
+				parts := strings.Split(tag, ":")
+				if len(parts) == 2 {
+					if parts[0] == "quote" {
+						quote = parts[1]
+					}
+					if parts[0] == "base" {
+						base = parts[1]
+					}
+				}
+			}
+
+		}
+
+	}
 
 	marketResponse, err := b.node.MarketByID(&api.MarketByIDRequest{MarketId: b.config.MarketID})
 	if err != nil {
@@ -211,75 +241,22 @@ func (b *Bot) GetTraderDetails() string {
 		settlementEthereumContractAddress + "\"}"
 }
 
-// ConvertSignedBundle converts from trading-core.wallet.SignedBundle to trading-core.proto.api.SignedBundle
-func ConvertSignedBundle(sb *wallet.SignedBundle) *proto.SignedBundle {
-	return &proto.SignedBundle{
-		Tx: sb.Tx,
-		Sig: &proto.Signature{
-			Sig:     sb.Sig.Sig,
-			Algo:    sb.Sig.Algo,
-			Version: sb.Sig.Version,
-		},
-	}
-}
-
-func (b *Bot) signSubmitTx(blob []byte, typ api.SubmitTransactionRequest_Type) error {
-	blockHeightResponse, err := b.node.LastBlockHeight(&api.LastBlockHeightRequest{})
-	if err != nil {
-		return fmt.Errorf("failed to get block height: %w", err)
-	}
-
-	// Sign, using internal wallet server
-	blobBase64 := base64.StdEncoding.EncodeToString(blob)
-	signedBundle, err := b.walletServer.SignTx(b.walletToken, blobBase64, b.walletPubKeyHex, blockHeightResponse.Height)
-	if err != nil {
-		return errors.Wrap(err, "failed to sign tx")
-	}
-
-	// Submit TX
-	sub := &api.SubmitTransactionRequest{
-		Tx: ConvertSignedBundle(&signedBundle),
-	}
-	submitResponse, err := b.node.SubmitTransaction(sub)
-	if err != nil {
-		return errors.Wrap(err, "failed to submit signed tx")
-	}
-	if !submitResponse.Success {
-		return errors.New("success=false")
-	}
-	return nil
-}
-
 func (b *Bot) submitLiquidityProvision(sub *api.PrepareLiquidityProvisionRequest) error {
 	// Prepare tx, without talking to a Vega node
-	prepared, err := txn.PrepareLiquidityProvision(sub)
-	if err != nil {
-		return errors.Wrap(err, "failed to prepare tx")
-	}
+	// prepared, err := txn.PrepareLiquidityProvision(sub)
+	// if err != nil {
+	// 	return errors.Wrap(err, "failed to prepare tx")
+	// }
 
-	err = b.signSubmitTx(prepared.Blob, api.SubmitTransactionRequest_TYPE_ASYNC)
-	if err != nil {
-		return errors.Wrap(err, "failed to sign and submit tx")
-	}
+	// err = b.signSubmitTx(prepared.Blob, api.SubmitTransactionV2Request_TYPE_ASYNC)
+	// if err != nil {
+	// 	return errors.Wrap(err, "failed to sign and submit tx")
+	// }
 	return nil
 }
 
 func (b *Bot) canPlaceOrders() bool {
 	return b.marketData.MarketTradingMode == proto.Market_TRADING_MODE_CONTINUOUS
-}
-
-func (b *Bot) submitOrder(sub *api.PrepareSubmitOrderRequest) error {
-	// Prepare tx, without talking to a Vega node
-	prepared, err := txn.PrepareSubmitOrder(sub)
-	if err != nil {
-		return errors.Wrap(err, "failed to prepare tx")
-	}
-
-	err = b.signSubmitTx(prepared.Blob, api.SubmitTransactionRequest_TYPE_ASYNC)
-	if err != nil {
-		return errors.Wrap(err, "failed to sign and submit tx")
-	}
-	return nil
 }
 
 func (b *Bot) sendLiquidityProvision(buys, sells []*proto.LiquidityOrder) error {
@@ -368,20 +345,20 @@ func (b *Bot) checkPositionManagement() {
 
 	if shouldBuy {
 		size := uint64(float64(abs(b.openVolume)) * b.strategy.PosManagementFraction)
-		err := b.sendOrder(size, 0, proto.Side_SIDE_BUY, proto.Order_TIME_IN_FORCE_IOC, proto.Order_TYPE_MARKET, "PosManagement", 0)
+		err := b.submitOrder(size, 0, proto.Side_SIDE_BUY, proto.Order_TIME_IN_FORCE_IOC, proto.Order_TYPE_MARKET, "PosManagement", 0)
 		if err != nil {
 			log.Warningln("Failed to place a position management buy")
 		}
 	} else if shouldSell {
 		size := uint64(float64(abs(b.openVolume)) * b.strategy.PosManagementFraction)
-		err := b.sendOrder(size, 0, proto.Side_SIDE_SELL, proto.Order_TIME_IN_FORCE_IOC, proto.Order_TYPE_MARKET, "PosManagement", 0)
+		err := b.submitOrder(size, 0, proto.Side_SIDE_SELL, proto.Order_TIME_IN_FORCE_IOC, proto.Order_TYPE_MARKET, "PosManagement", 0)
 		if err != nil {
 			log.Warningln("Failed to place a position management sell")
 		}
 	}
 }
 
-func (b *Bot) sendOrder(
+func (b *Bot) submitOrder(
 	size, price uint64,
 	side proto.Side,
 	tif proto.Order_TimeInForce,
@@ -389,31 +366,56 @@ func (b *Bot) sendOrder(
 	reference string,
 	secondsFromNow int64,
 ) error {
-	request := &api.PrepareSubmitOrderRequest{
-		Submission: &commandspb.OrderSubmission{
+
+	blockHeightResponse, err := b.node.LastBlockHeight(&api.LastBlockHeightRequest{})
+	if err != nil {
+		return fmt.Errorf("failed to get block height: %w", err)
+	}
+
+	cmd := &walletpb.SubmitTransactionRequest_OrderSubmission{
+		OrderSubmission: &commandspb.OrderSubmission{
 			MarketId:    b.market.Id,
+			Price:       0, // added below
 			Size:        size,
 			Side:        side,
 			TimeInForce: tif,
+			ExpiresAt:   0, // added below
 			Type:        orderType,
 			Reference:   reference,
+			PeggedOrder: nil,
 		},
 	}
 	if tif == proto.Order_TIME_IN_FORCE_GTT {
-		request.Submission.ExpiresAt = time.Now().UnixNano() + (secondsFromNow * 1000000000)
+		cmd.OrderSubmission.ExpiresAt = time.Now().UnixNano() + (secondsFromNow * 1000000000)
 	}
-
 	if orderType != proto.Order_TYPE_MARKET {
-		request.Submission.Price = price
+		cmd.OrderSubmission.Price = price
 	}
 
-	err := b.submitOrder(request)
+	signedTx, err := b.walletServer.SignTxV2(
+		b.config.Name,
+		&walletpb.SubmitTransactionRequest{
+			PubKey:  "",
+			Command: cmd,
+		},
+		blockHeightResponse.Height,
+	)
 	if err != nil {
-		b.log.WithFields(log.Fields{
-			"error": err.Error(),
-		}).Warning("Failed to submit order")
+		return fmt.Errorf("failed to sign tx (v2): %w", err)
 	}
-	return err
+
+	submitReq := &api.SubmitTransactionV2Request{
+		Tx:   signedTx,
+		Type: api.SubmitTransactionV2Request_TYPE_SYNC,
+	}
+	submitResponse, err := b.node.SubmitTransactionV2(submitReq)
+	if err != nil {
+		return errors.Wrap(err, "failed to submit signed tx (v2)")
+	}
+	if !submitResponse.Success {
+		return errors.New("success=false")
+	}
+	return nil
 }
 
 func (b *Bot) checkInitialMargin() error {
@@ -504,7 +506,7 @@ func (b *Bot) placeAuctionOrders() {
 		if rand.Intn(2) == 0 {
 			side = proto.Side_SIDE_SELL
 		}
-		err := b.sendOrder(size, price, side, proto.Order_TIME_IN_FORCE_GTT, proto.Order_TYPE_LIMIT, "AuctionOrder", 330)
+		err := b.submitOrder(size, price, side, proto.Order_TIME_IN_FORCE_GTT, proto.Order_TYPE_LIMIT, "AuctionOrder", 330)
 		if err == nil {
 			totalVolume += size
 		} else {
@@ -745,7 +747,7 @@ func (b *Bot) runPriceSteering() {
 							"price": price,
 						}).Debug("Submitting order")
 
-						err = b.sendOrder(size,
+						err = b.submitOrder(size,
 							price,
 							side,
 							proto.Order_TIME_IN_FORCE_GTT,
@@ -827,10 +829,10 @@ func (b *Bot) setupWallet() (err error) {
 	b.walletPassphrase = "123"
 
 	if b.walletToken == "" {
-		b.walletToken, err = b.walletServer.LoginWallet(b.config.Name, b.walletPassphrase)
+		err = b.walletServer.LoginWallet(b.config.Name, b.walletPassphrase)
 		if err != nil {
 			if err == wallet.ErrWalletDoesNotExists {
-				b.walletToken, err = b.walletServer.CreateWallet(b.config.Name, b.walletPassphrase)
+				err = b.walletServer.CreateWallet(b.config.Name, b.walletPassphrase)
 				if err != nil {
 					return errors.Wrap(err, "failed to create wallet")
 				}
@@ -844,19 +846,21 @@ func (b *Bot) setupWallet() (err error) {
 	}
 
 	if b.walletPubKeyHex == "" || b.walletPubKeyRaw == nil {
-		var keys []wallet.Keypair
-		keys, err = b.walletServer.ListPublicKeys(b.walletToken)
+		var keys []wallet.PublicKey
+		keys, err = b.walletServer.ListPublicKeys(b.config.Name)
 		if err != nil {
 			return errors.Wrap(err, "failed to list public keys")
 		}
 		if len(keys) == 0 {
-			b.walletPubKeyHex, err = b.walletServer.GenerateKeypair(b.walletToken, b.walletPassphrase)
+			var key wallet.KeyPair
+			key, err = b.walletServer.GenerateKeyPair(b.config.Name, b.walletPassphrase)
 			if err != nil {
-				return errors.Wrap(err, "failed to generate keypair")
+				return fmt.Errorf("failed to generate keypair: %w", err)
 			}
+			b.walletPubKeyHex = key.Pub
 			b.log.WithFields(log.Fields{"pubKey": b.walletPubKeyHex}).Debug("Created keypair")
 		} else {
-			b.walletPubKeyHex = keys[0].Pub
+			b.walletPubKeyHex = keys[0].Key
 			b.log.WithFields(log.Fields{"pubKey": b.walletPubKeyHex}).Debug("Using existing keypair")
 		}
 

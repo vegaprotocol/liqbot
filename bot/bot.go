@@ -27,7 +27,7 @@ type PricingEngine interface {
 }
 
 // New returns a new Bot instance.
-func New(config config.BotConfig, pe PricingEngine, ws wallet.WalletHandler) (b Bot, err error) {
+func New(config config.BotConfig, pe PricingEngine, ws *wallet.Handler) (b Bot, err error) {
 	switch config.Strategy {
 	case "normal":
 		b, err = normal.New(config, pe, ws)
