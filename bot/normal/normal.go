@@ -1,7 +1,6 @@
 package normal
 
 import (
-	// "encoding/base64"
 	"fmt"
 	"math"
 	"math/rand"
@@ -73,9 +72,7 @@ type Bot struct {
 
 	walletServer     *wallet.Handler
 	walletPassphrase string
-	walletPubKeyRaw  []byte // "XYZ" ...
-	walletPubKeyHex  string // "58595a" ...
-	walletToken      string
+	walletPubKey     string // "58595a" ...
 
 	buyShape   []*proto.LiquidityOrder
 	sellShape  []*proto.LiquidityOrder
@@ -227,7 +224,7 @@ func (b *Bot) Stop() {
 // GetTraderDetails returns information relating to the trader
 func (b *Bot) GetTraderDetails() string {
 	name := b.config.Name
-	pubKey := b.walletPubKeyHex
+	pubKey := b.walletPubKey
 	settlementVegaAssetID := b.settlementAssetID
 	settlementEthereumContractAddress := b.settlementAssetAddress
 
@@ -254,7 +251,7 @@ func (b *Bot) sendLiquidityProvision(buys, sells []*proto.LiquidityOrder) error 
 		},
 	}
 	submitTxReq := &walletpb.SubmitTransactionRequest{
-		PubKey:  b.walletPubKeyHex,
+		PubKey:  b.walletPubKey,
 		Command: cmd,
 	}
 	err := b.signSubmitTxV2(submitTxReq, 0)
@@ -403,7 +400,7 @@ func (b *Bot) submitOrder(
 	}
 
 	submitTxReq := &walletpb.SubmitTransactionRequest{
-		PubKey:  b.walletPubKeyHex,
+		PubKey:  b.walletPubKey,
 		Command: cmd,
 	}
 	err := b.signSubmitTxV2(submitTxReq, 0)
@@ -416,8 +413,8 @@ func (b *Bot) submitOrder(
 func (b *Bot) checkInitialMargin() error {
 	// Turn the shapes into a set of orders scaled by commitment
 	obligation := b.strategy.CommitmentFraction * float64(b.balanceMargin+b.balanceBond+b.balanceGeneral)
-	buyOrders := b.calculateOrderSizes(b.market.Id, b.walletPubKeyHex, obligation, b.buyShape, b.marketData.MidPrice)
-	sellOrders := b.calculateOrderSizes(b.market.Id, b.walletPubKeyHex, obligation, b.sellShape, b.marketData.MidPrice)
+	buyOrders := b.calculateOrderSizes(b.market.Id, b.walletPubKey, obligation, b.buyShape, b.marketData.MidPrice)
+	sellOrders := b.calculateOrderSizes(b.market.Id, b.walletPubKey, obligation, b.sellShape, b.marketData.MidPrice)
 
 	buyRisk := float64(0.01)
 	sellRisk := float64(0.01)
@@ -785,27 +782,24 @@ func (b *Bot) GetRealisticOrderDetails(externalPrice uint64) (price, size uint64
 }
 
 func (b *Bot) setupWallet() (err error) {
-	//	b.walletPassphrase = "DCBAabcd1357!#&*" + b.config.Name
 	b.walletPassphrase = "123"
 
-	if b.walletToken == "" {
-		err = b.walletServer.LoginWallet(b.config.Name, b.walletPassphrase)
-		if err != nil {
-			if err == wallet.ErrWalletDoesNotExists {
-				err = b.walletServer.CreateWallet(b.config.Name, b.walletPassphrase)
-				if err != nil {
-					return errors.Wrap(err, "failed to create wallet")
-				}
-				b.log.Debug("Created and logged into wallet")
-			} else {
-				return errors.Wrap(err, "failed to log in to wallet")
+	err = b.walletServer.LoginWallet(b.config.Name, b.walletPassphrase)
+	if err != nil {
+		if err == wallet.ErrWalletDoesNotExists {
+			err = b.walletServer.CreateWallet(b.config.Name, b.walletPassphrase)
+			if err != nil {
+				return errors.Wrap(err, "failed to create wallet")
 			}
+			b.log.Debug("Created and logged into wallet")
 		} else {
-			b.log.Debug("Logged into wallet")
+			return errors.Wrap(err, "failed to log in to wallet")
 		}
+	} else {
+		b.log.Debug("Logged into wallet")
 	}
 
-	if b.walletPubKeyHex == "" || b.walletPubKeyRaw == nil {
+	if b.walletPubKey == "" {
 		var keys []wallet.PublicKey
 		keys, err = b.walletServer.ListPublicKeys(b.config.Name)
 		if err != nil {
@@ -817,20 +811,13 @@ func (b *Bot) setupWallet() (err error) {
 			if err != nil {
 				return fmt.Errorf("failed to generate keypair: %w", err)
 			}
-			b.walletPubKeyHex = key.Pub
-			b.log.WithFields(log.Fields{"pubKey": b.walletPubKeyHex}).Debug("Created keypair")
+			b.walletPubKey = key.Pub
+			b.log.WithFields(log.Fields{"pubKey": b.walletPubKey}).Debug("Created keypair")
 		} else {
-			b.walletPubKeyHex = keys[0].Key
-			b.log.WithFields(log.Fields{"pubKey": b.walletPubKeyHex}).Debug("Using existing keypair")
-		}
-
-		b.walletPubKeyRaw, err = hexToRaw([]byte(b.walletPubKeyHex))
-		if err != nil {
-			b.walletPubKeyHex = ""
-			b.walletPubKeyRaw = nil
-			return errors.Wrap(err, "failed to decode hex pubkey")
+			b.walletPubKey = keys[0].Key
+			b.log.WithFields(log.Fields{"pubKey": b.walletPubKey}).Debug("Using existing keypair")
 		}
 	}
-	b.log = b.log.WithFields(log.Fields{"pubkey": b.walletPubKeyHex})
+	b.log = b.log.WithFields(log.Fields{"pubkey": b.walletPubKey})
 	return
 }
