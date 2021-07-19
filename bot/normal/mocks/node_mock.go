@@ -216,17 +216,17 @@ func (mr *MockNodeMockRecorder) PositionsSubscribe(arg0 interface{}) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PositionsSubscribe", reflect.TypeOf((*MockNode)(nil).PositionsSubscribe), arg0)
 }
 
-// SubmitTransaction mocks base method.
-func (m *MockNode) SubmitTransaction(arg0 *api.SubmitTransactionRequest) (*api.SubmitTransactionResponse, error) {
+// SubmitTransactionV2 mocks base method.
+func (m *MockNode) SubmitTransactionV2(arg0 *api.SubmitTransactionV2Request) (*api.SubmitTransactionV2Response, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SubmitTransaction", arg0)
-	ret0, _ := ret[0].(*api.SubmitTransactionResponse)
+	ret := m.ctrl.Call(m, "SubmitTransactionV2", arg0)
+	ret0, _ := ret[0].(*api.SubmitTransactionV2Response)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// SubmitTransaction indicates an expected call of SubmitTransaction.
-func (mr *MockNodeMockRecorder) SubmitTransaction(arg0 interface{}) *gomock.Call {
+// SubmitTransactionV2 indicates an expected call of SubmitTransactionV2.
+func (mr *MockNodeMockRecorder) SubmitTransactionV2(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitTransaction", reflect.TypeOf((*MockNode)(nil).SubmitTransaction), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitTransactionV2", reflect.TypeOf((*MockNode)(nil).SubmitTransactionV2), arg0)
 }
