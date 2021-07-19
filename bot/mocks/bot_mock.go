@@ -33,6 +33,20 @@ func (m *MockBot) EXPECT() *MockBotMockRecorder {
 	return m.recorder
 }
 
+// GetTraderDetails mocks base method.
+func (m *MockBot) GetTraderDetails() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTraderDetails")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// GetTraderDetails indicates an expected call of GetTraderDetails.
+func (mr *MockBotMockRecorder) GetTraderDetails() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTraderDetails", reflect.TypeOf((*MockBot)(nil).GetTraderDetails))
+}
+
 // Start mocks base method.
 func (m *MockBot) Start() error {
 	m.ctrl.T.Helper()

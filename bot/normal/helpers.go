@@ -1,8 +1,6 @@
 package normal
 
 import (
-	"encoding/hex"
-	"fmt"
 	"math"
 	"time"
 
@@ -12,18 +10,6 @@ import (
 	"gonum.org/v1/gonum/optimize"
 	"gonum.org/v1/gonum/stat/distuv"
 )
-
-func hexToRaw(hexBytes []byte) ([]byte, error) {
-	raw := make([]byte, hex.DecodedLen(len(hexBytes)))
-	n, err := hex.Decode(raw, hexBytes)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to decode hex")
-	}
-	if n != len(raw) {
-		return nil, fmt.Errorf("failed to decode hex: decoded %d bytes, expected to decode %d bytes", n, len(raw))
-	}
-	return raw, nil
-}
 
 func max(a, b uint64) uint64 {
 	if a > b {
