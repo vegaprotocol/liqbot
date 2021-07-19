@@ -15,13 +15,14 @@ import (
 	"code.vegaprotocol.io/liqbot/config"
 	"code.vegaprotocol.io/liqbot/pricing"
 
+	storev1 "code.vegaprotocol.io/go-wallet/store/v1"
 	"code.vegaprotocol.io/go-wallet/wallet"
 	ppconfig "code.vegaprotocol.io/priceproxy/config"
 	ppservice "code.vegaprotocol.io/priceproxy/service"
 	"github.com/julienschmidt/httprouter"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
-	"go.uber.org/zap"
+	// "go.uber.org/zap"
 )
 
 // Bot is the generic bot interface.
@@ -59,11 +60,11 @@ type Service struct {
 
 	pricingEngine PricingEngine
 	server        *http.Server
-	walletServer  wallet.WalletHandler
+	walletServer  *wallet.Handler
 }
 
 // NewService creates a new service instance (with optional mocks for test purposes).
-func NewService(config config.Config, pe PricingEngine, ws wallet.WalletHandler) (s *Service, err error) {
+func NewService(config config.Config, pe PricingEngine, ws *wallet.Handler) (s *Service, err error) {
 	if pe == nil {
 		pe = pricing.NewEngine(*config.Pricing)
 	}
@@ -75,36 +76,15 @@ func NewService(config config.Config, pe PricingEngine, ws wallet.WalletHandler)
 		if err = ensureDir(config.Wallet.RootPath); err != nil {
 			return
 		}
-		rsaKeyDir := filepath.Join(config.Wallet.RootPath, "wallet_rsa")
-		if err = ensureDir(rsaKeyDir); err != nil {
-			return
-		}
 		walletsDir := filepath.Join(config.Wallet.RootPath, "wallets")
 		if err = ensureDir(walletsDir); err != nil {
 			return
 		}
-		var log *zap.Logger
-		log, err = zap.NewProduction()
+		store, err := storev1.NewStore(config.Wallet.RootPath)
 		if err != nil {
-			return
+			return nil, err
 		}
-		var pubKeyExists bool
-		pubKeyExists, err = fileExists(filepath.Join(rsaKeyDir, "public.pem"))
-		if err != nil {
-			return
-		}
-		if !pubKeyExists {
-			err = wallet.GenRsaKeyFiles(log, config.Wallet.RootPath, true)
-			if err != nil {
-				return
-			}
-		}
-		var auth wallet.Auth
-		auth, err = wallet.NewAuth(log, config.Wallet.RootPath, time.Duration(config.Wallet.TokenExpiry)*time.Second)
-		if err != nil {
-			return
-		}
-		ws = wallet.NewHandler(log, auth, config.Wallet.RootPath)
+		ws = wallet.NewHandler(store)
 	}
 	s = &Service{
 		Router: httprouter.New(),

@@ -53,7 +53,7 @@ func (b *Bot) lookupInitialValues() error {
 func (b *Bot) getAccountGeneral() error {
 	response, err := b.node.PartyAccounts(&api.PartyAccountsRequest{
 		// MarketId: general account is not per market
-		PartyId: b.walletPubKeyHex,
+		PartyId: b.walletPubKey,
 		Asset:   b.settlementAssetID,
 		Type:    proto.AccountType_ACCOUNT_TYPE_GENERAL,
 	})
@@ -73,7 +73,7 @@ func (b *Bot) getAccountGeneral() error {
 // getAccountMargin get this bot's margin account balance.
 func (b *Bot) getAccountMargin() error {
 	response, err := b.node.PartyAccounts(&api.PartyAccountsRequest{
-		PartyId:  b.walletPubKeyHex,
+		PartyId:  b.walletPubKey,
 		MarketId: b.market.Id,
 		Asset:    b.settlementAssetID,
 		Type:     proto.AccountType_ACCOUNT_TYPE_MARGIN,
@@ -95,7 +95,7 @@ func (b *Bot) getAccountMargin() error {
 func (b *Bot) getAccountBond() error {
 	b.balanceBond = 0
 	response, err := b.node.PartyAccounts(&api.PartyAccountsRequest{
-		PartyId:  b.walletPubKeyHex,
+		PartyId:  b.walletPubKey,
 		MarketId: b.market.Id,
 		Asset:    b.settlementAssetID,
 		Type:     proto.AccountType_ACCOUNT_TYPE_BOND,
@@ -116,7 +116,7 @@ func (b *Bot) getAccountBond() error {
 // getPositions get this bot's positions.
 func (b *Bot) getPositions() ([]*proto.Position, error) {
 	response, err := b.node.PositionsByParty(&api.PositionsByPartyRequest{
-		PartyId:  b.walletPubKeyHex,
+		PartyId:  b.walletPubKey,
 		MarketId: b.market.Id,
 	})
 	if err != nil {

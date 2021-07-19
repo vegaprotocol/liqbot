@@ -50,9 +50,9 @@ func (n *GRPCNode) GetAddress() (url.URL, error) {
 
 // === Trading ===
 
-// SubmitTransaction submits a signed transaction
-func (n *GRPCNode) SubmitTransaction(req *api.SubmitTransactionRequest) (response *api.SubmitTransactionResponse, err error) {
-	msg := "gRPC call failed: SubmitTransaction: %w"
+// SubmitTransactionV2 submits a signed v2 transaction
+func (n *GRPCNode) SubmitTransactionV2(req *api.SubmitTransactionV2Request) (response *api.SubmitTransactionV2Response, err error) {
+	msg := "gRPC call failed: SubmitTransactionV2: %w"
 	if n == nil {
 		err = fmt.Errorf(msg, e.ErrNil)
 		return
@@ -67,7 +67,7 @@ func (n *GRPCNode) SubmitTransaction(req *api.SubmitTransactionRequest) (respons
 	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
 	defer cancel()
 
-	response, err = c.SubmitTransaction(ctx, req)
+	response, err = c.SubmitTransactionV2(ctx, req)
 	if err != nil {
 		err = fmt.Errorf(msg, apigrpc.ErrorDetail(err))
 	}
