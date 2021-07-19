@@ -236,20 +236,6 @@ func (b *Bot) GetTraderDetails() string {
 		settlementEthereumContractAddress + "\"}"
 }
 
-func (b *Bot) submitLiquidityProvision(sub *api.PrepareLiquidityProvisionRequest) error {
-	// Prepare tx, without talking to a Vega node
-	// prepared, err := txn.PrepareLiquidityProvision(sub)
-	// if err != nil {
-	// 	return errors.Wrap(err, "failed to prepare tx")
-	// }
-
-	// err = b.signSubmitTx(prepared.Blob, api.SubmitTransactionV2Request_TYPE_ASYNC)
-	// if err != nil {
-	// 	return errors.Wrap(err, "failed to sign and submit tx")
-	// }
-	return nil
-}
-
 func (b *Bot) canPlaceOrders() bool {
 	return b.marketData.MarketTradingMode == proto.Market_TRADING_MODE_CONTINUOUS
 }
@@ -258,8 +244,8 @@ func (b *Bot) sendLiquidityProvision(buys, sells []*proto.LiquidityOrder) error 
 	// CommitmentAmount is the fractional commitment value * total collateral
 	commitment := b.strategy.CommitmentFraction * float64(b.balanceGeneral+b.balanceMargin+b.balanceBond)
 
-	sub := &api.PrepareLiquidityProvisionRequest{
-		Submission: &commandspb.LiquidityProvisionSubmission{
+	cmd := &walletpb.SubmitTransactionRequest_LiquidityProvisionSubmission{
+		LiquidityProvisionSubmission: &commandspb.LiquidityProvisionSubmission{
 			Fee:              b.config.StrategyDetails.Fee,
 			MarketId:         b.market.Id,
 			CommitmentAmount: uint64(commitment),
@@ -267,15 +253,19 @@ func (b *Bot) sendLiquidityProvision(buys, sells []*proto.LiquidityOrder) error 
 			Sells:            sells,
 		},
 	}
-	err := b.submitLiquidityProvision(sub)
+	submitTxReq := &walletpb.SubmitTransactionRequest{
+		PubKey:  b.walletPubKeyHex,
+		Command: cmd,
+	}
+	err := b.signSubmitTxV2(submitTxReq, 0)
 	if err != nil {
-		return errors.Wrap(err, "failed to submit liquidity provision order")
+		return fmt.Errorf("failed to submit LiquidityProvisionSubmission: %w", err)
 	}
 	b.log.WithFields(log.Fields{
 		"commitment":         commitment,
 		"commitmentFraction": b.strategy.CommitmentFraction,
 		"balanceTotal":       b.balanceGeneral + b.balanceMargin + b.balanceBond,
-	}).Debug("Submitted liquidity provision order")
+	}).Debug("Submitted LiquidityProvisionSubmission")
 	return nil
 }
 
@@ -353,6 +343,37 @@ func (b *Bot) checkPositionManagement() {
 	}
 }
 
+func (b *Bot) signSubmitTxV2(
+	submitTxReq *walletpb.SubmitTransactionRequest,
+	blockHeight uint64,
+) error {
+	if blockHeight == 0 {
+		blockHeightResponse, err := b.node.LastBlockHeight(&api.LastBlockHeightRequest{})
+		if err != nil {
+			return fmt.Errorf("failed to get block height: %w", err)
+		}
+		blockHeight = blockHeightResponse.Height
+	}
+
+	signedTx, err := b.walletServer.SignTxV2(b.config.Name, submitTxReq, blockHeight)
+	if err != nil {
+		return fmt.Errorf("failed to sign tx (v2): %w", err)
+	}
+
+	submitReq := &api.SubmitTransactionV2Request{
+		Tx:   signedTx,
+		Type: api.SubmitTransactionV2Request_TYPE_SYNC,
+	}
+	submitResponse, err := b.node.SubmitTransactionV2(submitReq)
+	if err != nil {
+		return fmt.Errorf("failed to submit signed tx (v2): %w", err)
+	}
+	if !submitResponse.Success {
+		return errors.New("success=false")
+	}
+	return nil
+}
+
 func (b *Bot) submitOrder(
 	size, price uint64,
 	side proto.Side,
@@ -361,12 +382,6 @@ func (b *Bot) submitOrder(
 	reference string,
 	secondsFromNow int64,
 ) error {
-
-	blockHeightResponse, err := b.node.LastBlockHeight(&api.LastBlockHeightRequest{})
-	if err != nil {
-		return fmt.Errorf("failed to get block height: %w", err)
-	}
-
 	cmd := &walletpb.SubmitTransactionRequest_OrderSubmission{
 		OrderSubmission: &commandspb.OrderSubmission{
 			MarketId:    b.market.Id,
@@ -387,28 +402,13 @@ func (b *Bot) submitOrder(
 		cmd.OrderSubmission.Price = price
 	}
 
-	signedTx, err := b.walletServer.SignTxV2(
-		b.config.Name,
-		&walletpb.SubmitTransactionRequest{
-			PubKey:  "",
-			Command: cmd,
-		},
-		blockHeightResponse.Height,
-	)
+	submitTxReq := &walletpb.SubmitTransactionRequest{
+		PubKey:  b.walletPubKeyHex,
+		Command: cmd,
+	}
+	err := b.signSubmitTxV2(submitTxReq, 0)
 	if err != nil {
-		return fmt.Errorf("failed to sign tx (v2): %w", err)
-	}
-
-	submitReq := &api.SubmitTransactionV2Request{
-		Tx:   signedTx,
-		Type: api.SubmitTransactionV2Request_TYPE_SYNC,
-	}
-	submitResponse, err := b.node.SubmitTransactionV2(submitReq)
-	if err != nil {
-		return errors.Wrap(err, "failed to submit signed tx (v2)")
-	}
-	if !submitResponse.Success {
-		return errors.New("success=false")
+		return fmt.Errorf("failed to submit OrderSubmission: %w", err)
 	}
 	return nil
 }
