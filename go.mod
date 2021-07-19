@@ -6,7 +6,6 @@ require (
 	code.vegaprotocol.io/go-wallet v0.8.0
 	code.vegaprotocol.io/priceproxy v0.0.2
 	github.com/golang/mock v1.6.0
-	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/jinzhu/configor v1.2.1
 	github.com/julienschmidt/httprouter v1.3.0
@@ -14,7 +13,7 @@ require (
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.0
 	github.com/vegaprotocol/api v0.38.0
-	go.uber.org/zap v1.18.1
+	go.uber.org/zap v1.18.1 // indirect
 	golang.org/x/exp v0.0.0-20191030013958-a1ab85dbe136 // indirect
 	gonum.org/v1/gonum v0.9.1
 	google.golang.org/grpc v1.39.0

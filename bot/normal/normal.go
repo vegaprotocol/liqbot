@@ -145,10 +145,8 @@ func (b *Bot) Start() error {
 	if err != nil {
 		return fmt.Errorf("failed to get markets: %w", err)
 	}
+	b.market = nil
 	for _, mkt := range marketsResponse.Markets {
-		b.log.WithFields(log.Fields{
-			"ID": mkt.Id,
-		}).Warning("market")
 		instrument := mkt.TradableInstrument.GetInstrument()
 		if instrument != nil {
 			md := instrument.Metadata
@@ -160,33 +158,30 @@ func (b *Bot) Start() error {
 					if parts[0] == "quote" {
 						quote = parts[1]
 					}
-					if parts[0] == "base" {
+					if parts[0] == "base" || parts[0] == "ticker" {
 						base = parts[1]
 					}
 				}
 			}
-
+			if base == b.config.InstrumentBase && quote == b.config.InstrumentQuote {
+				future := mkt.TradableInstrument.Instrument.GetFuture()
+				if future != nil {
+					b.settlementAssetID = future.SettlementAsset
+					b.market = mkt
+					break
+				}
+			}
 		}
-
 	}
-
-	marketResponse, err := b.node.MarketByID(&api.MarketByIDRequest{MarketId: b.config.MarketID})
-	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("failed to get market %s", b.config.MarketID))
+	if b.market == nil {
+		return fmt.Errorf("failed to find futures markets: base/ticker=%s, quote=%s", b.config.InstrumentBase, b.config.InstrumentQuote)
 	}
-	if marketResponse.Market == nil {
-		return fmt.Errorf("No market that matchs our ID: %s", b.config.MarketID)
-	}
-	b.market = marketResponse.Market
-	future := b.market.TradableInstrument.Instrument.GetFuture()
-	if future == nil {
-		return errors.New("market is not a Futures market")
-	}
-	b.settlementAssetID = future.SettlementAsset
 	b.log.WithFields(log.Fields{
-		"marketID":          b.config.MarketID,
+		"id":                b.market.Id,
+		"base/ticker":       b.config.InstrumentBase,
+		"quote":             b.config.InstrumentQuote,
 		"settlementAssetID": b.settlementAssetID,
-	}).Debug("Fetched market info")
+	}).Info("Fetched market info")
 
 	// Use the settlementAssetID to lookup the settlement ethereum address
 	assetResponse, err := b.node.AssetByID(b.settlementAssetID)
@@ -421,8 +416,8 @@ func (b *Bot) submitOrder(
 func (b *Bot) checkInitialMargin() error {
 	// Turn the shapes into a set of orders scaled by commitment
 	obligation := b.strategy.CommitmentFraction * float64(b.balanceMargin+b.balanceBond+b.balanceGeneral)
-	buyOrders := b.calculateOrderSizes(b.config.MarketID, b.walletPubKeyHex, obligation, b.buyShape, b.marketData.MidPrice)
-	sellOrders := b.calculateOrderSizes(b.config.MarketID, b.walletPubKeyHex, obligation, b.sellShape, b.marketData.MidPrice)
+	buyOrders := b.calculateOrderSizes(b.market.Id, b.walletPubKeyHex, obligation, b.buyShape, b.marketData.MidPrice)
+	sellOrders := b.calculateOrderSizes(b.market.Id, b.walletPubKeyHex, obligation, b.sellShape, b.marketData.MidPrice)
 
 	buyRisk := float64(0.01)
 	sellRisk := float64(0.01)
@@ -647,49 +642,14 @@ func (b *Bot) calculateMarginCost(risk float64, markPrice uint64, orders []*prot
 	return totalMargin
 }
 
-func (b *Bot) getPriceParts() (base, quote string, err error) {
-	// If we have been passed in the values, use those
-	if len(b.config.InstrumentBase) > 0 &&
-		len(b.config.InstrumentQuote) > 0 {
-		return b.config.InstrumentBase, b.config.InstrumentQuote, nil
-	}
-
-	// Find out the underlying assets for this market
-	instrument := b.market.TradableInstrument.GetInstrument()
-	if instrument != nil {
-		md := instrument.Metadata
-		for _, tag := range md.Tags {
-			parts := strings.Split(tag, ":")
-			if len(parts) == 2 {
-				if parts[0] == "quote" {
-					quote = parts[1]
-				}
-				if parts[0] == "base" {
-					base = parts[1]
-				}
-			}
-		}
-	}
-	if len(quote) == 0 || len(base) == 0 {
-		return "", "", fmt.Errorf("Unable to work out price assets from market metadata")
-	}
-	return
-}
-
 func (b *Bot) runPriceSteering() {
 	var externalPrice, currentPrice uint64
 	var err error
 	var externalPriceResponse ppservice.PriceResponse
 
-	base, quote, err := b.getPriceParts()
-	if err != nil {
-		b.log.WithFields(log.Fields{"error": err.Error()}).
-			Fatal("Unable to build instrument for external price feed")
-	}
-
 	ppcfg := ppconfig.PriceConfig{
-		Base:   base,
-		Quote:  quote,
+		Base:   b.config.InstrumentBase,
+		Quote:  b.config.InstrumentQuote,
 		Wander: true,
 	}
 
