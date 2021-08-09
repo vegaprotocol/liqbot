@@ -359,7 +359,7 @@ func (b *Bot) signSubmitTxV2(
 
 	submitReq := &api.SubmitTransactionV2Request{
 		Tx:   signedTx,
-		Type: api.SubmitTransactionV2Request_TYPE_SYNC,
+		Type: api.SubmitTransactionV2Request_TYPE_ASYNC,
 	}
 	submitResponse, err := b.node.SubmitTransactionV2(submitReq)
 	if err != nil {
