@@ -16,6 +16,6 @@ require (
 	go.uber.org/zap v1.18.1 // indirect
 	golang.org/x/exp v0.0.0-20191030013958-a1ab85dbe136 // indirect
 	gonum.org/v1/gonum v0.9.1
-	google.golang.org/grpc v1.39.0
+	google.golang.org/grpc v1.39.1
 	gopkg.in/yaml.v2 v2.3.0 // indirect
 )
