@@ -61,11 +61,13 @@ func (b *Bot) processEventBusData(stream api.TradingDataService_ObserveEventBusC
 	for {
 		eb, err := stream.Recv()
 		if err == io.EOF {
-			log.Warning("event bus data: stream closed by server err:", err)
+			b.log.Warning("event bus data: stream closed by server (EOF)")
 			break
 		}
 		if err != nil {
-			log.Warning("event bus data: stream closed err:", err)
+			b.log.WithFields(log.Fields{
+				"error": err,
+			}).Warning("event bus data: stream closed")
 			break
 		}
 
@@ -79,15 +81,43 @@ func (b *Bot) processEventBusData(stream api.TradingDataService_ObserveEventBusC
 				}
 				switch acct.Type {
 				case proto.AccountType_ACCOUNT_TYPE_GENERAL:
-					b.balanceGeneral = acct.Balance
+					bal, err_or_overflow := num.UintFromString(acct.Balance, 10)
+					if err_or_overflow {
+						b.log.WithFields(log.Fields{
+							"generalAccountBalance": acct.Balance,
+						}).Warning("processEventBusData: failed to unmarshal uint256: error or overflow")
+					} else {
+						b.balanceGeneral = bal
+					}
 				case proto.AccountType_ACCOUNT_TYPE_MARGIN:
-					b.balanceMargin = acct.Balance
+					bal, err_or_overflow := num.UintFromString(acct.Balance, 10)
+					if err_or_overflow {
+						b.log.WithFields(log.Fields{
+							"marginAccountBalance": acct.Balance,
+						}).Warning("processEventBusData: failed to unmarshal uint256: error or overflow")
+					} else {
+						b.balanceMargin = bal
+					}
 				case proto.AccountType_ACCOUNT_TYPE_BOND:
-					b.balanceBond = acct.Balance
+					bal, err_or_overflow := num.UintFromString(acct.Balance, 10)
+					if err_or_overflow {
+						b.log.WithFields(log.Fields{
+							"bondAccountBalance": acct.Balance,
+						}).Warning("processEventBusData: failed to unmarshal uint256: error or overflow")
+					} else {
+						b.balanceBond = bal
+					}
 				}
 			case eventspb.BusEventType_BUS_EVENT_TYPE_MARKET_DATA:
 				b.marketData = event.GetMarketData()
-				b.currentPrice = b.marketData.MarkPrice
+				p, err_or_overflow := num.UintFromString(b.marketData.MarkPrice, 10)
+				if err_or_overflow {
+					b.log.WithFields(log.Fields{
+						"markPrice": b.marketData.MarkPrice,
+					}).Warning("processEventBusData: failed to unmarshal uint256: error or overflow")
+				} else {
+					b.currentPrice = p
+				}
 			}
 		}
 	}

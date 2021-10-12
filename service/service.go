@@ -15,7 +15,7 @@ import (
 	"code.vegaprotocol.io/liqbot/config"
 	"code.vegaprotocol.io/liqbot/pricing"
 
-	storev1 "code.vegaprotocol.io/go-wallet/store/v1"
+	store "code.vegaprotocol.io/go-wallet/service/store/v1"
 	"code.vegaprotocol.io/go-wallet/wallet"
 	ppconfig "code.vegaprotocol.io/priceproxy/config"
 	ppservice "code.vegaprotocol.io/priceproxy/service"
@@ -80,11 +80,11 @@ func NewService(config config.Config, pe PricingEngine, ws *wallet.Handler) (s *
 		if err = ensureDir(walletsDir); err != nil {
 			return
 		}
-		store, err := storev1.NewStore(config.Wallet.RootPath)
+		stor, err := store.NewStore(config.Wallet.RootPath)
 		if err != nil {
 			return nil, err
 		}
-		ws = wallet.NewHandler(store)
+		ws = wallet.NewHandler(stor)
 	}
 	s = &Service{
 		Router: httprouter.New(),
