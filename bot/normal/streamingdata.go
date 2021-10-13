@@ -1,6 +1,7 @@
 package normal
 
 import (
+	"fmt"
 	"io"
 
 	"code.vegaprotocol.io/liqbot/types/num"
@@ -9,7 +10,6 @@ import (
 	"code.vegaprotocol.io/protos/vega"
 	vegaapipb "code.vegaprotocol.io/protos/vega/api/v1"
 	eventspb "code.vegaprotocol.io/protos/vega/events/v1"
-	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -28,13 +28,13 @@ func (b *Bot) subscribeToEvents() error {
 	// First we have to create the stream
 	stream, err := b.node.ObserveEventBus()
 	if err != nil {
-		return errors.Wrap(err, "Failed to subscribe to event bus data")
+		return fmt.Errorf("Failed to subscribe to event bus data: %w", err)
 	}
 
 	// Then we subscribe to the data
 	err = stream.SendMsg(eventBusDataReq)
 	if err != nil {
-		return errors.Wrap(err, "Unable to send event bus request on the stream")
+		return fmt.Errorf("Unable to send event bus request on the stream: %w", err)
 	}
 	go b.processEventBusData(stream)
 
@@ -47,13 +47,13 @@ func (b *Bot) subscribeToEvents() error {
 	}
 	stream2, err := b.node.ObserveEventBus()
 	if err != nil {
-		return errors.Wrap(err, "Failed to subscribe to event bus data: ")
+		return fmt.Errorf("Failed to subscribe to event bus data: : %w", err)
 	}
 
 	// Then we subscribe to the data
 	err = stream2.SendMsg(eventBusDataReq2)
 	if err != nil {
-		return errors.Wrap(err, "Unable to send event bus request on the stream")
+		return fmt.Errorf("Unable to send event bus request on the stream: %w", err)
 	}
 	b.eventStreamLive = true
 	go b.processEventBusData(stream2)
@@ -145,7 +145,7 @@ func (b *Bot) subscribePositions() error {
 	}
 	stream, err := b.node.PositionsSubscribe(req)
 	if err != nil {
-		return errors.Wrap(err, "Failed to subscribe to positions")
+		return fmt.Errorf("Failed to subscribe to positions: %w", err)
 	}
 
 	// Run in background and process messages

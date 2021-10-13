@@ -1,6 +1,7 @@
 package normal
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -9,7 +10,6 @@ import (
 
 	"code.vegaprotocol.io/protos/vega"
 	"github.com/hashicorp/go-multierror"
-	"github.com/pkg/errors"
 )
 
 // ShapeConfig is the top level definition of a liquidity shape
@@ -128,7 +128,7 @@ func steeringMethodToEnum(method string) (SteeringMethod, error) {
 
 func validateStrategyConfig(details config.Strategy) (s *Strategy, err error) {
 	s = &Strategy{}
-	errInvalid := "invalid strategy config for %s"
+	errInvalid := "invalid strategy config for %s: %w"
 
 	var errs *multierror.Error
 
@@ -182,14 +182,14 @@ func validateStrategyConfig(details config.Strategy) (s *Strategy, err error) {
 
 	s.PosManagementSleepMilliseconds = uint64(details.PosManagementSleepMilliseconds)
 	if s.PosManagementSleepMilliseconds < 100 {
-		errs = multierror.Append(errs, errors.Wrap(fmt.Errorf("must be >=100"), fmt.Sprintf(errInvalid, "PosManagementSleepMilliseconds")))
+		errs = multierror.Append(errs, fmt.Errorf(errInvalid, "PosManagementSleepMilliseconds", errors.New("must be >=100")))
 	}
 
 	s.MarketPriceSteeringRatePerSecond = details.MarketPriceSteeringRatePerSecond
 	if s.MarketPriceSteeringRatePerSecond <= 0.0 {
-		errs = multierror.Append(errs, errors.Wrap(fmt.Errorf("must be >0"), fmt.Sprintf(errInvalid, "MarketPriceSteeringRatePerSecond")))
+		errs = multierror.Append(errs, fmt.Errorf(errInvalid, "MarketPriceSteeringRatePerSecond", errors.New("must be >0")))
 	} else if s.MarketPriceSteeringRatePerSecond > 10.0 {
-		errs = multierror.Append(errs, errors.Wrap(fmt.Errorf("must be <=10"), fmt.Sprintf(errInvalid, "MarketPriceSteeringRatePerSecond")))
+		errs = multierror.Append(errs, fmt.Errorf(errInvalid, "MarketPriceSteeringRatePerSecond", errors.New("must be <=10")))
 	}
 
 	s.PriceSteerOrderScale = details.PriceSteerOrderScale

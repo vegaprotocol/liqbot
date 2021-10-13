@@ -21,9 +21,7 @@ import (
 	ppservice "code.vegaprotocol.io/priceproxy/service"
 	// "code.vegaprotocol.io/shared/paths"
 	"github.com/julienschmidt/httprouter"
-	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
-	// "go.uber.org/zap"
 )
 
 // Bot is the generic bot interface.
@@ -160,7 +158,7 @@ func (s *Service) initBots() error {
 	for _, botcfg := range s.config.Bots {
 		b, err := bot.New(botcfg, s.pricingEngine, s.walletServer)
 		if err != nil {
-			return errors.Wrap(err, fmt.Sprintf("failed to create bot %s", botcfg.Name))
+			return fmt.Errorf("failed to create bot %s: %w", botcfg.Name, err)
 		}
 		s.bots[botcfg.Name] = b
 		log.WithFields(log.Fields{

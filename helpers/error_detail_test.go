@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"code.vegaprotocol.io/sdk-golang/helpers"
+	"code.vegaprotocol.io/liqbot/helpers"
 
 	"github.com/stretchr/testify/require"
 	gstatus "google.golang.org/genproto/googleapis/rpc/status"
