@@ -1,2 +1,2 @@
-// Package node contains functionality for interacting with core and data nodes.
+// Package node contains functionality for interacting with Vega data nodes.
 package node
