@@ -77,7 +77,28 @@ func (n *DataNode) SubmitTransaction(req *vegaapipb.SubmitTransactionRequest) (r
 
 // rpc PropagateChainEvent(PropagateChainEventRequest) returns (PropagateChainEventResponse);
 
-// rpc Statistics(StatisticsRequest) returns (StatisticsResponse);
+func (n *DataNode) Statistics(req *vegaapipb.StatisticsRequest) (response *vegaapipb.StatisticsResponse, err error) {
+	msg := "gRPC call failed: Statistics: %w"
+	if n == nil {
+		err = fmt.Errorf(msg, e.ErrNil)
+		return
+	}
+
+	if n.conn.GetState() != connectivity.Ready {
+		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
+		return
+	}
+
+	c := vegaapipb.NewCoreServiceClient(n.conn)
+	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
+	defer cancel()
+
+	response, err = c.Statistics(ctx, req)
+	if err != nil {
+		err = fmt.Errorf(msg, helpers.ErrorDetail(err))
+	}
+	return
+}
 
 // rpc LastBlockHeight(LastBlockHeightRequest) returns (LastBlockHeightResponse);
 // LastBlockHeight gets the latest blockchain height (used for replay protection)
