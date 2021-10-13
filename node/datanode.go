@@ -136,7 +136,29 @@ func (n *DataNode) GetVegaTime() (t time.Time, err error) {
 	return
 }
 
-// rpc ObserveEventBus(stream ObserveEventBusRequest) returns (stream ObserveEventBusResponse);
+func (n *DataNode) ObserveEventBus() (client vegaapipb.CoreService_ObserveEventBusClient, err error) {
+	msg := "gRPC call failed: ObserveEventBus: %w"
+	if n == nil {
+		err = fmt.Errorf(msg, e.ErrNil)
+		return
+	}
+
+	if n.conn.GetState() != connectivity.Ready {
+		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
+		return
+	}
+
+	c := vegaapipb.NewCoreServiceClient(n.conn)
+	// no timeout on streams
+	client, err = c.ObserveEventBus(context.Background())
+	if err != nil {
+		err = fmt.Errorf(msg, helpers.ErrorDetail(err))
+		return
+	}
+	// client.Send(req)
+	// client.CloseSend()
+	return
+}
 
 // === TradingDataService ===
 
@@ -282,7 +304,29 @@ func (n *DataNode) PositionsByParty(req *dataapipb.PositionsByPartyRequest) (res
 // rpc MarketDepthUpdatesSubscribe(MarketDepthUpdatesSubscribeRequest) returns (stream MarketDepthUpdatesSubscribeResponse);
 // rpc MarketsDataSubscribe(MarketsDataSubscribeRequest) returns (stream MarketsDataSubscribeResponse);
 // rpc OrdersSubscribe(OrdersSubscribeRequest) returns (stream OrdersSubscribeResponse);
-// rpc PositionsSubscribe(PositionsSubscribeRequest) returns (stream PositionsSubscribeResponse);
+
+func (n *DataNode) PositionsSubscribe(req *dataapipb.PositionsSubscribeRequest) (client dataapipb.TradingDataService_PositionsSubscribeClient, err error) {
+	msg := "gRPC call failed: PositionsSubscribe: %w"
+	if n == nil {
+		err = fmt.Errorf(msg, e.ErrNil)
+		return
+	}
+
+	if n.conn.GetState() != connectivity.Ready {
+		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
+		return
+	}
+
+	c := dataapipb.NewTradingDataServiceClient(n.conn)
+	// no timeout on streams
+	client, err = c.PositionsSubscribe(context.Background(), req)
+	if err != nil {
+		err = fmt.Errorf(msg, helpers.ErrorDetail(err))
+		return
+	}
+	return
+}
+
 // rpc TradesSubscribe(TradesSubscribeRequest) returns (stream TradesSubscribeResponse);
 // rpc TransferResponsesSubscribe(TransferResponsesSubscribeRequest) returns (stream TransferResponsesSubscribeResponse);
 // rpc GetNodeSignaturesAggregate(GetNodeSignaturesAggregateRequest) returns (GetNodeSignaturesAggregateResponse);

@@ -1,6 +1,7 @@
 package normal
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"math/rand"
@@ -12,6 +13,7 @@ import (
 	"code.vegaprotocol.io/liqbot/node"
 	"code.vegaprotocol.io/liqbot/types/num"
 
+	"code.vegaprotocol.io/go-wallet/wallet"
 	"code.vegaprotocol.io/go-wallet/wallets"
 	ppconfig "code.vegaprotocol.io/priceproxy/config"
 	ppservice "code.vegaprotocol.io/priceproxy/service"
@@ -20,7 +22,6 @@ import (
 	vegaapipb "code.vegaprotocol.io/protos/vega/api/v1"
 	commandspb "code.vegaprotocol.io/protos/vega/commands/v1"
 	walletpb "code.vegaprotocol.io/protos/vega/wallet/v1"
-	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -30,7 +31,7 @@ type CoreService interface {
 	// rpc Statistics(StatisticsRequest) returns (StatisticsResponse);
 	LastBlockHeight() (height uint64, err error)
 	GetVegaTime() (t time.Time, err error)
-	// rpc ObserveEventBus(stream ObserveEventBusRequest) returns (stream ObserveEventBusResponse);
+	ObserveEventBus() (client vegaapipb.CoreService_ObserveEventBusClient, err error)
 }
 
 type CoreStateService interface {
@@ -103,7 +104,7 @@ type TradingDataService interface {
 	// rpc MarketDepthUpdatesSubscribe(MarketDepthUpdatesSubscribeRequest) returns (stream MarketDepthUpdatesSubscribeResponse);
 	// rpc MarketsDataSubscribe(MarketsDataSubscribeRequest) returns (stream MarketsDataSubscribeResponse);
 	// rpc OrdersSubscribe(OrdersSubscribeRequest) returns (stream OrdersSubscribeResponse);
-	// rpc PositionsSubscribe(PositionsSubscribeRequest) returns (stream PositionsSubscribeResponse);
+	PositionsSubscribe(req *dataapipb.PositionsSubscribeRequest) (client dataapipb.TradingDataService_PositionsSubscribeClient, err error)
 	// rpc TradesSubscribe(TradesSubscribeRequest) returns (stream TradesSubscribeResponse);
 	// rpc TransferResponsesSubscribe(TransferResponsesSubscribeRequest) returns (stream TransferResponsesSubscribeResponse);
 	// rpc GetNodeSignaturesAggregate(GetNodeSignaturesAggregateRequest) returns (GetNodeSignaturesAggregateResponse);
@@ -179,6 +180,7 @@ type Bot struct {
 	positions  []*vega.Position
 
 	currentPrice       *num.Uint
+	staticMidPrice     *num.Uint
 	openVolume         int64
 	previousOpenVolume int64
 
@@ -208,7 +210,7 @@ func New(config config.BotConfig, pe PricingEngine, ws *wallets.Handler) (b *Bot
 
 	b.strategy, err = validateStrategyConfig(config.StrategyDetails)
 	if err != nil {
-		err = errors.Wrap(err, "failed to read strategy details")
+		err = fmt.Errorf("failed to read strategy details: %w", err)
 		return
 	}
 	b.log.WithFields(log.Fields{
@@ -220,9 +222,9 @@ func New(config config.BotConfig, pe PricingEngine, ws *wallets.Handler) (b *Bot
 
 // Start starts the liquidity bot goroutine(s).
 func (b *Bot) Start() error {
-	err := b.setupWallet()
+	_, err := b.setupWallet()
 	if err != nil {
-		return errors.Wrap(err, "failed to setup wallet")
+		return fmt.Errorf("failed to setup wallet: %w", err)
 	}
 
 	b.node, err = node.NewDataNode(
@@ -231,7 +233,7 @@ func (b *Bot) Start() error {
 		time.Duration(b.config.CallTimeout)*time.Millisecond,
 	)
 	if err != nil {
-		return errors.Wrap(err, "failed to connect to Vega gRPC node")
+		return fmt.Errorf("failed to connect to Vega gRPC node: %w", err)
 	}
 	b.log.WithFields(log.Fields{
 		"address": b.config.Location,
@@ -352,7 +354,7 @@ func (b *Bot) sendLiquidityProvision(buys, sells []*vega.LiquidityOrder) error {
 		LiquidityProvisionSubmission: &commandspb.LiquidityProvisionSubmission{
 			Fee:              b.config.StrategyDetails.Fee,
 			MarketId:         b.market.Id,
-			CommitmentAmount: fmt.Sprintf("%g", commitment),
+			CommitmentAmount: commitment.String(),
 			Buys:             buys,
 			Sells:            sells,
 		},
@@ -463,7 +465,8 @@ func (b *Bot) signSubmitTx(
 ) error {
 	msg := "failed to sign+submit tx: %w"
 	if blockHeight == 0 {
-		blockHeight, err := b.node.LastBlockHeight()
+		var err error
+		blockHeight, err = b.node.LastBlockHeight()
 		if err != nil {
 			return fmt.Errorf(msg, fmt.Errorf("failed to get block height: %w", err))
 		}
@@ -662,7 +665,6 @@ func (b *Bot) runPositionManagement() {
 					b.log.WithFields(log.Fields{
 						"error": err.Error(),
 					}).Error("Failed to send liquidity provision order")
-					return
 				}
 				firstTime = false
 			}
@@ -711,28 +713,16 @@ func (b *Bot) runPositionManagement() {
 // calculateOrderSizes calculates the size of the orders using the total commitment, price, distance from mid and chance
 // of trading liquidity.supplied.updateSizes(obligation, currentPrice, liquidityOrders, true, minPrice, maxPrice)
 func (b *Bot) calculateOrderSizes(marketID, partyID string, obligation *num.Uint, liquidityOrders []*vega.LiquidityOrder) []*vega.Order {
-	midPrice, err_or_overflow := num.UintFromString(b.marketData.MidPrice, 10)
-	if err_or_overflow {
-		b.log.WithFields(log.Fields{
-			"midPrice": b.marketData.MidPrice,
-		}).Warning("calculateOrderSizes: failed to unmarshal uint256: error or overflow")
-		return nil
-	}
-
 	orders := make([]*vega.Order, 0, len(liquidityOrders))
 	// Work out the total proportion for the shape
-	var totalProportion uint32
+	totalProportion := num.Zero()
 	for _, order := range liquidityOrders {
-		totalProportion += order.Proportion
+		totalProportion.Add(totalProportion, num.NewUint(uint64(order.Proportion)))
 	}
 
 	// Now size up the orders and create the real order objects
 	for _, lo := range liquidityOrders {
-		prob := 0.10 // Need to make this more accurate later
-		fraction := float64(lo.Proportion) / float64(totalProportion)
-		scaling := fraction / prob
-		size := uint64(math.Ceil(obligation * scaling / float64(midPrice)))
-
+		size := num.UintChain(obligation).Mul(num.NewUint(uint64(lo.Proportion))).Mul(num.NewUint(10)).Div(totalProportion).Div(b.currentPrice).Get()
 		peggedOrder := vega.PeggedOrder{
 			Reference: lo.Reference,
 			Offset:    lo.Offset,
@@ -742,8 +732,8 @@ func (b *Bot) calculateOrderSizes(marketID, partyID string, obligation *num.Uint
 			MarketId:    marketID,
 			PartyId:     partyID,
 			Side:        vega.Side_SIDE_BUY,
-			Remaining:   size,
-			Size:        size,
+			Remaining:   size.Uint64(),
+			Size:        size.Uint64(),
 			TimeInForce: vega.Order_TIME_IN_FORCE_GTC,
 			Type:        vega.Order_TYPE_LIMIT,
 			PeggedOrder: &peggedOrder,
@@ -764,13 +754,14 @@ func (b *Bot) calculateMarginCost(risk float64, orders []*vega.Order) *num.Uint 
 			margins[i] = num.NewUint(uint64(order.Size))
 		}
 	}
-	totalMargin := UintChain(NewUint(0)).Add(margins...).Mul(b.currentPrice).Get()
+	totalMargin := num.UintChain(num.NewUint(0)).Add(margins...).Mul(b.currentPrice).Get()
 	totalMargin = mulFrac(totalMargin, risk, 15)
 	return totalMargin
 }
 
 func (b *Bot) runPriceSteering() {
-	var externalPrice, currentPrice uint64
+	externalPrice := num.Zero()
+	currentPrice := num.Zero()
 	var err error
 	var externalPriceResponse ppservice.PriceResponse
 
@@ -796,21 +787,21 @@ func (b *Bot) runPriceSteering() {
 					b.log.WithFields(log.Fields{
 						"error": err.Error(),
 					}).Warning("Failed to get external price")
-					externalPrice = 0
-					currentPrice = 0
+					externalPrice = num.Zero()
+					currentPrice = num.Zero()
 				} else {
-					externalPrice = uint64(externalPriceResponse.Price * math.Pow10(int(b.market.DecimalPlaces)))
-					currentPrice = b.marketData.StaticMidPrice
+					externalPrice = num.UintChain(num.NewUint(uint64(externalPriceResponse.Price))).Mul(num.NewUint(uint64(math.Pow10(int(b.market.DecimalPlaces))))).Get()
+					currentPrice = b.staticMidPrice
 				}
 
-				if err == nil && externalPrice != 0 {
+				if err == nil && externalPrice.NEQUint64(0) {
 					shouldMove := "no"
 					// We only want to steer the price if the external and market price
 					// are greater than a certain percentage apart
-					currentDiff := math.Abs((float64(currentPrice) - float64(externalPrice)) / float64(externalPrice))
+					currentDiff := math.Abs((currentPrice.Float64() - externalPrice.Float64()) / externalPrice.Float64())
 					if currentDiff > b.strategy.MinPriceSteerFraction {
 						var side vega.Side
-						if externalPrice > currentPrice {
+						if externalPrice.GT(currentPrice) {
 							side = vega.Side_SIDE_BUY
 							shouldMove = "UP"
 						} else {
@@ -827,14 +818,15 @@ func (b *Bot) runPriceSteering() {
 								Fatal("Unable to get realistic order details for price steering")
 						}
 
-						size = uint64(float64(size) * b.strategy.PriceSteerOrderScale)
+						size = mulFrac(size, b.strategy.PriceSteerOrderScale, 15)
 						b.log.WithFields(log.Fields{
 							"size":  size,
 							"side":  side,
 							"price": price,
 						}).Debug("Submitting order")
 
-						err = b.submitOrder(size,
+						err = b.submitOrder(
+							size.Uint64(),
 							price,
 							side,
 							vega.Order_TIME_IN_FORCE_GTT,
@@ -845,7 +837,7 @@ func (b *Bot) runPriceSteering() {
 					b.log.WithFields(log.Fields{
 						"currentPrice":  currentPrice,
 						"externalPrice": externalPrice,
-						"diff":          int(externalPrice) - int(b.currentPrice),
+						"diff":          num.Zero().Sub(externalPrice, b.currentPrice),
 						"shouldMove":    shouldMove,
 					}).Debug("Steering info")
 				}
@@ -878,7 +870,7 @@ func (b *Bot) runPriceSteering() {
 }
 
 // GetRealisticOrderDetails uses magic to return a realistic order price and size
-func (b *Bot) GetRealisticOrderDetails(externalPrice uint64) (price, size uint64, err error) {
+func (b *Bot) GetRealisticOrderDetails(externalPrice *num.Uint) (price, size *num.Uint, err error) {
 	// Collect stuff from config that's common to all methods
 	method := b.strategy.LimitOrderDistributionParams.Method
 
@@ -892,38 +884,39 @@ func (b *Bot) GetRealisticOrderDetails(externalPrice uint64) (price, size uint64
 
 	// this converts something like BTCUSD 3912312345 (five decimal places)
 	// to 39123.12345 float.
-	M0 := float64(externalPrice) / math.Pow(10, float64(b.market.DecimalPlaces))
+	M0 := num.Zero().Div(externalPrice, num.NewUint(uint64(math.Pow(10, float64(b.market.DecimalPlaces)))))
 
 	var priceFloat float64
-	size = 1
+	size = num.NewUint(1)
 	switch method {
 	case DiscreteThreeLevel:
-		priceFloat, err = GeneratePriceUsingDiscreteThreeLevel(M0, delta, sigma, tgtTimeHorizonYrFrac, N)
+		priceFloat, err = GeneratePriceUsingDiscreteThreeLevel(M0.Float64(), delta, sigma, tgtTimeHorizonYrFrac, N)
 
 		// we need to add back decimals
-		price = uint64(math.Round(priceFloat * math.Pow(10, float64(b.market.DecimalPlaces))))
+		price = num.NewUint(uint64(math.Round(priceFloat * math.Pow(10, float64(b.market.DecimalPlaces)))))
 		return
 	case CoinAndBinomial:
-		return externalPrice, 1, nil
+		price = externalPrice
+		return
 	default:
 		err = fmt.Errorf("Method for generating price distributions not recognised: %w", err)
 		return
 	}
 }
 
-func (b *Bot) setupWallet() (err error) {
+func (b *Bot) setupWallet() (mnemonic string, err error) {
 	b.walletPassphrase = "123"
 
 	err = b.walletServer.LoginWallet(b.config.Name, b.walletPassphrase)
 	if err != nil {
-		if err == wallet.ErrWalletDoesNotExists {
-			err = b.walletServer.CreateWallet(b.config.Name, b.walletPassphrase)
+		if err == wallets.ErrWalletDoesNotExists {
+			mnemonic, err = b.walletServer.CreateWallet(b.config.Name, b.walletPassphrase)
 			if err != nil {
-				return errors.Wrap(err, "failed to create wallet")
+				return "", fmt.Errorf("failed to create wallet: %w", err)
 			}
 			b.log.Debug("Created and logged into wallet")
 		} else {
-			return errors.Wrap(err, "failed to log in to wallet")
+			return "", fmt.Errorf("failed to log in to wallet: %w", err)
 		}
 	} else {
 		b.log.Debug("Logged into wallet")
@@ -933,18 +926,18 @@ func (b *Bot) setupWallet() (err error) {
 		var keys []wallet.PublicKey
 		keys, err = b.walletServer.ListPublicKeys(b.config.Name)
 		if err != nil {
-			return errors.Wrap(err, "failed to list public keys")
+			return "", fmt.Errorf("failed to list public keys: %w", err)
 		}
 		if len(keys) == 0 {
 			var key wallet.KeyPair
-			key, err = b.walletServer.GenerateKeyPair(b.config.Name, b.walletPassphrase)
+			key, err = b.walletServer.GenerateKeyPair(b.config.Name, b.walletPassphrase, []wallet.Meta{})
 			if err != nil {
-				return fmt.Errorf("failed to generate keypair: %w", err)
+				return "", fmt.Errorf("failed to generate keypair: %w", err)
 			}
-			b.walletPubKey = key.Pub
+			b.walletPubKey = key.PublicKey()
 			b.log.WithFields(log.Fields{"pubKey": b.walletPubKey}).Debug("Created keypair")
 		} else {
-			b.walletPubKey = keys[0].Key
+			b.walletPubKey = keys[0].Key()
 			b.log.WithFields(log.Fields{"pubKey": b.walletPubKey}).Debug("Using existing keypair")
 		}
 	}

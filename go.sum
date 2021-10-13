@@ -18,8 +18,14 @@ cloud.google.com/go/storage v1.0.0 h1:VV2nUM3wwLLGh9lSABFgZMjInyUbJeaRSE64WuAIQ+
 cloud.google.com/go/storage v1.0.0/go.mod h1:IhtSnM/ZTZV8YYJWCY8RULGVqBDmpoyjwiyrjsg+URw=
 code.vegaprotocol.io/go-wallet v0.7.1-0.20210831185441-b7ec69d5d320 h1:76dmVRPS7E2IHHWcp/zs7YV0SHbdlD6NELgge1/Yk5s=
 code.vegaprotocol.io/go-wallet v0.7.1-0.20210831185441-b7ec69d5d320/go.mod h1:r3Q8o+luWdjRo9KzulUfwRRVIkMOpejPrjzit+Z+xTw=
+code.vegaprotocol.io/go-wallet v0.9.0-pre3.0.20211004162429-e97c150b901d h1:HaiWyOSddAJln+47dqUeku1eA4rFyl+B0BIU91+te9I=
+code.vegaprotocol.io/go-wallet v0.9.0-pre3.0.20211004162429-e97c150b901d/go.mod h1:rtrVN1n0XTV33HSY593/HaCpXCRyfOew0IHS+N9UR68=
+code.vegaprotocol.io/go-wallet v0.9.0-pre4 h1:XPO8qtcAXNrMEaCFP6n+tCC7WMLRT/X4bQbi7WHoa0Y=
+code.vegaprotocol.io/go-wallet v0.9.0-pre4/go.mod h1:rtrVN1n0XTV33HSY593/HaCpXCRyfOew0IHS+N9UR68=
 code.vegaprotocol.io/go-wallet v0.9.0-pre4.0.20211012075852-69c039fd2bc7 h1:HfuheoDugaG/2ExTF4K3qN3Q3/JSCnBqG5hACB/XgJs=
 code.vegaprotocol.io/go-wallet v0.9.0-pre4.0.20211012075852-69c039fd2bc7/go.mod h1:kqrf0DvCrso8YSJKVBnzyIMDFoSJYIrwlJzhD7+ki3Y=
+code.vegaprotocol.io/go-wallet v0.9.0-pre4.0.20211013125355-a512696ce01c h1:y7yUa15F4JwA0ovX28BJU7hbFn1odoFrdgGvpVF5spo=
+code.vegaprotocol.io/go-wallet v0.9.0-pre4.0.20211013125355-a512696ce01c/go.mod h1:kqrf0DvCrso8YSJKVBnzyIMDFoSJYIrwlJzhD7+ki3Y=
 code.vegaprotocol.io/priceproxy v0.0.2 h1:yeaX4nAuZCxbODsF5/YOosIXCyNtY91M8FQzgvFB430=
 code.vegaprotocol.io/priceproxy v0.0.2/go.mod h1:lj5Y3+LPxiGKUhAxz0RQ11wjQ3gtTqIHHqSQDCgndKI=
 code.vegaprotocol.io/protos v0.41.1-0.20210831105504-a2fb8fcd9c11 h1:iKP6H/9iX641vvy63he8qT880JXXjajBwq30DTj9qPw=
@@ -28,6 +34,9 @@ code.vegaprotocol.io/protos v0.43.1-0.20211004102311-d2ad34ada37b h1:yJdUc7Ml6Ef
 code.vegaprotocol.io/protos v0.43.1-0.20211004102311-d2ad34ada37b/go.mod h1:NORK22Evpwn0GoetL7H6/oVUzGcfjAJEJTzw+zTkSyE=
 code.vegaprotocol.io/protos v0.44.0 h1:sF/1xqrzpSBh2sPan9g375uwL49YSeiGbqNM0b1xYPg=
 code.vegaprotocol.io/protos v0.44.0/go.mod h1:NORK22Evpwn0GoetL7H6/oVUzGcfjAJEJTzw+zTkSyE=
+code.vegaprotocol.io/shared v0.0.0-20210907092733-405b656c2f5b/go.mod h1:dmahiiphuDJvjXXDvQvo22tFPx7yk9wW8z1glU/JgHE=
+code.vegaprotocol.io/shared v0.0.0-20210920084547-4d2225c561d6 h1:EetjWJVqonprNkq5qJhIHhojhA+gejy2mNeL+DyYhZs=
+code.vegaprotocol.io/shared v0.0.0-20210920084547-4d2225c561d6/go.mod h1:dmahiiphuDJvjXXDvQvo22tFPx7yk9wW8z1glU/JgHE=
 code.vegaprotocol.io/shared v0.0.0-20211011145318-554fafdfeb34 h1:jvLT/H+GkrMaDjcNy4nJe2gIXhS3G5UYbnj77qiWGPA=
 code.vegaprotocol.io/shared v0.0.0-20211011145318-554fafdfeb34/go.mod h1:dmahiiphuDJvjXXDvQvo22tFPx7yk9wW8z1glU/JgHE=
 dmitri.shuralyov.com/gpu/mtl v0.0.0-20190408044501-666a987793e9 h1:VpgP7xuJadIUuKccphEpTJnWhS2jkQyMt6Y7pJCD7fY=

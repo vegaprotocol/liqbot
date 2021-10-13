@@ -3,9 +3,10 @@ module code.vegaprotocol.io/liqbot
 go 1.16
 
 require (
-	code.vegaprotocol.io/go-wallet v0.9.0-pre4.0.20211012075852-69c039fd2bc7
+	code.vegaprotocol.io/go-wallet v0.9.0-pre4
 	code.vegaprotocol.io/priceproxy v0.0.2
 	code.vegaprotocol.io/protos v0.44.0 // indirect
+	code.vegaprotocol.io/shared v0.0.0-20210920084547-4d2225c561d6
 	github.com/golang/mock v1.6.0
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/holiman/uint256 v1.2.0 // indirect

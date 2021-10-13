@@ -8,6 +8,7 @@ import (
 
 	dataapipb "code.vegaprotocol.io/protos/data-node/api/v1"
 	"code.vegaprotocol.io/protos/vega"
+	log "github.com/sirupsen/logrus"
 )
 
 // As the streaming service only gives us data when it changes
@@ -70,10 +71,13 @@ func (b *Bot) getAccount(typ vega.AccountType) (*num.Uint, error) {
 		return nil, err
 	}
 	if len(response.Accounts) == 0 {
-		return nil, errors.New("zero general accounts for party")
+		b.log.WithFields(log.Fields{
+			"type": typ,
+		}).Debug("zero accounts for party")
+		return num.Zero(), nil
 	}
 	if len(response.Accounts) > 1 {
-		return nil, errors.New(fmt.Sprintf("too many general accounts for party: %d", len(response.Accounts)))
+		return nil, errors.New(fmt.Sprintf("too many accounts for party: %d", len(response.Accounts)))
 	}
 
 	return convertUint256(response.Accounts[0].Balance)

@@ -3,11 +3,14 @@ package normal
 import (
 	"io"
 
+	"code.vegaprotocol.io/liqbot/types/num"
+
+	dataapipb "code.vegaprotocol.io/protos/data-node/api/v1"
+	"code.vegaprotocol.io/protos/vega"
+	vegaapipb "code.vegaprotocol.io/protos/vega/api/v1"
+	eventspb "code.vegaprotocol.io/protos/vega/events/v1"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
-	"github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto"
-	"github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto/api"
-	eventspb "github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto/events/v1"
 )
 
 // Subscribe to all the events that we need to keep the bot happy
@@ -16,7 +19,7 @@ import (
 // * Market Data
 func (b *Bot) subscribeToEvents() error {
 	// Party related events
-	eventBusDataReq := &api.ObserveEventBusRequest{
+	eventBusDataReq := &dataapipb.ObserveEventBusRequest{
 		Type: []eventspb.BusEventType{
 			eventspb.BusEventType_BUS_EVENT_TYPE_ACCOUNT,
 		},
@@ -36,7 +39,7 @@ func (b *Bot) subscribeToEvents() error {
 	go b.processEventBusData(stream)
 
 	// Market related events
-	eventBusDataReq2 := &api.ObserveEventBusRequest{
+	eventBusDataReq2 := &vegaapipb.ObserveEventBusRequest{
 		Type: []eventspb.BusEventType{
 			eventspb.BusEventType_BUS_EVENT_TYPE_MARKET_DATA,
 		},
@@ -57,7 +60,7 @@ func (b *Bot) subscribeToEvents() error {
 	return nil
 }
 
-func (b *Bot) processEventBusData(stream api.TradingDataService_ObserveEventBusClient) {
+func (b *Bot) processEventBusData(stream vegaapipb.CoreService_ObserveEventBusClient) {
 	for {
 		eb, err := stream.Recv()
 		if err == io.EOF {
@@ -80,7 +83,7 @@ func (b *Bot) processEventBusData(stream api.TradingDataService_ObserveEventBusC
 					continue
 				}
 				switch acct.Type {
-				case proto.AccountType_ACCOUNT_TYPE_GENERAL:
+				case vega.AccountType_ACCOUNT_TYPE_GENERAL:
 					bal, err_or_overflow := num.UintFromString(acct.Balance, 10)
 					if err_or_overflow {
 						b.log.WithFields(log.Fields{
@@ -89,7 +92,7 @@ func (b *Bot) processEventBusData(stream api.TradingDataService_ObserveEventBusC
 					} else {
 						b.balanceGeneral = bal
 					}
-				case proto.AccountType_ACCOUNT_TYPE_MARGIN:
+				case vega.AccountType_ACCOUNT_TYPE_MARGIN:
 					bal, err_or_overflow := num.UintFromString(acct.Balance, 10)
 					if err_or_overflow {
 						b.log.WithFields(log.Fields{
@@ -98,7 +101,7 @@ func (b *Bot) processEventBusData(stream api.TradingDataService_ObserveEventBusC
 					} else {
 						b.balanceMargin = bal
 					}
-				case proto.AccountType_ACCOUNT_TYPE_BOND:
+				case vega.AccountType_ACCOUNT_TYPE_BOND:
 					bal, err_or_overflow := num.UintFromString(acct.Balance, 10)
 					if err_or_overflow {
 						b.log.WithFields(log.Fields{
@@ -110,13 +113,23 @@ func (b *Bot) processEventBusData(stream api.TradingDataService_ObserveEventBusC
 				}
 			case eventspb.BusEventType_BUS_EVENT_TYPE_MARKET_DATA:
 				b.marketData = event.GetMarketData()
-				p, err_or_overflow := num.UintFromString(b.marketData.MarkPrice, 10)
+				markPrice, err_or_overflow := num.UintFromString(b.marketData.MarkPrice, 10)
 				if err_or_overflow {
 					b.log.WithFields(log.Fields{
 						"markPrice": b.marketData.MarkPrice,
 					}).Warning("processEventBusData: failed to unmarshal uint256: error or overflow")
 				} else {
-					b.currentPrice = p
+					b.currentPrice = markPrice
+				}
+
+				staticMidPrice := num.Zero()
+				staticMidPrice, err = convertUint256(b.marketData.StaticMidPrice)
+				if err != nil {
+					b.log.WithFields(log.Fields{
+						"staticMidPrice": b.marketData.StaticMidPrice,
+					}).Warning("processEventBusData: failed to unmarshal uint256: error or overflow")
+				} else {
+					b.staticMidPrice = staticMidPrice
 				}
 			}
 		}
@@ -126,7 +139,7 @@ func (b *Bot) processEventBusData(stream api.TradingDataService_ObserveEventBusC
 }
 
 func (b *Bot) subscribePositions() error {
-	req := &api.PositionsSubscribeRequest{
+	req := &dataapipb.PositionsSubscribeRequest{
 		MarketId: b.market.Id,
 		PartyId:  b.walletPubKey,
 	}
@@ -141,7 +154,7 @@ func (b *Bot) subscribePositions() error {
 	return nil
 }
 
-func (b *Bot) processPositions(stream api.TradingDataService_PositionsSubscribeClient) {
+func (b *Bot) processPositions(stream dataapipb.TradingDataService_PositionsSubscribeClient) {
 	for {
 		o, err := stream.Recv()
 		if err == io.EOF {

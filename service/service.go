@@ -15,10 +15,11 @@ import (
 	"code.vegaprotocol.io/liqbot/config"
 	"code.vegaprotocol.io/liqbot/pricing"
 
-	store "code.vegaprotocol.io/go-wallet/service/store/v1"
-	"code.vegaprotocol.io/go-wallet/wallet"
+	store "code.vegaprotocol.io/go-wallet/wallet/store/v1"
+	"code.vegaprotocol.io/go-wallet/wallets"
 	ppconfig "code.vegaprotocol.io/priceproxy/config"
 	ppservice "code.vegaprotocol.io/priceproxy/service"
+	// "code.vegaprotocol.io/shared/paths"
 	"github.com/julienschmidt/httprouter"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -60,11 +61,11 @@ type Service struct {
 
 	pricingEngine PricingEngine
 	server        *http.Server
-	walletServer  *wallet.Handler
+	walletServer  *wallets.Handler
 }
 
 // NewService creates a new service instance (with optional mocks for test purposes).
-func NewService(config config.Config, pe PricingEngine, ws *wallet.Handler) (s *Service, err error) {
+func NewService(config config.Config, pe PricingEngine, ws *wallets.Handler) (s *Service, err error) {
 	if pe == nil {
 		pe = pricing.NewEngine(*config.Pricing)
 	}
@@ -80,11 +81,15 @@ func NewService(config config.Config, pe PricingEngine, ws *wallet.Handler) (s *
 		if err = ensureDir(walletsDir); err != nil {
 			return
 		}
-		stor, err := store.NewStore(config.Wallet.RootPath)
+		// path := paths.CustomPaths{
+		// 	CustomHome: config.Wallet.RootPath,
+		// }
+		// ConfigPath(filepath.Join(ConsoleConfigHome.String(), "config.toml"))
+		stor, err := store.InitialiseStore(config.Wallet.RootPath)
 		if err != nil {
 			return nil, err
 		}
-		ws = wallet.NewHandler(stor)
+		ws = wallets.NewHandler(stor)
 	}
 	s = &Service{
 		Router: httprouter.New(),
