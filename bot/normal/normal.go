@@ -25,6 +25,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// CoreService implements the gRPC service of the same name.
 type CoreService interface {
 	SubmitTransaction(req *vegaapipb.SubmitTransactionRequest) (response *vegaapipb.SubmitTransactionResponse, err error)
 	// rpc PropagateChainEvent(PropagateChainEventRequest) returns (PropagateChainEventResponse);
@@ -34,6 +35,7 @@ type CoreService interface {
 	ObserveEventBus() (client vegaapipb.CoreService_ObserveEventBusClient, err error)
 }
 
+// CoreStateService implements the gRPC service of the same name.
 type CoreStateService interface {
 	// Avoid using this. Use something from DataNode instead
 
@@ -51,7 +53,6 @@ type CoreStateService interface {
 }
 
 // TradingDataService implements the gRPC service of the same name.
-//go:generate go run github.com/golang/mock/mockgen -destination mocks/tradingdataservice_mock.go -package mocks code.vegaprotocol.io/liqbot/bot/normal TradingDataService
 type TradingDataService interface {
 	// rpc MarketAccounts(MarketAccountsRequest) returns (MarketAccountsResponse);
 	// rpc PartyAccounts(PartyAccountsRequest) returns (PartyAccountsResponse);
@@ -129,19 +130,16 @@ type TradingDataService interface {
 }
 
 // CoreNode is a Vega Core node
-//go:generate go run github.com/golang/mock/mockgen -destination mocks/corenode_mock.go -package mocks code.vegaprotocol.io/liqbot/bot/normal CoreNode
-type CoreNode interface {
-	GetAddress() (url.URL, error)
-
-	CoreService
-	CoreStateService
-}
+// type CoreNode interface {
+// 	GetAddress() (url.URL, error)
+// 	CoreService
+// 	CoreStateService
+// }
 
 // DataNode is a Vega Data node
 //go:generate go run github.com/golang/mock/mockgen -destination mocks/datanode_mock.go -package mocks code.vegaprotocol.io/liqbot/bot/normal DataNode
 type DataNode interface {
 	GetAddress() (url.URL, error)
-
 	CoreService
 	TradingDataService
 }
@@ -794,7 +792,7 @@ func (b *Bot) runPriceSteering() {
 					currentPrice = b.staticMidPrice
 				}
 
-				if err == nil && externalPrice.NEQUint64(0) {
+				if err == nil && currentPrice != nil && externalPrice != nil && externalPrice.NEQUint64(0) {
 					shouldMove := "no"
 					// We only want to steer the price if the external and market price
 					// are greater than a certain percentage apart
