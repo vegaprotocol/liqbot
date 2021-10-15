@@ -4,7 +4,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"code.vegaprotocol.io/vega/types/num"
+	"code.vegaprotocol.io/liqbot/types/num"
 	"github.com/stretchr/testify/assert"
 )
 
