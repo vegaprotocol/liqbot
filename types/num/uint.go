@@ -28,6 +28,7 @@ func NewUint(val uint64) *Uint {
 	return &Uint{*uint256.NewInt(val)}
 }
 
+// Zero ...
 func Zero() *Uint {
 	return zero.Clone()
 }
@@ -109,24 +110,29 @@ func Sum(vals ...*Uint) *Uint {
 	return NewUint(0).AddSum(vals...)
 }
 
+// Set ...
 func (u *Uint) Set(oth *Uint) *Uint {
 	u.u.Set(&oth.u)
 	return u
 }
 
+// SetUint64 ...
 func (u *Uint) SetUint64(val uint64) *Uint {
 	u.u.SetUint64(val)
 	return u
 }
 
+// Uint64 ...
 func (u Uint) Uint64() uint64 {
 	return u.u.Uint64()
 }
 
+// BigInt ...
 func (u Uint) BigInt() *big.Int {
 	return u.u.ToBig()
 }
 
+// Float64 ...
 func (u Uint) Float64() float64 {
 	d := DecimalFromUint(&u)
 	retVal, _ := d.Float64()
@@ -236,6 +242,7 @@ func (u *Uint) Mod(x, y *Uint) *Uint {
 	return u
 }
 
+// Exp ...
 func (u *Uint) Exp(x, y *Uint) *Uint {
 	u.u.Exp(&x.u, &y.u)
 	return u

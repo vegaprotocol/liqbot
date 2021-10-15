@@ -33,10 +33,10 @@ type Strategy struct {
 	// ExpectedMarkPrice (optional) specifies the expected mark price for a market that may not yet
 	// have a mark price. It is used to calculate margin cost of orders meeting liquidity
 	// requirement.
-	ExpectedMarkPrice config.ConfigUint
+	ExpectedMarkPrice config.Uint
 
 	// AuctionVolume ...
-	AuctionVolume config.ConfigUint
+	AuctionVolume config.Uint
 
 	// CommitmentFraction is the fractional amount of stake for the LP
 	CommitmentFraction float64
@@ -45,10 +45,10 @@ type Strategy struct {
 	Fee float64
 
 	// MaxLong specifies the maximum long position that the bot will tolerate.
-	MaxLong config.ConfigUint
+	MaxLong config.Uint
 
 	// MaxShort specifies the maximum short position that the bot will tolerate.
-	MaxShort config.ConfigUint
+	MaxShort config.Uint
 
 	// PosManagementFraction controls the size of market orders used to manage the bot's position.
 	PosManagementFraction float64

@@ -76,31 +76,8 @@ func (n *DataNode) SubmitTransaction(req *vegaapipb.SubmitTransactionRequest) (r
 }
 
 // rpc PropagateChainEvent(PropagateChainEventRequest) returns (PropagateChainEventResponse);
+// rpc Statistics(StatisticsRequest) returns (StatisticsResponse);
 
-func (n *DataNode) Statistics(req *vegaapipb.StatisticsRequest) (response *vegaapipb.StatisticsResponse, err error) {
-	msg := "gRPC call failed: Statistics: %w"
-	if n == nil {
-		err = fmt.Errorf(msg, e.ErrNil)
-		return
-	}
-
-	if n.conn.GetState() != connectivity.Ready {
-		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
-		return
-	}
-
-	c := vegaapipb.NewCoreServiceClient(n.conn)
-	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
-	defer cancel()
-
-	response, err = c.Statistics(ctx, req)
-	if err != nil {
-		err = fmt.Errorf(msg, helpers.ErrorDetail(err))
-	}
-	return
-}
-
-// rpc LastBlockHeight(LastBlockHeightRequest) returns (LastBlockHeightResponse);
 // LastBlockHeight gets the latest blockchain height (used for replay protection)
 func (n *DataNode) LastBlockHeight() (height uint64, err error) {
 	msg := "gRPC call failed: LastBlockHeight: %w"
@@ -157,6 +134,7 @@ func (n *DataNode) GetVegaTime() (t time.Time, err error) {
 	return
 }
 
+// ObserveEventBus opens a stream.
 func (n *DataNode) ObserveEventBus() (client vegaapipb.CoreService_ObserveEventBusClient, err error) {
 	msg := "gRPC call failed: ObserveEventBus: %w"
 	if n == nil {
@@ -185,6 +163,7 @@ func (n *DataNode) ObserveEventBus() (client vegaapipb.CoreService_ObserveEventB
 
 // rpc MarketAccounts(MarketAccountsRequest) returns (MarketAccountsResponse);
 
+// PartyAccounts returns accounts for the given party.
 func (n *DataNode) PartyAccounts(req *dataapipb.PartyAccountsRequest) (response *dataapipb.PartyAccountsResponse, err error) {
 	msg := "gRPC call failed (data-node): PartyAccounts: %w"
 	if n == nil {
@@ -212,6 +191,7 @@ func (n *DataNode) PartyAccounts(req *dataapipb.PartyAccountsRequest) (response 
 // rpc GlobalRewardPoolAccounts(GlobalRewardPoolAccountsRequest) returns (GlobalRewardPoolAccountsResponse);
 // rpc Candles(CandlesRequest) returns (CandlesResponse);
 
+// MarketDataByID returns market data for the specified market.
 func (n *DataNode) MarketDataByID(req *dataapipb.MarketDataByIDRequest) (response *dataapipb.MarketDataByIDResponse, err error) {
 	msg := "gRPC call failed (data-node): MarketDataByID: %w"
 	if n == nil {
@@ -239,6 +219,7 @@ func (n *DataNode) MarketDataByID(req *dataapipb.MarketDataByIDRequest) (respons
 // rpc MarketByID(MarketByIDRequest) returns (MarketByIDResponse);
 // rpc MarketDepth(MarketDepthRequest) returns (MarketDepthResponse);
 
+// Markets returns all markets.
 func (n *DataNode) Markets(req *dataapipb.MarketsRequest) (response *dataapipb.MarketsResponse, err error) {
 	msg := "gRPC call failed (data-node): Markets: %w"
 	if n == nil {
@@ -272,6 +253,7 @@ func (n *DataNode) Markets(req *dataapipb.MarketsRequest) (response *dataapipb.M
 // rpc Parties(PartiesRequest) returns (PartiesResponse);
 // rpc PartyByID(PartyByIDRequest) returns (PartyByIDResponse);
 
+// PositionsByParty returns positions for the given party.
 func (n *DataNode) PositionsByParty(req *dataapipb.PositionsByPartyRequest) (response *dataapipb.PositionsByPartyResponse, err error) {
 	msg := "gRPC call failed (data-node): PositionsByParty: %w"
 	if n == nil {
@@ -326,6 +308,7 @@ func (n *DataNode) PositionsByParty(req *dataapipb.PositionsByPartyRequest) (res
 // rpc MarketsDataSubscribe(MarketsDataSubscribeRequest) returns (stream MarketsDataSubscribeResponse);
 // rpc OrdersSubscribe(OrdersSubscribeRequest) returns (stream OrdersSubscribeResponse);
 
+// PositionsSubscribe opens a stream.
 func (n *DataNode) PositionsSubscribe(req *dataapipb.PositionsSubscribeRequest) (client dataapipb.TradingDataService_PositionsSubscribeClient, err error) {
 	msg := "gRPC call failed: PositionsSubscribe: %w"
 	if n == nil {
@@ -352,6 +335,7 @@ func (n *DataNode) PositionsSubscribe(req *dataapipb.PositionsSubscribeRequest) 
 // rpc TransferResponsesSubscribe(TransferResponsesSubscribeRequest) returns (stream TransferResponsesSubscribeResponse);
 // rpc GetNodeSignaturesAggregate(GetNodeSignaturesAggregateRequest) returns (GetNodeSignaturesAggregateResponse);
 
+// AssetByID returns the specified asset.
 func (n *DataNode) AssetByID(req *dataapipb.AssetByIDRequest) (response *dataapipb.AssetByIDResponse, err error) {
 	msg := "gRPC call failed (data-node): AssetByID: %w"
 	if n == nil {

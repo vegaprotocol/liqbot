@@ -77,7 +77,7 @@ func (b *Bot) getAccount(typ vega.AccountType) (*num.Uint, error) {
 		return num.Zero(), nil
 	}
 	if len(response.Accounts) > 1 {
-		return nil, errors.New(fmt.Sprintf("too many accounts for party: %d", len(response.Accounts)))
+		return nil, fmt.Errorf("too many accounts for party: %d", len(response.Accounts))
 	}
 
 	return convertUint256(response.Accounts[0].Balance)

@@ -56,10 +56,10 @@ type BotConfig struct {
 
 // Strategy describes parameters for the bot's strategy.
 type Strategy struct {
-	ExpectedMarkPrice ConfigUint `yaml:"expectedMarkPrice"`
-	AuctionVolume     ConfigUint `yaml:"auctionVolume"`
-	MaxLong           ConfigUint `yaml:"maxLong"`
-	MaxShort          ConfigUint `yaml:"maxShort"`
+	ExpectedMarkPrice Uint `yaml:"expectedMarkPrice"`
+	AuctionVolume     Uint `yaml:"auctionVolume"`
+	MaxLong           Uint `yaml:"maxLong"`
+	MaxShort          Uint `yaml:"maxShort"`
 
 	PosManagementFraction float64 `yaml:"posManagementFraction"`
 	StakeFraction         float64 `yaml:"stakeFraction"`

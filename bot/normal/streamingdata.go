@@ -84,8 +84,8 @@ func (b *Bot) processEventBusData(stream vegaapipb.CoreService_ObserveEventBusCl
 				}
 				switch acct.Type {
 				case vega.AccountType_ACCOUNT_TYPE_GENERAL:
-					bal, err_or_overflow := num.UintFromString(acct.Balance, 10)
-					if err_or_overflow {
+					bal, errOrOverflow := num.UintFromString(acct.Balance, 10)
+					if errOrOverflow {
 						b.log.WithFields(log.Fields{
 							"generalAccountBalance": acct.Balance,
 						}).Warning("processEventBusData: failed to unmarshal uint256: error or overflow")
@@ -93,8 +93,8 @@ func (b *Bot) processEventBusData(stream vegaapipb.CoreService_ObserveEventBusCl
 						b.balanceGeneral = bal
 					}
 				case vega.AccountType_ACCOUNT_TYPE_MARGIN:
-					bal, err_or_overflow := num.UintFromString(acct.Balance, 10)
-					if err_or_overflow {
+					bal, errOrOverflow := num.UintFromString(acct.Balance, 10)
+					if errOrOverflow {
 						b.log.WithFields(log.Fields{
 							"marginAccountBalance": acct.Balance,
 						}).Warning("processEventBusData: failed to unmarshal uint256: error or overflow")
@@ -102,8 +102,8 @@ func (b *Bot) processEventBusData(stream vegaapipb.CoreService_ObserveEventBusCl
 						b.balanceMargin = bal
 					}
 				case vega.AccountType_ACCOUNT_TYPE_BOND:
-					bal, err_or_overflow := num.UintFromString(acct.Balance, 10)
-					if err_or_overflow {
+					bal, errOrOverflow := num.UintFromString(acct.Balance, 10)
+					if errOrOverflow {
 						b.log.WithFields(log.Fields{
 							"bondAccountBalance": acct.Balance,
 						}).Warning("processEventBusData: failed to unmarshal uint256: error or overflow")
@@ -113,8 +113,8 @@ func (b *Bot) processEventBusData(stream vegaapipb.CoreService_ObserveEventBusCl
 				}
 			case eventspb.BusEventType_BUS_EVENT_TYPE_MARKET_DATA:
 				b.marketData = event.GetMarketData()
-				markPrice, err_or_overflow := num.UintFromString(b.marketData.MarkPrice, 10)
-				if err_or_overflow {
+				markPrice, errOrOverflow := num.UintFromString(b.marketData.MarkPrice, 10)
+				if errOrOverflow {
 					b.log.WithFields(log.Fields{
 						"markPrice": b.marketData.MarkPrice,
 					}).Warning("processEventBusData: failed to unmarshal uint256: error or overflow")

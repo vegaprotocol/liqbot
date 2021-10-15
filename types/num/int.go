@@ -8,6 +8,7 @@ type Int struct {
 	s bool
 }
 
+// IntFromUint ...
 func IntFromUint(u *Uint, s bool) *Int {
 	copy := &Int{s: s,
 		U: u.Clone()}
@@ -79,6 +80,7 @@ func (i Int) LT(o *Int) bool {
 	return o.IsPositive()
 }
 
+// Int64 ...
 func (i Int) Int64() int64 {
 	val := int64(i.U.Uint64())
 	if i.IsNegative() {
