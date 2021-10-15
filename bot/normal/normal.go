@@ -613,8 +613,10 @@ func (b *Bot) placeAuctionOrders() {
 	for totalVolume.LT(b.config.StrategyDetails.AuctionVolume.Get()) {
 		remaining := num.Zero().Sub(b.config.StrategyDetails.AuctionVolume.Get(), totalVolume)
 		size := num.Min(num.UintChain(b.config.StrategyDetails.AuctionVolume.Get()).Div(num.NewUint(10)).Add(num.NewUint(1)).Get(), remaining)
+		// #nosec G404
 		price := num.Zero().Add(b.currentPrice, num.NewUint(uint64(rand.Int63n(100)-50)))
 		side := vega.Side_SIDE_BUY
+		// #nosec G404
 		if rand.Intn(2) == 0 {
 			side = vega.Side_SIDE_SELL
 		}
