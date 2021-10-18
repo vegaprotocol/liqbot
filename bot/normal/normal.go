@@ -794,12 +794,20 @@ func (b *Bot) runPriceSteering() {
 					currentPrice = b.staticMidPrice
 				}
 
-				if err == nil && currentPrice != nil && externalPrice != nil && externalPrice.NEQUint64(0) {
+				if err == nil && currentPrice != nil && externalPrice != nil && !externalPrice.IsZero() {
 					shouldMove := "no"
 					// We only want to steer the price if the external and market price
 					// are greater than a certain percentage apart
-					currentDiff := math.Abs((currentPrice.Float64() - externalPrice.Float64()) / externalPrice.Float64())
-					if currentDiff > b.strategy.MinPriceSteerFraction {
+					var currentDiff *num.Uint
+
+					// currentDiff = 100 * Abs(currentPrice - externalPrice) / externalPrice
+					if currentPrice.GT(externalPrice) {
+						currentDiff = num.Zero().Sub(currentPrice, externalPrice)
+					} else {
+						currentDiff = num.Zero().Sub(externalPrice, currentPrice)
+					}
+					currentDiff = num.UintChain(currentDiff).Mul(num.NewUint(100)).Div(externalPrice).Get()
+					if currentDiff.GT(num.NewUint(uint64(100.0 * b.strategy.MinPriceSteerFraction))) {
 						var side vega.Side
 						if externalPrice.GT(currentPrice) {
 							side = vega.Side_SIDE_BUY
