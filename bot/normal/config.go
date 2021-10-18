@@ -1,21 +1,21 @@
 package normal
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 
 	"code.vegaprotocol.io/liqbot/config"
-	"github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto"
 
+	"code.vegaprotocol.io/protos/vega"
 	"github.com/hashicorp/go-multierror"
-	"github.com/pkg/errors"
 )
 
 // ShapeConfig is the top level definition of a liquidity shape
 type ShapeConfig struct {
-	Sells []*proto.LiquidityOrder
-	Buys  []*proto.LiquidityOrder
+	Sells []*vega.LiquidityOrder
+	Buys  []*vega.LiquidityOrder
 }
 
 // LODParamsConfig is a little data structure which sets the algo and params for how limits
@@ -33,10 +33,10 @@ type Strategy struct {
 	// ExpectedMarkPrice (optional) specifies the expected mark price for a market that may not yet
 	// have a mark price. It is used to calculate margin cost of orders meeting liquidity
 	// requirement.
-	ExpectedMarkPrice uint64
+	ExpectedMarkPrice config.Uint
 
 	// AuctionVolume ...
-	AuctionVolume uint64
+	AuctionVolume config.Uint
 
 	// CommitmentFraction is the fractional amount of stake for the LP
 	CommitmentFraction float64
@@ -45,10 +45,10 @@ type Strategy struct {
 	Fee float64
 
 	// MaxLong specifies the maximum long position that the bot will tolerate.
-	MaxLong uint64
+	MaxLong config.Uint
 
 	// MaxShort specifies the maximum short position that the bot will tolerate.
-	MaxShort uint64
+	MaxShort config.Uint
 
 	// PosManagementFraction controls the size of market orders used to manage the bot's position.
 	PosManagementFraction float64
@@ -90,17 +90,17 @@ type Strategy struct {
 	TargetLNVol float64
 }
 
-func refStringToEnum(reference string) proto.PeggedReference {
+func refStringToEnum(reference string) vega.PeggedReference {
 	reference = strings.ToUpper(reference)
 	switch reference {
 	case "ASK":
-		return proto.PeggedReference_PEGGED_REFERENCE_BEST_ASK
+		return vega.PeggedReference_PEGGED_REFERENCE_BEST_ASK
 	case "BID":
-		return proto.PeggedReference_PEGGED_REFERENCE_BEST_BID
+		return vega.PeggedReference_PEGGED_REFERENCE_BEST_BID
 	case "MID":
-		return proto.PeggedReference_PEGGED_REFERENCE_MID
+		return vega.PeggedReference_PEGGED_REFERENCE_MID
 	default:
-		return proto.PeggedReference_PEGGED_REFERENCE_UNSPECIFIED
+		return vega.PeggedReference_PEGGED_REFERENCE_UNSPECIFIED
 	}
 }
 
@@ -128,7 +128,7 @@ func steeringMethodToEnum(method string) (SteeringMethod, error) {
 
 func validateStrategyConfig(details config.Strategy) (s *Strategy, err error) {
 	s = &Strategy{}
-	errInvalid := "invalid strategy config for %s"
+	errInvalid := "invalid strategy config for %s: %w"
 
 	var errs *multierror.Error
 
@@ -143,23 +143,23 @@ func validateStrategyConfig(details config.Strategy) (s *Strategy, err error) {
 	s.Fee, _ = strconv.ParseFloat(details.Fee, 64)
 
 	var shorteningShape *ShapeConfig = &ShapeConfig{
-		Sells: []*proto.LiquidityOrder{},
-		Buys:  []*proto.LiquidityOrder{},
+		Sells: []*vega.LiquidityOrder{},
+		Buys:  []*vega.LiquidityOrder{},
 	}
 
 	var longeningShape *ShapeConfig = &ShapeConfig{
-		Sells: []*proto.LiquidityOrder{},
-		Buys:  []*proto.LiquidityOrder{},
+		Sells: []*vega.LiquidityOrder{},
+		Buys:  []*vega.LiquidityOrder{},
 	}
 
 	for _, buy := range details.ShorteningShape.Buys {
-		shorteningShape.Buys = append(shorteningShape.Buys, &proto.LiquidityOrder{Reference: refStringToEnum(buy.Reference),
+		shorteningShape.Buys = append(shorteningShape.Buys, &vega.LiquidityOrder{Reference: refStringToEnum(buy.Reference),
 			Proportion: buy.Proportion,
 			Offset:     buy.Offset,
 		})
 	}
 	for _, sell := range details.ShorteningShape.Sells {
-		shorteningShape.Sells = append(shorteningShape.Sells, &proto.LiquidityOrder{Reference: refStringToEnum(sell.Reference),
+		shorteningShape.Sells = append(shorteningShape.Sells, &vega.LiquidityOrder{Reference: refStringToEnum(sell.Reference),
 			Proportion: sell.Proportion,
 			Offset:     sell.Offset,
 		})
@@ -167,13 +167,13 @@ func validateStrategyConfig(details config.Strategy) (s *Strategy, err error) {
 	s.ShorteningShape = shorteningShape
 
 	for _, buy := range details.LongeningShape.Buys {
-		longeningShape.Buys = append(longeningShape.Buys, &proto.LiquidityOrder{Reference: refStringToEnum(buy.Reference),
+		longeningShape.Buys = append(longeningShape.Buys, &vega.LiquidityOrder{Reference: refStringToEnum(buy.Reference),
 			Proportion: buy.Proportion,
 			Offset:     buy.Offset,
 		})
 	}
 	for _, sell := range details.LongeningShape.Sells {
-		longeningShape.Sells = append(longeningShape.Sells, &proto.LiquidityOrder{Reference: refStringToEnum(sell.Reference),
+		longeningShape.Sells = append(longeningShape.Sells, &vega.LiquidityOrder{Reference: refStringToEnum(sell.Reference),
 			Proportion: sell.Proportion,
 			Offset:     sell.Offset,
 		})
@@ -182,14 +182,14 @@ func validateStrategyConfig(details config.Strategy) (s *Strategy, err error) {
 
 	s.PosManagementSleepMilliseconds = uint64(details.PosManagementSleepMilliseconds)
 	if s.PosManagementSleepMilliseconds < 100 {
-		errs = multierror.Append(errs, errors.Wrap(fmt.Errorf("must be >=100"), fmt.Sprintf(errInvalid, "PosManagementSleepMilliseconds")))
+		errs = multierror.Append(errs, fmt.Errorf(errInvalid, "PosManagementSleepMilliseconds", errors.New("must be >=100")))
 	}
 
 	s.MarketPriceSteeringRatePerSecond = details.MarketPriceSteeringRatePerSecond
 	if s.MarketPriceSteeringRatePerSecond <= 0.0 {
-		errs = multierror.Append(errs, errors.Wrap(fmt.Errorf("must be >0"), fmt.Sprintf(errInvalid, "MarketPriceSteeringRatePerSecond")))
+		errs = multierror.Append(errs, fmt.Errorf(errInvalid, "MarketPriceSteeringRatePerSecond", errors.New("must be >0")))
 	} else if s.MarketPriceSteeringRatePerSecond > 10.0 {
-		errs = multierror.Append(errs, errors.Wrap(fmt.Errorf("must be <=10"), fmt.Sprintf(errInvalid, "MarketPriceSteeringRatePerSecond")))
+		errs = multierror.Append(errs, fmt.Errorf(errInvalid, "MarketPriceSteeringRatePerSecond", errors.New("must be <=10")))
 	}
 
 	s.PriceSteerOrderScale = details.PriceSteerOrderScale

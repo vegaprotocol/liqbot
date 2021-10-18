@@ -1,15 +1,15 @@
 package bot
 
 import (
+	"errors"
 	"fmt"
 
 	"code.vegaprotocol.io/liqbot/bot/normal"
 	"code.vegaprotocol.io/liqbot/config"
 
-	"code.vegaprotocol.io/go-wallet/wallet"
+	"code.vegaprotocol.io/go-wallet/wallets"
 	ppconfig "code.vegaprotocol.io/priceproxy/config"
 	ppservice "code.vegaprotocol.io/priceproxy/service"
-	"github.com/pkg/errors"
 )
 
 // Bot is the generic bot interface.
@@ -27,7 +27,7 @@ type PricingEngine interface {
 }
 
 // New returns a new Bot instance.
-func New(config config.BotConfig, pe PricingEngine, ws *wallet.Handler) (b Bot, err error) {
+func New(config config.BotConfig, pe PricingEngine, ws *wallets.Handler) (b Bot, err error) {
 	switch config.Strategy {
 	case "normal":
 		b, err = normal.New(config, pe, ws)
@@ -35,9 +35,7 @@ func New(config config.BotConfig, pe PricingEngine, ws *wallet.Handler) (b Bot, 
 		err = errors.New("unrecognised bot strategy")
 	}
 	if err != nil {
-		err = errors.Wrap(err, fmt.Sprintf("failed to create new bot with strategy %s", config.Strategy))
-		return
+		err = fmt.Errorf("failed to create new bot with strategy %s: %w", config.Strategy, err)
 	}
-
 	return
 }

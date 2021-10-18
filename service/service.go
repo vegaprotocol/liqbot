@@ -15,14 +15,13 @@ import (
 	"code.vegaprotocol.io/liqbot/config"
 	"code.vegaprotocol.io/liqbot/pricing"
 
-	storev1 "code.vegaprotocol.io/go-wallet/store/v1"
-	"code.vegaprotocol.io/go-wallet/wallet"
+	store "code.vegaprotocol.io/go-wallet/wallet/store/v1"
+	"code.vegaprotocol.io/go-wallet/wallets"
 	ppconfig "code.vegaprotocol.io/priceproxy/config"
 	ppservice "code.vegaprotocol.io/priceproxy/service"
+	// "code.vegaprotocol.io/shared/paths"
 	"github.com/julienschmidt/httprouter"
-	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
-	// "go.uber.org/zap"
 )
 
 // Bot is the generic bot interface.
@@ -60,11 +59,11 @@ type Service struct {
 
 	pricingEngine PricingEngine
 	server        *http.Server
-	walletServer  *wallet.Handler
+	walletServer  *wallets.Handler
 }
 
 // NewService creates a new service instance (with optional mocks for test purposes).
-func NewService(config config.Config, pe PricingEngine, ws *wallet.Handler) (s *Service, err error) {
+func NewService(config config.Config, pe PricingEngine, ws *wallets.Handler) (s *Service, err error) {
 	if pe == nil {
 		pe = pricing.NewEngine(*config.Pricing)
 	}
@@ -80,11 +79,15 @@ func NewService(config config.Config, pe PricingEngine, ws *wallet.Handler) (s *
 		if err = ensureDir(walletsDir); err != nil {
 			return
 		}
-		store, err := storev1.NewStore(config.Wallet.RootPath)
+		// path := paths.CustomPaths{
+		// 	CustomHome: config.Wallet.RootPath,
+		// }
+		// ConfigPath(filepath.Join(ConsoleConfigHome.String(), "config.toml"))
+		stor, err := store.InitialiseStore(config.Wallet.RootPath)
 		if err != nil {
 			return nil, err
 		}
-		ws = wallet.NewHandler(store)
+		ws = wallets.NewHandler(stor)
 	}
 	s = &Service{
 		Router: httprouter.New(),
@@ -155,7 +158,7 @@ func (s *Service) initBots() error {
 	for _, botcfg := range s.config.Bots {
 		b, err := bot.New(botcfg, s.pricingEngine, s.walletServer)
 		if err != nil {
-			return errors.Wrap(err, fmt.Sprintf("failed to create bot %s", botcfg.Name))
+			return fmt.Errorf("failed to create bot %s: %w", botcfg.Name, err)
 		}
 		s.bots[botcfg.Name] = b
 		log.WithFields(log.Fields{

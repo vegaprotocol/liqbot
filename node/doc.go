@@ -1,3 +1,2 @@
-// Package node contains functionality for submitting orders to nodes. This is
-// done with the use of independent traders who run in their own goroutine.
+// Package node contains functionality for interacting with Vega data nodes.
 package node

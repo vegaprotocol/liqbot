@@ -1,13 +1,16 @@
 package normal
 
 import (
+	"fmt"
 	"io"
 
-	"github.com/pkg/errors"
+	"code.vegaprotocol.io/liqbot/types/num"
+
+	dataapipb "code.vegaprotocol.io/protos/data-node/api/v1"
+	"code.vegaprotocol.io/protos/vega"
+	vegaapipb "code.vegaprotocol.io/protos/vega/api/v1"
+	eventspb "code.vegaprotocol.io/protos/vega/events/v1"
 	log "github.com/sirupsen/logrus"
-	"github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto"
-	"github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto/api"
-	eventspb "github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto/events/v1"
 )
 
 // Subscribe to all the events that we need to keep the bot happy
@@ -16,7 +19,7 @@ import (
 // * Market Data
 func (b *Bot) subscribeToEvents() error {
 	// Party related events
-	eventBusDataReq := &api.ObserveEventBusRequest{
+	eventBusDataReq := &dataapipb.ObserveEventBusRequest{
 		Type: []eventspb.BusEventType{
 			eventspb.BusEventType_BUS_EVENT_TYPE_ACCOUNT,
 		},
@@ -25,18 +28,18 @@ func (b *Bot) subscribeToEvents() error {
 	// First we have to create the stream
 	stream, err := b.node.ObserveEventBus()
 	if err != nil {
-		return errors.Wrap(err, "Failed to subscribe to event bus data")
+		return fmt.Errorf("Failed to subscribe to event bus data: %w", err)
 	}
 
 	// Then we subscribe to the data
 	err = stream.SendMsg(eventBusDataReq)
 	if err != nil {
-		return errors.Wrap(err, "Unable to send event bus request on the stream")
+		return fmt.Errorf("Unable to send event bus request on the stream: %w", err)
 	}
 	go b.processEventBusData(stream)
 
 	// Market related events
-	eventBusDataReq2 := &api.ObserveEventBusRequest{
+	eventBusDataReq2 := &vegaapipb.ObserveEventBusRequest{
 		Type: []eventspb.BusEventType{
 			eventspb.BusEventType_BUS_EVENT_TYPE_MARKET_DATA,
 		},
@@ -44,28 +47,30 @@ func (b *Bot) subscribeToEvents() error {
 	}
 	stream2, err := b.node.ObserveEventBus()
 	if err != nil {
-		return errors.Wrap(err, "Failed to subscribe to event bus data: ")
+		return fmt.Errorf("Failed to subscribe to event bus data: : %w", err)
 	}
 
 	// Then we subscribe to the data
 	err = stream2.SendMsg(eventBusDataReq2)
 	if err != nil {
-		return errors.Wrap(err, "Unable to send event bus request on the stream")
+		return fmt.Errorf("Unable to send event bus request on the stream: %w", err)
 	}
 	b.eventStreamLive = true
 	go b.processEventBusData(stream2)
 	return nil
 }
 
-func (b *Bot) processEventBusData(stream api.TradingDataService_ObserveEventBusClient) {
+func (b *Bot) processEventBusData(stream vegaapipb.CoreService_ObserveEventBusClient) {
 	for {
 		eb, err := stream.Recv()
 		if err == io.EOF {
-			log.Warning("event bus data: stream closed by server err:", err)
+			b.log.Warning("event bus data: stream closed by server (EOF)")
 			break
 		}
 		if err != nil {
-			log.Warning("event bus data: stream closed err:", err)
+			b.log.WithFields(log.Fields{
+				"error": err,
+			}).Warning("event bus data: stream closed")
 			break
 		}
 
@@ -78,16 +83,54 @@ func (b *Bot) processEventBusData(stream api.TradingDataService_ObserveEventBusC
 					continue
 				}
 				switch acct.Type {
-				case proto.AccountType_ACCOUNT_TYPE_GENERAL:
-					b.balanceGeneral = acct.Balance
-				case proto.AccountType_ACCOUNT_TYPE_MARGIN:
-					b.balanceMargin = acct.Balance
-				case proto.AccountType_ACCOUNT_TYPE_BOND:
-					b.balanceBond = acct.Balance
+				case vega.AccountType_ACCOUNT_TYPE_GENERAL:
+					bal, errOrOverflow := num.UintFromString(acct.Balance, 10)
+					if errOrOverflow {
+						b.log.WithFields(log.Fields{
+							"generalAccountBalance": acct.Balance,
+						}).Warning("processEventBusData: failed to unmarshal uint256: error or overflow")
+					} else {
+						b.balanceGeneral = bal
+					}
+				case vega.AccountType_ACCOUNT_TYPE_MARGIN:
+					bal, errOrOverflow := num.UintFromString(acct.Balance, 10)
+					if errOrOverflow {
+						b.log.WithFields(log.Fields{
+							"marginAccountBalance": acct.Balance,
+						}).Warning("processEventBusData: failed to unmarshal uint256: error or overflow")
+					} else {
+						b.balanceMargin = bal
+					}
+				case vega.AccountType_ACCOUNT_TYPE_BOND:
+					bal, errOrOverflow := num.UintFromString(acct.Balance, 10)
+					if errOrOverflow {
+						b.log.WithFields(log.Fields{
+							"bondAccountBalance": acct.Balance,
+						}).Warning("processEventBusData: failed to unmarshal uint256: error or overflow")
+					} else {
+						b.balanceBond = bal
+					}
 				}
 			case eventspb.BusEventType_BUS_EVENT_TYPE_MARKET_DATA:
 				b.marketData = event.GetMarketData()
-				b.currentPrice = b.marketData.MarkPrice
+				markPrice, errOrOverflow := num.UintFromString(b.marketData.MarkPrice, 10)
+				if errOrOverflow {
+					b.log.WithFields(log.Fields{
+						"markPrice": b.marketData.MarkPrice,
+					}).Warning("processEventBusData: failed to unmarshal uint256: error or overflow")
+				} else {
+					b.currentPrice = markPrice
+				}
+
+				staticMidPrice := num.Zero()
+				staticMidPrice, err = convertUint256(b.marketData.StaticMidPrice)
+				if err != nil {
+					b.log.WithFields(log.Fields{
+						"staticMidPrice": b.marketData.StaticMidPrice,
+					}).Warning("processEventBusData: failed to unmarshal uint256: error or overflow")
+				} else {
+					b.staticMidPrice = staticMidPrice
+				}
 			}
 		}
 	}
@@ -96,13 +139,13 @@ func (b *Bot) processEventBusData(stream api.TradingDataService_ObserveEventBusC
 }
 
 func (b *Bot) subscribePositions() error {
-	req := &api.PositionsSubscribeRequest{
+	req := &dataapipb.PositionsSubscribeRequest{
 		MarketId: b.market.Id,
 		PartyId:  b.walletPubKey,
 	}
 	stream, err := b.node.PositionsSubscribe(req)
 	if err != nil {
-		return errors.Wrap(err, "Failed to subscribe to positions")
+		return fmt.Errorf("Failed to subscribe to positions: %w", err)
 	}
 
 	// Run in background and process messages
@@ -111,7 +154,7 @@ func (b *Bot) subscribePositions() error {
 	return nil
 }
 
-func (b *Bot) processPositions(stream api.TradingDataService_PositionsSubscribeClient) {
+func (b *Bot) processPositions(stream dataapipb.TradingDataService_PositionsSubscribeClient) {
 	for {
 		o, err := stream.Recv()
 		if err == io.EOF {

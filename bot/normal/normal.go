@@ -1,6 +1,7 @@
 package normal
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"math/rand"
@@ -10,40 +11,137 @@ import (
 
 	"code.vegaprotocol.io/liqbot/config"
 	"code.vegaprotocol.io/liqbot/node"
+	"code.vegaprotocol.io/liqbot/types/num"
 
 	"code.vegaprotocol.io/go-wallet/wallet"
+	"code.vegaprotocol.io/go-wallet/wallets"
 	ppconfig "code.vegaprotocol.io/priceproxy/config"
 	ppservice "code.vegaprotocol.io/priceproxy/service"
-	"github.com/pkg/errors"
+	dataapipb "code.vegaprotocol.io/protos/data-node/api/v1"
+	"code.vegaprotocol.io/protos/vega"
+	vegaapipb "code.vegaprotocol.io/protos/vega/api/v1"
+	commandspb "code.vegaprotocol.io/protos/vega/commands/v1"
+	walletpb "code.vegaprotocol.io/protos/vega/wallet/v1"
 	log "github.com/sirupsen/logrus"
-	"github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto"
-	"github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto/api"
-	commandspb "github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto/commands/v1"
-	walletpb "github.com/vegaprotocol/api/grpc/clients/go/generated/code.vegaprotocol.io/vega/proto/wallet/v1"
 )
 
-// Node is a Vega gRPC node
-//go:generate go run github.com/golang/mock/mockgen -destination mocks/node_mock.go -package mocks code.vegaprotocol.io/liqbot/bot/normal Node
-type Node interface {
+// CoreService implements the gRPC service of the same name.
+type CoreService interface {
+	SubmitTransaction(req *vegaapipb.SubmitTransactionRequest) (response *vegaapipb.SubmitTransactionResponse, err error)
+	// rpc PropagateChainEvent(PropagateChainEventRequest) returns (PropagateChainEventResponse);
+	// rpc Statistics(StatisticsRequest) returns (StatisticsResponse);
+	LastBlockHeight() (height uint64, err error)
+	GetVegaTime() (t time.Time, err error)
+	ObserveEventBus() (client vegaapipb.CoreService_ObserveEventBusClient, err error)
+}
+
+// CoreStateService implements the gRPC service of the same name.
+type CoreStateService interface {
+	// Avoid using this. Use something from DataNode instead
+
+	// rpc ListAccounts(ListAccountsRequest) returns (ListAccountsResponse);
+	// ListAssets(req *vegaapipb.ListAssetsRequest) (response *vegaapipb.ListAssetsResponse, err error)
+	// rpc ListNetworkParameters(ListNetworkParametersRequest) returns (ListNetworkParametersResponse);
+	// rpc ListParties(ListPartiesRequest) returns (ListPartiesResponse);
+	// rpc ListValidators(ListValidatorsRequest) returns (ListValidatorsResponse);
+	// ListMarkets(req *vegaapipb.ListMarketsRequest) (response *vegaapipb.ListMarketsResponse, err error)
+	// rpc ListProposals(ListProposalsRequest) returns (ListProposalsResponse);
+	// rpc ListMarketsData(ListMarketsDataRequest) returns (ListMarketsDataResponse);
+	// rpc ListVotes(ListVotesRequest) returns (ListVotesResponse);
+	// rpc ListPartiesStake(ListPartiesStakeRequest) returns (ListPartiesStakeResponse);
+	// rpc ListDelegations(ListDelegationsRequest) returns (ListDelegationsResponse);
+}
+
+// TradingDataService implements the gRPC service of the same name.
+type TradingDataService interface {
+	// rpc MarketAccounts(MarketAccountsRequest) returns (MarketAccountsResponse);
+	// rpc PartyAccounts(PartyAccountsRequest) returns (PartyAccountsResponse);
+	PartyAccounts(req *dataapipb.PartyAccountsRequest) (response *dataapipb.PartyAccountsResponse, err error)
+	// rpc FeeInfrastructureAccounts(FeeInfrastructureAccountsRequest) returns (FeeInfrastructureAccountsResponse);
+	// rpc GlobalRewardPoolAccounts(GlobalRewardPoolAccountsRequest) returns (GlobalRewardPoolAccountsResponse);
+	// rpc Candles(CandlesRequest) returns (CandlesResponse);
+	MarketDataByID(req *dataapipb.MarketDataByIDRequest) (response *dataapipb.MarketDataByIDResponse, err error)
+	// rpc MarketsData(MarketsDataRequest) returns (MarketsDataResponse);
+	// rpc MarketByID(MarketByIDRequest) returns (MarketByIDResponse);
+	// rpc MarketDepth(MarketDepthRequest) returns (MarketDepthResponse);
+	Markets(req *dataapipb.MarketsRequest) (response *dataapipb.MarketsResponse, err error)
+	// rpc OrderByMarketAndID(OrderByMarketAndIDRequest) returns (OrderByMarketAndIDResponse);
+	// rpc OrderByReference(OrderByReferenceRequest) returns (OrderByReferenceResponse);
+	// rpc OrdersByMarket(OrdersByMarketRequest) returns (OrdersByMarketResponse);
+	// rpc OrdersByParty(OrdersByPartyRequest) returns (OrdersByPartyResponse);
+	// rpc OrderByID(OrderByIDRequest) returns (OrderByIDResponse);
+	// rpc OrderVersionsByID(OrderVersionsByIDRequest) returns (OrderVersionsByIDResponse);
+	// rpc MarginLevels(MarginLevelsRequest) returns (MarginLevelsResponse);
+	// rpc Parties(PartiesRequest) returns (PartiesResponse);
+	// rpc PartyByID(PartyByIDRequest) returns (PartyByIDResponse);
+	PositionsByParty(req *dataapipb.PositionsByPartyRequest) (response *dataapipb.PositionsByPartyResponse, err error)
+	// rpc LastTrade(LastTradeRequest) returns (LastTradeResponse);
+	// rpc TradesByMarket(TradesByMarketRequest) returns (TradesByMarketResponse);
+	// rpc TradesByOrder(TradesByOrderRequest) returns (TradesByOrderResponse);
+	// rpc TradesByParty(TradesByPartyRequest) returns (TradesByPartyResponse);
+	// rpc GetProposals(GetProposalsRequest) returns (GetProposalsResponse);
+	// rpc GetProposalsByParty(GetProposalsByPartyRequest) returns (GetProposalsByPartyResponse);
+	// rpc GetVotesByParty(GetVotesByPartyRequest) returns (GetVotesByPartyResponse);
+	// rpc GetNewMarketProposals(GetNewMarketProposalsRequest) returns (GetNewMarketProposalsResponse);
+	// rpc GetUpdateMarketProposals(GetUpdateMarketProposalsRequest) returns (GetUpdateMarketProposalsResponse);
+	// rpc GetNetworkParametersProposals(GetNetworkParametersProposalsRequest) returns (GetNetworkParametersProposalsResponse);
+	// rpc GetNewAssetProposals(GetNewAssetProposalsRequest) returns (GetNewAssetProposalsResponse);
+	// rpc GetProposalByID(GetProposalByIDRequest) returns (GetProposalByIDResponse);
+	// rpc GetProposalByReference(GetProposalByReferenceRequest) returns (GetProposalByReferenceResponse);
+	// rpc ObserveGovernance(ObserveGovernanceRequest) returns (stream ObserveGovernanceResponse);
+	// rpc ObservePartyProposals(ObservePartyProposalsRequest) returns (stream ObservePartyProposalsResponse);
+	// rpc ObservePartyVotes(ObservePartyVotesRequest) returns (stream ObservePartyVotesResponse);
+	// rpc ObserveProposalVotes(ObserveProposalVotesRequest) returns (stream ObserveProposalVotesResponse);
+	// rpc ObserveEventBus(stream ObserveEventBusRequest) returns (stream ObserveEventBusResponse);
+	// rpc GetNodeData(GetNodeDataRequest) returns (GetNodeDataResponse);
+	// rpc GetNodes(GetNodesRequest) returns (GetNodesResponse);
+	// rpc GetNodeByID(GetNodeByIDRequest) returns (GetNodeByIDResponse);
+	// rpc GetEpoch(GetEpochRequest) returns (GetEpochResponse);
+	// rpc GetVegaTime(GetVegaTimeRequest) returns (GetVegaTimeResponse);
+	// rpc AccountsSubscribe(AccountsSubscribeRequest) returns (stream AccountsSubscribeResponse);
+	// rpc CandlesSubscribe(CandlesSubscribeRequest) returns (stream CandlesSubscribeResponse);
+	// rpc MarginLevelsSubscribe(MarginLevelsSubscribeRequest) returns (stream MarginLevelsSubscribeResponse);
+	// rpc MarketDepthSubscribe(MarketDepthSubscribeRequest) returns (stream MarketDepthSubscribeResponse);
+	// rpc MarketDepthUpdatesSubscribe(MarketDepthUpdatesSubscribeRequest) returns (stream MarketDepthUpdatesSubscribeResponse);
+	// rpc MarketsDataSubscribe(MarketsDataSubscribeRequest) returns (stream MarketsDataSubscribeResponse);
+	// rpc OrdersSubscribe(OrdersSubscribeRequest) returns (stream OrdersSubscribeResponse);
+	PositionsSubscribe(req *dataapipb.PositionsSubscribeRequest) (client dataapipb.TradingDataService_PositionsSubscribeClient, err error)
+	// rpc TradesSubscribe(TradesSubscribeRequest) returns (stream TradesSubscribeResponse);
+	// rpc TransferResponsesSubscribe(TransferResponsesSubscribeRequest) returns (stream TransferResponsesSubscribeResponse);
+	// rpc GetNodeSignaturesAggregate(GetNodeSignaturesAggregateRequest) returns (GetNodeSignaturesAggregateResponse);
+	AssetByID(req *dataapipb.AssetByIDRequest) (response *dataapipb.AssetByIDResponse, err error)
+	// rpc Assets(AssetsRequest) returns (AssetsResponse);
+	// rpc EstimateFee(EstimateFeeRequest) returns (EstimateFeeResponse);
+	// rpc EstimateMargin(EstimateMarginRequest) returns (EstimateMarginResponse);
+	// rpc ERC20WithdrawalApproval(ERC20WithdrawalApprovalRequest) returns (ERC20WithdrawalApprovalResponse);
+	// rpc Withdrawal(WithdrawalRequest) returns (WithdrawalResponse);
+	// rpc Withdrawals(WithdrawalsRequest) returns (WithdrawalsResponse);
+	// rpc Deposit(DepositRequest) returns (DepositResponse);
+	// rpc Deposits(DepositsRequest) returns (DepositsResponse);
+	// rpc NetworkParameters(NetworkParametersRequest) returns (NetworkParametersResponse);
+	// rpc LiquidityProvisions(LiquidityProvisionsRequest) returns (LiquidityProvisionsResponse);
+	// rpc OracleSpec(OracleSpecRequest) returns (OracleSpecResponse);
+	// rpc OracleSpecs(OracleSpecsRequest) returns (OracleSpecsResponse);
+	// rpc OracleDataBySpec(OracleDataBySpecRequest) returns (OracleDataBySpecResponse);
+	// rpc GetRewardDetails(GetRewardDetailsRequest) returns (GetRewardDetailsResponse);
+	// rpc Checkpoints(CheckpointsRequest) returns (CheckpointsResponse);
+	// rpc Delegations(DelegationsRequest) returns (DelegationsResponse);
+	// rpc PartyStake(PartyStakeRequest) returns (PartyStakeResponse);
+}
+
+// CoreNode is a Vega Core node
+// type CoreNode interface {
+// 	GetAddress() (url.URL, error)
+// 	CoreService
+// 	CoreStateService
+// }
+
+// DataNode is a Vega Data node
+//go:generate go run github.com/golang/mock/mockgen -destination mocks/datanode_mock.go -package mocks code.vegaprotocol.io/liqbot/bot/normal DataNode
+type DataNode interface {
 	GetAddress() (url.URL, error)
-
-	// Trading
-	SubmitTransactionV2(req *api.SubmitTransactionV2Request) (resp *api.SubmitTransactionV2Response, err error)
-
-	// Trading Data
-	GetVegaTime() (time.Time, error)
-	LastBlockHeight(req *api.LastBlockHeightRequest) (response *api.LastBlockHeightResponse, err error)
-	LiquidityProvisions(req *api.LiquidityProvisionsRequest) (response *api.LiquidityProvisionsResponse, err error)
-	MarketByID(req *api.MarketByIDRequest) (response *api.MarketByIDResponse, err error)
-	MarketDataByID(req *api.MarketDataByIDRequest) (response *api.MarketDataByIDResponse, err error)
-	Markets(req *api.MarketsRequest) (response *api.MarketsResponse, err error)
-	PartyAccounts(req *api.PartyAccountsRequest) (response *api.PartyAccountsResponse, err error)
-	PositionsByParty(req *api.PositionsByPartyRequest) (response *api.PositionsByPartyResponse, err error)
-	AssetByID(assetID string) (response *api.AssetByIDResponse, err error)
-
-	// Events
-	ObserveEventBus() (stream api.TradingDataService_ObserveEventBusClient, err error)
-	PositionsSubscribe(req *api.PositionsSubscribeRequest) (stream api.TradingDataService_PositionsSubscribeClient, err error)
+	CoreService
+	TradingDataService
 }
 
 // PricingEngine is the source of price information from the price proxy.
@@ -63,23 +161,24 @@ type Bot struct {
 	stopPosMgmt            chan bool
 	stopPriceSteer         chan bool
 	strategy               *Strategy
-	market                 *proto.Market
-	node                   Node
+	market                 *vega.Market
+	node                   DataNode
 
-	balanceGeneral uint64
-	balanceMargin  uint64
-	balanceBond    uint64
+	balanceGeneral *num.Uint
+	balanceMargin  *num.Uint
+	balanceBond    *num.Uint
 
-	walletServer     *wallet.Handler
+	walletServer     *wallets.Handler
 	walletPassphrase string
 	walletPubKey     string // "58595a" ...
 
-	buyShape   []*proto.LiquidityOrder
-	sellShape  []*proto.LiquidityOrder
-	marketData *proto.MarketData
-	positions  []*proto.Position
+	buyShape   []*vega.LiquidityOrder
+	sellShape  []*vega.LiquidityOrder
+	marketData *vega.MarketData
+	positions  []*vega.Position
 
-	currentPrice       uint64
+	currentPrice       *num.Uint
+	staticMidPrice     *num.Uint
 	openVolume         int64
 	previousOpenVolume int64
 
@@ -93,7 +192,7 @@ type Bot struct {
 }
 
 // New returns a new instance of Bot.
-func New(config config.BotConfig, pe PricingEngine, ws *wallet.Handler) (b *Bot, err error) {
+func New(config config.BotConfig, pe PricingEngine, ws *wallets.Handler) (b *Bot, err error) {
 	b = &Bot{
 		config: config,
 		log: log.WithFields(log.Fields{
@@ -109,7 +208,7 @@ func New(config config.BotConfig, pe PricingEngine, ws *wallet.Handler) (b *Bot,
 
 	b.strategy, err = validateStrategyConfig(config.StrategyDetails)
 	if err != nil {
-		err = errors.Wrap(err, "failed to read strategy details")
+		err = fmt.Errorf("failed to read strategy details: %w", err)
 		return
 	}
 	b.log.WithFields(log.Fields{
@@ -121,24 +220,24 @@ func New(config config.BotConfig, pe PricingEngine, ws *wallet.Handler) (b *Bot,
 
 // Start starts the liquidity bot goroutine(s).
 func (b *Bot) Start() error {
-	err := b.setupWallet()
+	_, err := b.setupWallet()
 	if err != nil {
-		return errors.Wrap(err, "failed to setup wallet")
+		return fmt.Errorf("failed to setup wallet: %w", err)
 	}
 
-	b.node, err = node.NewGRPCNode(
+	b.node, err = node.NewDataNode(
 		url.URL{Host: b.config.Location},
 		time.Duration(b.config.ConnectTimeout)*time.Millisecond,
 		time.Duration(b.config.CallTimeout)*time.Millisecond,
 	)
 	if err != nil {
-		return errors.Wrap(err, "failed to connect to Vega gRPC node")
+		return fmt.Errorf("failed to connect to Vega gRPC node: %w", err)
 	}
 	b.log.WithFields(log.Fields{
 		"address": b.config.Location,
 	}).Debug("Connected to Vega gRPC node")
 
-	marketsResponse, err := b.node.Markets(&api.MarketsRequest{})
+	marketsResponse, err := b.node.Markets(&dataapipb.MarketsRequest{})
 	if err != nil {
 		return fmt.Errorf("failed to get markets: %w", err)
 	}
@@ -181,7 +280,7 @@ func (b *Bot) Start() error {
 	}).Info("Fetched market info")
 
 	// Use the settlementAssetID to lookup the settlement ethereum address
-	assetResponse, err := b.node.AssetByID(b.settlementAssetID)
+	assetResponse, err := b.node.AssetByID(&dataapipb.AssetByIDRequest{Id: b.settlementAssetID})
 	if err != nil {
 		return fmt.Errorf("unable to look up asset details for %s", b.settlementAssetID)
 	}
@@ -192,8 +291,8 @@ func (b *Bot) Start() error {
 		b.settlementAssetAddress = ""
 	}
 
-	b.balanceGeneral = 0
-	b.balanceMargin = 0
+	b.balanceGeneral = num.Zero()
+	b.balanceMargin = num.Zero()
 
 	b.active = true
 	b.stopPosMgmt = make(chan bool)
@@ -234,18 +333,26 @@ func (b *Bot) GetTraderDetails() string {
 }
 
 func (b *Bot) canPlaceOrders() bool {
-	return b.marketData.MarketTradingMode == proto.Market_TRADING_MODE_CONTINUOUS
+	return b.marketData.MarketTradingMode == vega.Market_TRADING_MODE_CONTINUOUS
 }
 
-func (b *Bot) sendLiquidityProvision(buys, sells []*proto.LiquidityOrder) error {
+func mulFrac(n *num.Uint, x float64, precision float64) *num.Uint {
+	val := num.NewUint(uint64(x * math.Pow(10, precision)))
+	val.Mul(val, n)
+	val.Div(val, num.NewUint(uint64(math.Pow(10, precision))))
+	return val
+}
+
+func (b *Bot) sendLiquidityProvision(buys, sells []*vega.LiquidityOrder) error {
 	// CommitmentAmount is the fractional commitment value * total collateral
-	commitment := b.strategy.CommitmentFraction * float64(b.balanceGeneral+b.balanceMargin+b.balanceBond)
+	balTotal := num.Sum(b.balanceGeneral, b.balanceMargin, b.balanceBond)
+	commitment := mulFrac(balTotal, b.strategy.CommitmentFraction, 15)
 
 	cmd := &walletpb.SubmitTransactionRequest_LiquidityProvisionSubmission{
 		LiquidityProvisionSubmission: &commandspb.LiquidityProvisionSubmission{
 			Fee:              b.config.StrategyDetails.Fee,
 			MarketId:         b.market.Id,
-			CommitmentAmount: uint64(commitment),
+			CommitmentAmount: commitment.String(),
 			Buys:             buys,
 			Sells:            sells,
 		},
@@ -254,20 +361,20 @@ func (b *Bot) sendLiquidityProvision(buys, sells []*proto.LiquidityOrder) error 
 		PubKey:  b.walletPubKey,
 		Command: cmd,
 	}
-	err := b.signSubmitTxV2(submitTxReq, 0)
+	err := b.signSubmitTx(submitTxReq, 0)
 	if err != nil {
 		return fmt.Errorf("failed to submit LiquidityProvisionSubmission: %w", err)
 	}
 	b.log.WithFields(log.Fields{
 		"commitment":         commitment,
 		"commitmentFraction": b.strategy.CommitmentFraction,
-		"balanceTotal":       b.balanceGeneral + b.balanceMargin + b.balanceBond,
+		"balanceTotal":       balTotal,
 	}).Debug("Submitted LiquidityProvisionSubmission")
 	return nil
 }
 
-func calculatePositionMarginCost(openVolume int64, currentPrice uint64, riskParameters *struct{}) uint64 {
-	return 1
+func calculatePositionMarginCost(openVolume int64, currentPrice *num.Uint, riskParameters *struct{}) *num.Uint {
+	return num.NewUint(1)
 }
 
 func (b *Bot) checkForShapeChange() {
@@ -311,78 +418,90 @@ func (b *Bot) checkPositionManagement() {
 		// Only allow position management during continuous trading
 		return
 	}
-	posMarginCost := calculatePositionMarginCost(b.openVolume, b.currentPrice, nil)
-	var shouldBuy, shouldSell bool
-	if posMarginCost > uint64((1.0-b.strategy.StakeFraction-b.strategy.OrdersFraction)*float64(b.balanceGeneral)) {
-		if b.openVolume > 0 {
-			shouldSell = true
-		} else if b.openVolume < 0 {
-			shouldBuy = true
-		}
-	} else if b.openVolume >= 0 && uint64(b.openVolume) > b.strategy.MaxLong {
-		shouldSell = true
-	} else if b.openVolume < 0 && uint64(-b.openVolume) > b.strategy.MaxShort {
-		shouldBuy = true
+	var shouldPlaceOrder bool
+
+	// TODO: add calculations
+	// posMarginCost := calculatePositionMarginCost(b.openVolume, b.currentPrice, nil)
+	// maxCost := uint64((1.0-b.strategy.StakeFraction-b.strategy.OrdersFraction)*b.balanceGeneral.Float64()
+
+	// if posMarginCost > maxCost {
+	// 	if b.openVolume > 0 {
+	// 		shouldSell = true
+	// 	} else if b.openVolume < 0 {
+	// 		shouldBuy = true
+	// 	}
+	// }
+	var size uint64
+	var side vega.Side
+	if b.openVolume >= 0 && num.NewUint(uint64(b.openVolume)).GT(b.strategy.MaxLong.Get()) {
+		shouldPlaceOrder = true
+		size = mulFrac(num.NewUint(uint64(b.openVolume)), b.strategy.PosManagementFraction, 15).Uint64()
+		side = vega.Side_SIDE_SELL
+	} else if b.openVolume < 0 && num.NewUint(uint64(-b.openVolume)).GT(b.strategy.MaxShort.Get()) {
+		shouldPlaceOrder = true
+		size = mulFrac(num.NewUint(uint64(-b.openVolume)), b.strategy.PosManagementFraction, 15).Uint64()
+		side = vega.Side_SIDE_BUY
 	}
 
-	if shouldBuy {
-		size := uint64(float64(abs(b.openVolume)) * b.strategy.PosManagementFraction)
-		err := b.submitOrder(size, 0, proto.Side_SIDE_BUY, proto.Order_TIME_IN_FORCE_IOC, proto.Order_TYPE_MARKET, "PosManagement", 0)
-		if err != nil {
-			log.Warningln("Failed to place a position management buy")
-		}
-	} else if shouldSell {
-		size := uint64(float64(abs(b.openVolume)) * b.strategy.PosManagementFraction)
-		err := b.submitOrder(size, 0, proto.Side_SIDE_SELL, proto.Order_TIME_IN_FORCE_IOC, proto.Order_TYPE_MARKET, "PosManagement", 0)
-		if err != nil {
-			log.Warningln("Failed to place a position management sell")
-		}
+	if !shouldPlaceOrder {
+		return
+	}
+
+	err := b.submitOrder(size, num.Zero(), side, vega.Order_TIME_IN_FORCE_IOC, vega.Order_TYPE_MARKET, "PosManagement", 0)
+	if err != nil {
+		b.log.WithFields(log.Fields{
+			"error": err,
+			"side":  side,
+			"size":  size,
+		}).Warning("Failed to place a position management order")
 	}
 }
 
-func (b *Bot) signSubmitTxV2(
+func (b *Bot) signSubmitTx(
 	submitTxReq *walletpb.SubmitTransactionRequest,
 	blockHeight uint64,
 ) error {
+	msg := "failed to sign+submit tx: %w"
 	if blockHeight == 0 {
-		blockHeightResponse, err := b.node.LastBlockHeight(&api.LastBlockHeightRequest{})
+		var err error
+		blockHeight, err = b.node.LastBlockHeight()
 		if err != nil {
-			return fmt.Errorf("failed to get block height: %w", err)
+			return fmt.Errorf(msg, fmt.Errorf("failed to get block height: %w", err))
 		}
-		blockHeight = blockHeightResponse.Height
 	}
 
-	signedTx, err := b.walletServer.SignTxV2(b.config.Name, submitTxReq, blockHeight)
+	signedTx, err := b.walletServer.SignTx(b.config.Name, submitTxReq, blockHeight)
 	if err != nil {
-		return fmt.Errorf("failed to sign tx (v2): %w", err)
+		return fmt.Errorf(msg, fmt.Errorf("failed to sign tx: %w", err))
 	}
 
-	submitReq := &api.SubmitTransactionV2Request{
+	submitReq := &vegaapipb.SubmitTransactionRequest{
 		Tx:   signedTx,
-		Type: api.SubmitTransactionV2Request_TYPE_ASYNC,
+		Type: vegaapipb.SubmitTransactionRequest_TYPE_ASYNC,
 	}
-	submitResponse, err := b.node.SubmitTransactionV2(submitReq)
+	submitResponse, err := b.node.SubmitTransaction(submitReq)
 	if err != nil {
-		return fmt.Errorf("failed to submit signed tx (v2): %w", err)
+		return fmt.Errorf(msg, fmt.Errorf("failed to submit signed tx: %w", err))
 	}
 	if !submitResponse.Success {
-		return errors.New("success=false")
+		return fmt.Errorf(msg, errors.New("success=false"))
 	}
 	return nil
 }
 
 func (b *Bot) submitOrder(
-	size, price uint64,
-	side proto.Side,
-	tif proto.Order_TimeInForce,
-	orderType proto.Order_Type,
+	size uint64,
+	price *num.Uint,
+	side vega.Side,
+	tif vega.Order_TimeInForce,
+	orderType vega.Order_Type,
 	reference string,
 	secondsFromNow int64,
 ) error {
 	cmd := &walletpb.SubmitTransactionRequest_OrderSubmission{
 		OrderSubmission: &commandspb.OrderSubmission{
 			MarketId:    b.market.Id,
-			Price:       0, // added below
+			Price:       "", // added below
 			Size:        size,
 			Side:        side,
 			TimeInForce: tif,
@@ -392,18 +511,18 @@ func (b *Bot) submitOrder(
 			PeggedOrder: nil,
 		},
 	}
-	if tif == proto.Order_TIME_IN_FORCE_GTT {
+	if tif == vega.Order_TIME_IN_FORCE_GTT {
 		cmd.OrderSubmission.ExpiresAt = time.Now().UnixNano() + (secondsFromNow * 1000000000)
 	}
-	if orderType != proto.Order_TYPE_MARKET {
-		cmd.OrderSubmission.Price = price
+	if orderType != vega.Order_TYPE_MARKET {
+		cmd.OrderSubmission.Price = price.String()
 	}
 
 	submitTxReq := &walletpb.SubmitTransactionRequest{
 		PubKey:  b.walletPubKey,
 		Command: cmd,
 	}
-	err := b.signSubmitTxV2(submitTxReq, 0)
+	err := b.signSubmitTx(submitTxReq, 0)
 	if err != nil {
 		return fmt.Errorf("failed to submit OrderSubmission: %w", err)
 	}
@@ -412,31 +531,33 @@ func (b *Bot) submitOrder(
 
 func (b *Bot) checkInitialMargin() error {
 	// Turn the shapes into a set of orders scaled by commitment
-	obligation := b.strategy.CommitmentFraction * float64(b.balanceMargin+b.balanceBond+b.balanceGeneral)
-	buyOrders := b.calculateOrderSizes(b.market.Id, b.walletPubKey, obligation, b.buyShape, b.marketData.MidPrice)
-	sellOrders := b.calculateOrderSizes(b.market.Id, b.walletPubKey, obligation, b.sellShape, b.marketData.MidPrice)
+	balTotal := num.Sum(b.balanceGeneral, b.balanceMargin, b.balanceBond)
+	obligation := mulFrac(balTotal, b.strategy.CommitmentFraction, 15)
+	buyOrders := b.calculateOrderSizes(b.market.Id, b.walletPubKey, obligation, b.buyShape)
+	sellOrders := b.calculateOrderSizes(b.market.Id, b.walletPubKey, obligation, b.sellShape)
 
 	buyRisk := float64(0.01)
 	sellRisk := float64(0.01)
 
-	buyCost := b.calculateMarginCost(buyRisk, b.marketData.MarkPrice, buyOrders)
-	sellCost := b.calculateMarginCost(sellRisk, b.marketData.MarkPrice, sellOrders)
+	buyCost := b.calculateMarginCost(buyRisk, buyOrders)
+	sellCost := b.calculateMarginCost(sellRisk, sellOrders)
 
-	shapeMarginCost := max(buyCost, sellCost)
+	shapeMarginCost := num.Max(buyCost, sellCost)
 
-	avail := int64(float64(b.balanceGeneral) * b.strategy.OrdersFraction)
-	cost := int64(float64(shapeMarginCost))
-	if avail < cost {
+	avail := mulFrac(b.balanceGeneral, b.strategy.OrdersFraction, 15)
+
+	if avail.LT(shapeMarginCost) {
 		var missingPercent string
-		if avail == 0 {
+		if avail.EQUint64(0) {
 			missingPercent = "Inf"
 		} else {
-			missingPercent = fmt.Sprintf("%.2f%%", float32((cost-avail)*100)/float32(avail))
+			x := num.UintChain(shapeMarginCost).Sub(avail).Mul(num.NewUint(100)).Div(avail).Get()
+			missingPercent = fmt.Sprintf("%v%%", x)
 		}
 		b.log.WithFields(log.Fields{
 			"available":      avail,
-			"cost":           cost,
-			"missing":        avail - cost,
+			"cost":           shapeMarginCost,
+			"missing":        num.Zero().Sub(avail, shapeMarginCost),
 			"missingPercent": missingPercent,
 		}).Error("Not enough collateral to safely keep orders up given current price, risk parameters and supplied default shapes.")
 		return errors.New("not enough collateral")
@@ -482,25 +603,26 @@ func (b *Bot) placeAuctionOrders() {
 		return
 	}
 	// Check we have a currentPrice we can use
-	if b.currentPrice == 0 {
+	if b.currentPrice.EQUint64(0) {
 		return
 	}
 
 	// Place the random orders split into
-	var totalVolume uint64
+	totalVolume := num.Zero()
 	rand.Seed(time.Now().UnixNano())
-	/* #nosec G404 */
-	for totalVolume < b.config.StrategyDetails.AuctionVolume {
-		remaining := b.config.StrategyDetails.AuctionVolume - totalVolume
-		size := min(1+(b.config.StrategyDetails.AuctionVolume/10), remaining)
-		price := b.currentPrice + (uint64(rand.Int63n(100) - 50))
-		side := proto.Side_SIDE_BUY
+	for totalVolume.LT(b.config.StrategyDetails.AuctionVolume.Get()) {
+		remaining := num.Zero().Sub(b.config.StrategyDetails.AuctionVolume.Get(), totalVolume)
+		size := num.Min(num.UintChain(b.config.StrategyDetails.AuctionVolume.Get()).Div(num.NewUint(10)).Add(num.NewUint(1)).Get(), remaining)
+		// #nosec G404
+		price := num.Zero().Add(b.currentPrice, num.NewUint(uint64(rand.Int63n(100)-50)))
+		side := vega.Side_SIDE_BUY
+		// #nosec G404
 		if rand.Intn(2) == 0 {
-			side = proto.Side_SIDE_SELL
+			side = vega.Side_SIDE_SELL
 		}
-		err := b.submitOrder(size, price, side, proto.Order_TIME_IN_FORCE_GTT, proto.Order_TYPE_LIMIT, "AuctionOrder", 330)
+		err := b.submitOrder(size.Uint64(), price, side, vega.Order_TIME_IN_FORCE_GTT, vega.Order_TYPE_LIMIT, "AuctionOrder", 330)
 		if err == nil {
-			totalVolume += size
+			totalVolume = num.Zero().Add(totalVolume, size)
 		} else {
 			// We failed to send an order so stop trying to send anymore
 			break
@@ -543,7 +665,6 @@ func (b *Bot) runPositionManagement() {
 					b.log.WithFields(log.Fields{
 						"error": err.Error(),
 					}).Error("Failed to send liquidity provision order")
-					return
 				}
 				firstTime = false
 			}
@@ -591,34 +712,30 @@ func (b *Bot) runPositionManagement() {
 
 // calculateOrderSizes calculates the size of the orders using the total commitment, price, distance from mid and chance
 // of trading liquidity.supplied.updateSizes(obligation, currentPrice, liquidityOrders, true, minPrice, maxPrice)
-func (b *Bot) calculateOrderSizes(marketID, partyID string, obligation float64, liquidityOrders []*proto.LiquidityOrder, midPrice uint64) []*proto.Order {
-	orders := make([]*proto.Order, 0, len(liquidityOrders))
+func (b *Bot) calculateOrderSizes(marketID, partyID string, obligation *num.Uint, liquidityOrders []*vega.LiquidityOrder) []*vega.Order {
+	orders := make([]*vega.Order, 0, len(liquidityOrders))
 	// Work out the total proportion for the shape
-	var totalProportion uint32
+	totalProportion := num.Zero()
 	for _, order := range liquidityOrders {
-		totalProportion += order.Proportion
+		totalProportion.Add(totalProportion, num.NewUint(uint64(order.Proportion)))
 	}
 
 	// Now size up the orders and create the real order objects
 	for _, lo := range liquidityOrders {
-		prob := 0.10 // Need to make this more accurate later
-		fraction := float64(lo.Proportion) / float64(totalProportion)
-		scaling := fraction / prob
-		size := uint64(math.Ceil(obligation * scaling / float64(midPrice)))
-
-		peggedOrder := proto.PeggedOrder{
+		size := num.UintChain(obligation).Mul(num.NewUint(uint64(lo.Proportion))).Mul(num.NewUint(10)).Div(totalProportion).Div(b.currentPrice).Get()
+		peggedOrder := vega.PeggedOrder{
 			Reference: lo.Reference,
 			Offset:    lo.Offset,
 		}
 
-		order := proto.Order{
+		order := vega.Order{
 			MarketId:    marketID,
 			PartyId:     partyID,
-			Side:        proto.Side_SIDE_BUY,
-			Remaining:   size,
-			Size:        size,
-			TimeInForce: proto.Order_TIME_IN_FORCE_GTC,
-			Type:        proto.Order_TYPE_LIMIT,
+			Side:        vega.Side_SIDE_BUY,
+			Remaining:   size.Uint64(),
+			Size:        size.Uint64(),
+			TimeInForce: vega.Order_TIME_IN_FORCE_GTC,
+			Type:        vega.Order_TYPE_LIMIT,
 			PeggedOrder: &peggedOrder,
 		}
 		orders = append(orders, &order)
@@ -627,20 +744,24 @@ func (b *Bot) calculateOrderSizes(marketID, partyID string, obligation float64, 
 }
 
 // calculateMarginCost estimates the margin cost of the set of orders
-func (b *Bot) calculateMarginCost(risk float64, markPrice uint64, orders []*proto.Order) uint64 {
-	var totalMargin uint64
-	for _, order := range orders {
-		if order.Side == proto.Side_SIDE_BUY {
-			totalMargin += uint64((risk * float64(markPrice)) + (float64(order.Size) * risk * float64(markPrice)))
+func (b *Bot) calculateMarginCost(risk float64, orders []*vega.Order) *num.Uint {
+	// totalMargin := num.Zero()
+	margins := make([]*num.Uint, len(orders))
+	for i, order := range orders {
+		if order.Side == vega.Side_SIDE_BUY {
+			margins[i] = num.NewUint(uint64(1 + order.Size))
 		} else {
-			totalMargin += uint64(float64(order.Size) * risk * float64(markPrice))
+			margins[i] = num.NewUint(uint64(order.Size))
 		}
 	}
+	totalMargin := num.UintChain(num.NewUint(0)).Add(margins...).Mul(b.currentPrice).Get()
+	totalMargin = mulFrac(totalMargin, risk, 15)
 	return totalMargin
 }
 
 func (b *Bot) runPriceSteering() {
-	var externalPrice, currentPrice uint64
+	externalPrice := num.Zero()
+	currentPrice := num.Zero()
 	var err error
 	var externalPriceResponse ppservice.PriceResponse
 
@@ -666,25 +787,33 @@ func (b *Bot) runPriceSteering() {
 					b.log.WithFields(log.Fields{
 						"error": err.Error(),
 					}).Warning("Failed to get external price")
-					externalPrice = 0
-					currentPrice = 0
+					externalPrice = num.Zero()
+					currentPrice = num.Zero()
 				} else {
-					externalPrice = uint64(externalPriceResponse.Price * math.Pow10(int(b.market.DecimalPlaces)))
-					currentPrice = b.marketData.StaticMidPrice
+					externalPrice = num.UintChain(num.NewUint(uint64(externalPriceResponse.Price))).Mul(num.NewUint(uint64(math.Pow10(int(b.market.DecimalPlaces))))).Get()
+					currentPrice = b.staticMidPrice
 				}
 
-				if err == nil && externalPrice != 0 {
+				if err == nil && currentPrice != nil && externalPrice != nil && !externalPrice.IsZero() {
 					shouldMove := "no"
 					// We only want to steer the price if the external and market price
 					// are greater than a certain percentage apart
-					currentDiff := math.Abs((float64(currentPrice) - float64(externalPrice)) / float64(externalPrice))
-					if currentDiff > b.strategy.MinPriceSteerFraction {
-						var side proto.Side
-						if externalPrice > currentPrice {
-							side = proto.Side_SIDE_BUY
+					var currentDiff *num.Uint
+
+					// currentDiff = 100 * Abs(currentPrice - externalPrice) / externalPrice
+					if currentPrice.GT(externalPrice) {
+						currentDiff = num.Zero().Sub(currentPrice, externalPrice)
+					} else {
+						currentDiff = num.Zero().Sub(externalPrice, currentPrice)
+					}
+					currentDiff = num.UintChain(currentDiff).Mul(num.NewUint(100)).Div(externalPrice).Get()
+					if currentDiff.GT(num.NewUint(uint64(100.0 * b.strategy.MinPriceSteerFraction))) {
+						var side vega.Side
+						if externalPrice.GT(currentPrice) {
+							side = vega.Side_SIDE_BUY
 							shouldMove = "UP"
 						} else {
-							side = proto.Side_SIDE_SELL
+							side = vega.Side_SIDE_SELL
 							shouldMove = "DN"
 						}
 
@@ -697,25 +826,26 @@ func (b *Bot) runPriceSteering() {
 								Fatal("Unable to get realistic order details for price steering")
 						}
 
-						size = uint64(float64(size) * b.strategy.PriceSteerOrderScale)
+						size = mulFrac(size, b.strategy.PriceSteerOrderScale, 15)
 						b.log.WithFields(log.Fields{
 							"size":  size,
 							"side":  side,
 							"price": price,
 						}).Debug("Submitting order")
 
-						err = b.submitOrder(size,
+						err = b.submitOrder(
+							size.Uint64(),
 							price,
 							side,
-							proto.Order_TIME_IN_FORCE_GTT,
-							proto.Order_TYPE_LIMIT,
+							vega.Order_TIME_IN_FORCE_GTT,
+							vega.Order_TYPE_LIMIT,
 							"PriceSteeringOrder",
 							int64(b.strategy.LimitOrderDistributionParams.GttLength))
 					}
 					b.log.WithFields(log.Fields{
 						"currentPrice":  currentPrice,
 						"externalPrice": externalPrice,
-						"diff":          int(externalPrice) - int(b.currentPrice),
+						"diff":          num.Zero().Sub(externalPrice, b.currentPrice),
 						"shouldMove":    shouldMove,
 					}).Debug("Steering info")
 				}
@@ -748,7 +878,7 @@ func (b *Bot) runPriceSteering() {
 }
 
 // GetRealisticOrderDetails uses magic to return a realistic order price and size
-func (b *Bot) GetRealisticOrderDetails(externalPrice uint64) (price, size uint64, err error) {
+func (b *Bot) GetRealisticOrderDetails(externalPrice *num.Uint) (price, size *num.Uint, err error) {
 	// Collect stuff from config that's common to all methods
 	method := b.strategy.LimitOrderDistributionParams.Method
 
@@ -762,38 +892,39 @@ func (b *Bot) GetRealisticOrderDetails(externalPrice uint64) (price, size uint64
 
 	// this converts something like BTCUSD 3912312345 (five decimal places)
 	// to 39123.12345 float.
-	M0 := float64(externalPrice) / math.Pow(10, float64(b.market.DecimalPlaces))
+	M0 := num.Zero().Div(externalPrice, num.NewUint(uint64(math.Pow(10, float64(b.market.DecimalPlaces)))))
 
 	var priceFloat float64
-	size = 1
+	size = num.NewUint(1)
 	switch method {
 	case DiscreteThreeLevel:
-		priceFloat, err = GeneratePriceUsingDiscreteThreeLevel(M0, delta, sigma, tgtTimeHorizonYrFrac, N)
+		priceFloat, err = GeneratePriceUsingDiscreteThreeLevel(M0.Float64(), delta, sigma, tgtTimeHorizonYrFrac, N)
 
 		// we need to add back decimals
-		price = uint64(math.Round(priceFloat * math.Pow(10, float64(b.market.DecimalPlaces))))
+		price = num.NewUint(uint64(math.Round(priceFloat * math.Pow(10, float64(b.market.DecimalPlaces)))))
 		return
 	case CoinAndBinomial:
-		return externalPrice, 1, nil
+		price = externalPrice
+		return
 	default:
 		err = fmt.Errorf("Method for generating price distributions not recognised: %w", err)
 		return
 	}
 }
 
-func (b *Bot) setupWallet() (err error) {
+func (b *Bot) setupWallet() (mnemonic string, err error) {
 	b.walletPassphrase = "123"
 
 	err = b.walletServer.LoginWallet(b.config.Name, b.walletPassphrase)
 	if err != nil {
-		if err == wallet.ErrWalletDoesNotExists {
-			err = b.walletServer.CreateWallet(b.config.Name, b.walletPassphrase)
+		if err == wallets.ErrWalletDoesNotExists {
+			mnemonic, err = b.walletServer.CreateWallet(b.config.Name, b.walletPassphrase)
 			if err != nil {
-				return errors.Wrap(err, "failed to create wallet")
+				return "", fmt.Errorf("failed to create wallet: %w", err)
 			}
 			b.log.Debug("Created and logged into wallet")
 		} else {
-			return errors.Wrap(err, "failed to log in to wallet")
+			return "", fmt.Errorf("failed to log in to wallet: %w", err)
 		}
 	} else {
 		b.log.Debug("Logged into wallet")
@@ -803,18 +934,18 @@ func (b *Bot) setupWallet() (err error) {
 		var keys []wallet.PublicKey
 		keys, err = b.walletServer.ListPublicKeys(b.config.Name)
 		if err != nil {
-			return errors.Wrap(err, "failed to list public keys")
+			return "", fmt.Errorf("failed to list public keys: %w", err)
 		}
 		if len(keys) == 0 {
 			var key wallet.KeyPair
-			key, err = b.walletServer.GenerateKeyPair(b.config.Name, b.walletPassphrase)
+			key, err = b.walletServer.GenerateKeyPair(b.config.Name, b.walletPassphrase, []wallet.Meta{})
 			if err != nil {
-				return fmt.Errorf("failed to generate keypair: %w", err)
+				return "", fmt.Errorf("failed to generate keypair: %w", err)
 			}
-			b.walletPubKey = key.Pub
+			b.walletPubKey = key.PublicKey()
 			b.log.WithFields(log.Fields{"pubKey": b.walletPubKey}).Debug("Created keypair")
 		} else {
-			b.walletPubKey = keys[0].Key
+			b.walletPubKey = keys[0].Key()
 			b.log.WithFields(log.Fields{"pubKey": b.walletPubKey}).Debug("Using existing keypair")
 		}
 	}
