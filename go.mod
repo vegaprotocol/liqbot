@@ -19,7 +19,7 @@ require (
 	github.com/stretchr/testify v1.7.0
 	golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c // indirect
 	golang.org/x/tools v0.1.5 // indirect
-	gonum.org/v1/gonum v0.9.1
+	gonum.org/v1/gonum v0.9.3
 	google.golang.org/genproto v0.0.0-20211008145708-270636b82663
 	google.golang.org/grpc v1.41.0
 	google.golang.org/protobuf v1.27.1
