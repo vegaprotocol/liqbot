@@ -7,9 +7,9 @@ import (
 	"code.vegaprotocol.io/liqbot/bot/normal"
 	"code.vegaprotocol.io/liqbot/config"
 
-	"code.vegaprotocol.io/go-wallet/wallets"
 	ppconfig "code.vegaprotocol.io/priceproxy/config"
 	ppservice "code.vegaprotocol.io/priceproxy/service"
+	"code.vegaprotocol.io/vegawallet/wallets"
 )
 
 // Bot is the generic bot interface.
