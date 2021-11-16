@@ -5,7 +5,7 @@ go 1.16
 require (
 	code.vegaprotocol.io/go-wallet v0.9.0-pre4.0.20211007082923-29e4a2c108a1
 	code.vegaprotocol.io/priceproxy v0.0.2
-	code.vegaprotocol.io/protos v0.44.0
+	code.vegaprotocol.io/protos v0.45.1
 	code.vegaprotocol.io/shared v0.0.0-20210920084547-4d2225c561d6 // indirect
 	github.com/golang/mock v1.6.0
 	github.com/hashicorp/go-multierror v1.1.1
