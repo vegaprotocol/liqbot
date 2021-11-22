@@ -13,8 +13,6 @@ import (
 	"code.vegaprotocol.io/liqbot/node"
 	"code.vegaprotocol.io/liqbot/types/num"
 
-	"code.vegaprotocol.io/go-wallet/wallet"
-	"code.vegaprotocol.io/go-wallet/wallets"
 	ppconfig "code.vegaprotocol.io/priceproxy/config"
 	ppservice "code.vegaprotocol.io/priceproxy/service"
 	dataapipb "code.vegaprotocol.io/protos/data-node/api/v1"
@@ -22,6 +20,8 @@ import (
 	vegaapipb "code.vegaprotocol.io/protos/vega/api/v1"
 	commandspb "code.vegaprotocol.io/protos/vega/commands/v1"
 	walletpb "code.vegaprotocol.io/protos/vega/wallet/v1"
+	"code.vegaprotocol.io/vegawallet/wallet"
+	wallets "code.vegaprotocol.io/vegawallet/wallets"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -36,9 +36,7 @@ type CoreService interface {
 }
 
 // CoreStateService implements the gRPC service of the same name.
-type CoreStateService interface {
-	// Avoid using this. Use something from DataNode instead
-
+type CoreStateService interface { // Avoid using this. Use something from DataNode instead
 	// rpc ListAccounts(ListAccountsRequest) returns (ListAccountsResponse);
 	// ListAssets(req *vegaapipb.ListAssetsRequest) (response *vegaapipb.ListAssetsResponse, err error)
 	// rpc ListNetworkParameters(ListNetworkParametersRequest) returns (ListNetworkParametersResponse);
