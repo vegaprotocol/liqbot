@@ -15,10 +15,10 @@ import (
 	"code.vegaprotocol.io/liqbot/config"
 	"code.vegaprotocol.io/liqbot/pricing"
 
-	store "code.vegaprotocol.io/go-wallet/wallet/store/v1"
-	"code.vegaprotocol.io/go-wallet/wallets"
 	ppconfig "code.vegaprotocol.io/priceproxy/config"
 	ppservice "code.vegaprotocol.io/priceproxy/service"
+	store "code.vegaprotocol.io/vegawallet/wallet/store/v1"
+	"code.vegaprotocol.io/vegawallet/wallets"
 	// "code.vegaprotocol.io/shared/paths"
 	"github.com/julienschmidt/httprouter"
 	log "github.com/sirupsen/logrus"
