@@ -5,7 +5,7 @@ go 1.16
 require (
 	code.vegaprotocol.io/priceproxy v0.0.2
 	code.vegaprotocol.io/protos v0.46.0
-	code.vegaprotocol.io/vegawallet v0.9.2
+	code.vegaprotocol.io/vegawallet v0.10.0
 	github.com/golang/mock v1.6.0
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/holiman/uint256 v1.2.0
@@ -19,7 +19,7 @@ require (
 	golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c // indirect
 	golang.org/x/tools v0.1.5 // indirect
 	gonum.org/v1/gonum v0.9.1
-	google.golang.org/genproto v0.0.0-20211115160612-a5da7257a6f7
+	google.golang.org/genproto v0.0.0-20211118181313-81c1377c94b1
 	google.golang.org/grpc v1.42.0
 	google.golang.org/protobuf v1.27.1
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
