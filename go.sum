@@ -15,6 +15,8 @@ code.vegaprotocol.io/priceproxy v0.0.2/go.mod h1:lj5Y3+LPxiGKUhAxz0RQ11wjQ3gtTqI
 code.vegaprotocol.io/protos v0.45.2-0.20211026143814-fd1dc62fd4e8/go.mod h1:NORK22Evpwn0GoetL7H6/oVUzGcfjAJEJTzw+zTkSyE=
 code.vegaprotocol.io/protos v0.46.0 h1:30y+g64HQ49224wU0sZCxJdlCGnDm8hZTogkiYEVi50=
 code.vegaprotocol.io/protos v0.46.0/go.mod h1:NORK22Evpwn0GoetL7H6/oVUzGcfjAJEJTzw+zTkSyE=
+code.vegaprotocol.io/protos v0.47.1-0.20220111105001-7a78836bb48a h1:h+EXRLqsgTNODMLLHHQZ0G+MLcw1t+on90NI+B2fBqM=
+code.vegaprotocol.io/protos v0.47.1-0.20220111105001-7a78836bb48a/go.mod h1:NORK22Evpwn0GoetL7H6/oVUzGcfjAJEJTzw+zTkSyE=
 code.vegaprotocol.io/shared v0.0.0-20211015074835-9ed837d93090 h1:SF7ZRvZ/JASJNEQigbuUwk1rQuugLy6gqbOFs8D8VXI=
 code.vegaprotocol.io/shared v0.0.0-20211015074835-9ed837d93090/go.mod h1:dmahiiphuDJvjXXDvQvo22tFPx7yk9wW8z1glU/JgHE=
 code.vegaprotocol.io/vegawallet v0.10.0 h1:bUtjeAxGg094QkABtbkp23anRLoh64qMynHLPxyZG4o=
