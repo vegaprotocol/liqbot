@@ -373,6 +373,67 @@ func (b *Bot) sendLiquidityProvision(buys, sells []*vega.LiquidityOrder) error {
 	return nil
 }
 
+func (b *Bot) sendLiquidityProvisionAmendment(buys, sells []*vega.LiquidityOrder) error {
+	balTotal := num.Sum(b.balanceGeneral, b.balanceMargin, b.balanceBond)
+	commitment := mulFrac(balTotal, b.strategy.CommitmentFraction, 15)
+
+	if commitment == num.NewUint(0) {
+		return b.sendLiquidityProvisionCancellation(balTotal)
+	}
+
+	cmd := &walletpb.SubmitTransactionRequest_LiquidityProvisionAmendment{
+		LiquidityProvisionAmendment: &commandspb.LiquidityProvisionAmendment{
+			MarketId:         b.market.Id,
+			CommitmentAmount: commitment.String(),
+			Fee:              b.config.StrategyDetails.Fee,
+			Sells:            buys,
+			Buys:             sells,
+		},
+	}
+
+	submitTxReq := &walletpb.SubmitTransactionRequest{
+		PubKey:  b.walletPubKey,
+		Command: cmd,
+	}
+
+	err := b.signSubmitTx(submitTxReq, 0)
+	if err != nil {
+		return fmt.Errorf("failed to submit LiquidityProvisionAmendment: %w", err)
+	}
+	b.log.WithFields(log.Fields{
+		"commitment":         commitment,
+		"commitmentFraction": b.strategy.CommitmentFraction,
+		"balanceTotal":       balTotal,
+	}).Debug("Submitted LiquidityProvisionAmendment")
+
+	return nil
+}
+
+func (b *Bot) sendLiquidityProvisionCancellation(balTotal *num.Uint) error {
+	cmd := &walletpb.SubmitTransactionRequest_LiquidityProvisionCancellation{
+		LiquidityProvisionCancellation: &commandspb.LiquidityProvisionCancellation{
+			MarketId: b.market.Id,
+		},
+	}
+
+	submitTxReq := &walletpb.SubmitTransactionRequest{
+		PubKey:  b.walletPubKey,
+		Command: cmd,
+	}
+
+	err := b.signSubmitTx(submitTxReq, 0)
+	if err != nil {
+		return fmt.Errorf("failed to submit LiquidityProvisionCancellation: %w", err)
+	}
+	b.log.WithFields(log.Fields{
+		"commitment":         num.NewUint(0),
+		"commitmentFraction": b.strategy.CommitmentFraction,
+		"balanceTotal":       balTotal,
+	}).Debug("Submitted LiquidityProvisionAmendment")
+
+	return nil
+}
+
 func calculatePositionMarginCost(openVolume int64, currentPrice *num.Uint, riskParameters *struct{}) *num.Uint {
 	return num.NewUint(1)
 }
@@ -402,7 +463,7 @@ func (b *Bot) checkForShapeChange() {
 		(b.openVolume < 0 && b.previousOpenVolume >= 0) {
 
 		b.log.WithFields(log.Fields{"shape": shape}).Debug("Flipping LP direction")
-		err := b.sendLiquidityProvision(b.buyShape, b.sellShape)
+		err := b.sendLiquidityProvisionAmendment(b.buyShape, b.sellShape)
 		if err != nil {
 			b.log.WithFields(log.Fields{
 				"error": err.Error(),
