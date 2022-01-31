@@ -41,10 +41,10 @@ bots:
           - {reference: Ask, proportion: 30, offset: 2}
           - {reference: Ask, proportion: 40, offset: 1}
         buys:
-          - {reference: Bid, proportion: 40, offset: -2}
-          - {reference: Bid, proportion: 30, offset: -4}
-          - {reference: Bid, proportion: 20, offset: -8}
-          - {reference: Bid, proportion: 10, offset: -16}
+          - {reference: Bid, proportion: 40, offset: 2}
+          - {reference: Bid, proportion: 30, offset: 4}
+          - {reference: Bid, proportion: 20, offset: 8}
+          - {reference: Bid, proportion: 10, offset: 16}
       longeningShape:
         sells:
           - {reference: Ask, proportion: 10, offset: 16}
@@ -52,10 +52,10 @@ bots:
           - {reference: Ask, proportion: 30, offset: 4}
           - {reference: Ask, proportion: 40, offset: 2}
         buys:
-          - {reference: Bid, proportion: 40, offset: -1}
-          - {reference: Bid, proportion: 30, offset: -2}
-          - {reference: Bid, proportion: 20, offset: -4}
-          - {reference: Bid, proportion: 10, offset: -8}
+          - {reference: Bid, proportion: 40, offset: 1}
+          - {reference: Bid, proportion: 30, offset: 2}
+          - {reference: Bid, proportion: 20, offset: 4}
+          - {reference: Bid, proportion: 10, offset: 8}
       posManagementSleepMilliseconds: 5050
       marketPriceSteeringRatePerSecond: 1.0
       minPriceSteerFraction: 0.00001

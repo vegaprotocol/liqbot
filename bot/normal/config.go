@@ -153,13 +153,15 @@ func validateStrategyConfig(details config.Strategy) (s *Strategy, err error) {
 	}
 
 	for _, buy := range details.ShorteningShape.Buys {
-		shorteningShape.Buys = append(shorteningShape.Buys, &vega.LiquidityOrder{Reference: refStringToEnum(buy.Reference),
+		shorteningShape.Buys = append(shorteningShape.Buys, &vega.LiquidityOrder{
+			Reference:  refStringToEnum(buy.Reference),
 			Proportion: buy.Proportion,
 			Offset:     buy.Offset,
 		})
 	}
 	for _, sell := range details.ShorteningShape.Sells {
-		shorteningShape.Sells = append(shorteningShape.Sells, &vega.LiquidityOrder{Reference: refStringToEnum(sell.Reference),
+		shorteningShape.Sells = append(shorteningShape.Sells, &vega.LiquidityOrder{
+			Reference:  refStringToEnum(sell.Reference),
 			Proportion: sell.Proportion,
 			Offset:     sell.Offset,
 		})
@@ -167,13 +169,15 @@ func validateStrategyConfig(details config.Strategy) (s *Strategy, err error) {
 	s.ShorteningShape = shorteningShape
 
 	for _, buy := range details.LongeningShape.Buys {
-		longeningShape.Buys = append(longeningShape.Buys, &vega.LiquidityOrder{Reference: refStringToEnum(buy.Reference),
+		longeningShape.Buys = append(longeningShape.Buys, &vega.LiquidityOrder{
+			Reference:  refStringToEnum(buy.Reference),
 			Proportion: buy.Proportion,
 			Offset:     buy.Offset,
 		})
 	}
 	for _, sell := range details.LongeningShape.Sells {
-		longeningShape.Sells = append(longeningShape.Sells, &vega.LiquidityOrder{Reference: refStringToEnum(sell.Reference),
+		longeningShape.Sells = append(longeningShape.Sells, &vega.LiquidityOrder{
+			Reference:  refStringToEnum(sell.Reference),
 			Proportion: sell.Proportion,
 			Offset:     sell.Offset,
 		})
