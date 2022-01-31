@@ -19,6 +19,8 @@ code.vegaprotocol.io/shared v0.0.0-20220127162227-dbe0bfac4efa h1:9w5f5T/ufidwfE
 code.vegaprotocol.io/shared v0.0.0-20220127162227-dbe0bfac4efa/go.mod h1:TIOZeN20FcXwKSdQAgHfUQOwGoK82MihSwetxgdKIMA=
 code.vegaprotocol.io/vegawallet v0.11.1-0.20220127172212-4fd3e826e6be h1:AAVkX7VmKpqKTsSVSbz684lE1qQ4gKiZaj7SuDdOrOQ=
 code.vegaprotocol.io/vegawallet v0.11.1-0.20220127172212-4fd3e826e6be/go.mod h1:6MrzQp7HZsx6Pg7nCTEfeHDpb4sQF8OlED1r6gNKwC4=
+code.vegaprotocol.io/vegawallet v0.11.1 h1:soTPXX6hHGJLPmNMUTz+PKjHFKuSNJsvkJWEZ6iJve4=
+code.vegaprotocol.io/vegawallet v0.11.1/go.mod h1:6MrzQp7HZsx6Pg7nCTEfeHDpb4sQF8OlED1r6gNKwC4=
 dmitri.shuralyov.com/gpu/mtl v0.0.0-20190408044501-666a987793e9/go.mod h1:H6x//7gZCb22OMCxBHrMx7a5I7Hp++hsVxbQ4BYO7hU=
 gioui.org v0.0.0-20210308172011-57750fc8a0a6/go.mod h1:RSH6KIUZ0p2xy5zHDxgAM4zumjgTw83q2ge/PI+yyw8=
 github.com/BurntSushi/toml v0.3.1 h1:WXkYYl6Yr3qBf1K79EBnL4mak0OimBfB0XUf9Vl28OQ=
