@@ -17,7 +17,7 @@ require (
 	github.com/stretchr/testify v1.7.0
 	gonum.org/v1/gonum v0.9.1
 	google.golang.org/genproto v0.0.0-20211118181313-81c1377c94b1
-	google.golang.org/grpc v1.42.0
+	google.golang.org/grpc v1.43.0
 	google.golang.org/protobuf v1.27.1
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 )
