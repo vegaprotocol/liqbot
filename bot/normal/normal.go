@@ -36,9 +36,7 @@ type CoreService interface {
 }
 
 // CoreStateService implements the gRPC service of the same name.
-type CoreStateService interface {
-	// Avoid using this. Use something from DataNode instead
-
+type CoreStateService interface { // Avoid using this. Use something from DataNode instead
 	// rpc ListAccounts(ListAccountsRequest) returns (ListAccountsResponse);
 	// ListAssets(req *vegaapipb.ListAssetsRequest) (response *vegaapipb.ListAssetsResponse, err error)
 	// rpc ListNetworkParameters(ListNetworkParametersRequest) returns (ListNetworkParametersResponse);
@@ -386,8 +384,8 @@ func (b *Bot) sendLiquidityProvisionAmendment(buys, sells []*vega.LiquidityOrder
 			MarketId:         b.market.Id,
 			CommitmentAmount: commitment.String(),
 			Fee:              b.config.StrategyDetails.Fee,
-			Sells:            buys,
-			Buys:             sells,
+			Sells:            sells,
+			Buys:             buys,
 		},
 	}
 

@@ -98,7 +98,7 @@ type Shape struct {
 type LiquidityOrder struct {
 	Reference  string `yaml:"reference"`
 	Proportion uint32 `yaml:"proportion"`
-	Offset     int64  `yaml:"offset"`
+	Offset     string `yaml:"offset"`
 }
 
 // WalletConfig describes the settings for running an internal wallet server
