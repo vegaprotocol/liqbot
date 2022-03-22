@@ -78,29 +78,26 @@ func (n *DataNode) SubmitTransaction(req *vegaapipb.SubmitTransactionRequest) (r
 // rpc PropagateChainEvent(PropagateChainEventRequest) returns (PropagateChainEventResponse);
 // rpc Statistics(StatisticsRequest) returns (StatisticsResponse);
 
-// LastBlockHeight gets the latest blockchain height (used for replay protection)
-func (n *DataNode) LastBlockHeight() (height uint64, err error) {
-	msg := "gRPC call failed: LastBlockHeight: %w"
+// LastBlockData gets the latest blockchain data, height, hash and pow parameters.
+func (n *DataNode) LastBlockData() (*vegaapipb.LastBlockHeightResponse, error) {
+	msg := "gRPC call failed: LastBlockData: %w"
 	if n == nil {
-		err = fmt.Errorf(msg, e.ErrNil)
-		return
+		return nil, fmt.Errorf(msg, e.ErrNil)
 	}
 
 	if n.conn.GetState() != connectivity.Ready {
-		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
-		return
+		return nil, fmt.Errorf(msg, e.ErrConnectionNotReady)
 	}
 
 	c := vegaapipb.NewCoreServiceClient(n.conn)
 	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
 	defer cancel()
 	var response *vegaapipb.LastBlockHeightResponse
-	response, err = c.LastBlockHeight(ctx, &vegaapipb.LastBlockHeightRequest{})
+	response, err := c.LastBlockHeight(ctx, &vegaapipb.LastBlockHeightRequest{})
 	if err != nil {
 		err = fmt.Errorf(msg, helpers.ErrorDetail(err))
 	}
-	height = response.Height
-	return
+	return response, err
 }
 
 // GetVegaTime gets the latest block header time from the node.
