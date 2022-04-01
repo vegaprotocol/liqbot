@@ -20,6 +20,7 @@ import (
 	vegaapipb "code.vegaprotocol.io/protos/vega/api/v1"
 	commandspb "code.vegaprotocol.io/protos/vega/commands/v1"
 	walletpb "code.vegaprotocol.io/protos/vega/wallet/v1"
+	vgcrypto "code.vegaprotocol.io/shared/libs/crypto"
 	"code.vegaprotocol.io/vegawallet/wallet"
 	"code.vegaprotocol.io/vegawallet/wallets"
 	log "github.com/sirupsen/logrus"
@@ -30,7 +31,7 @@ type CoreService interface {
 	SubmitTransaction(req *vegaapipb.SubmitTransactionRequest) (response *vegaapipb.SubmitTransactionResponse, err error)
 	// rpc PropagateChainEvent(PropagateChainEventRequest) returns (PropagateChainEventResponse);
 	// rpc Statistics(StatisticsRequest) returns (StatisticsResponse);
-	LastBlockHeight() (height uint64, err error)
+	LastBlockData() (*vegaapipb.LastBlockHeightResponse, error)
 	GetVegaTime() (t time.Time, err error)
 	ObserveEventBus() (client vegaapipb.CoreService_ObserveEventBusClient, err error)
 }
@@ -359,7 +360,7 @@ func (b *Bot) sendLiquidityProvision(buys, sells []*vega.LiquidityOrder) error {
 		PubKey:  b.walletPubKey,
 		Command: cmd,
 	}
-	err := b.signSubmitTx(submitTxReq, 0)
+	err := b.signSubmitTx(submitTxReq, nil)
 	if err != nil {
 		return fmt.Errorf("failed to submit LiquidityProvisionSubmission: %w", err)
 	}
@@ -394,7 +395,7 @@ func (b *Bot) sendLiquidityProvisionAmendment(buys, sells []*vega.LiquidityOrder
 		Command: cmd,
 	}
 
-	err := b.signSubmitTx(submitTxReq, 0)
+	err := b.signSubmitTx(submitTxReq, nil)
 	if err != nil {
 		return fmt.Errorf("failed to submit LiquidityProvisionAmendment: %w", err)
 	}
@@ -419,7 +420,7 @@ func (b *Bot) sendLiquidityProvisionCancellation(balTotal *num.Uint) error {
 		Command: cmd,
 	}
 
-	err := b.signSubmitTx(submitTxReq, 0)
+	err := b.signSubmitTx(submitTxReq, nil)
 	if err != nil {
 		return fmt.Errorf("failed to submit LiquidityProvisionCancellation: %w", err)
 	}
@@ -518,20 +519,30 @@ func (b *Bot) checkPositionManagement() {
 
 func (b *Bot) signSubmitTx(
 	submitTxReq *walletpb.SubmitTransactionRequest,
-	blockHeight uint64,
+	blockData *vegaapipb.LastBlockHeightResponse,
 ) error {
 	msg := "failed to sign+submit tx: %w"
-	if blockHeight == 0 {
+	if blockData == nil {
 		var err error
-		blockHeight, err = b.node.LastBlockHeight()
+		blockData, err = b.node.LastBlockData()
 		if err != nil {
 			return fmt.Errorf(msg, fmt.Errorf("failed to get block height: %w", err))
 		}
 	}
 
-	signedTx, err := b.walletServer.SignTx(b.config.Name, submitTxReq, blockHeight)
+	signedTx, err := b.walletServer.SignTx(b.config.Name, submitTxReq, blockData.Height)
 	if err != nil {
 		return fmt.Errorf(msg, fmt.Errorf("failed to sign tx: %w", err))
+	}
+
+	tid := vgcrypto.RandomHash()
+	powNonce, _, err := vgcrypto.PoW(blockData.Hash, tid, uint(blockData.SpamPowDifficulty), vgcrypto.Sha3)
+	if err != nil {
+		return fmt.Errorf(msg, fmt.Errorf("failed to generate proof of work: %w", err))
+	}
+	signedTx.Pow = &commandspb.ProofOfWork{
+		Tid:   tid,
+		Nonce: powNonce,
 	}
 
 	submitReq := &vegaapipb.SubmitTransactionRequest{
@@ -581,7 +592,7 @@ func (b *Bot) submitOrder(
 		PubKey:  b.walletPubKey,
 		Command: cmd,
 	}
-	err := b.signSubmitTx(submitTxReq, 0)
+	err := b.signSubmitTx(submitTxReq, nil)
 	if err != nil {
 		return fmt.Errorf("failed to submit OrderSubmission: %w", err)
 	}
