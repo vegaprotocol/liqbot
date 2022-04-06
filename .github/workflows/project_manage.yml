@@ -59,7 +59,7 @@ jobs:
 
       - name: Verify linked issue
         if: env.LINKED_ISSUE_ID != ''
-        uses: actions/github-script@0.9.0
+        uses: actions/github-script@v6.0.0
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
@@ -67,7 +67,7 @@ jobs:
 
       - name: Report no linked issue
         if: env.LINKED_ISSUE_ID == ''
-        uses: actions/github-script@0.9.0
+        uses: actions/github-script@v6.0.0
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
