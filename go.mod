@@ -6,7 +6,7 @@ require (
 	code.vegaprotocol.io/priceproxy v0.0.2
 	code.vegaprotocol.io/protos v0.49.3
 	code.vegaprotocol.io/shared v0.0.0-20220321185018-3b5684b00533
-	code.vegaprotocol.io/vegawallet v0.13.2-0.20220322164721-c0e96d14aacb
+	code.vegaprotocol.io/vegawallet v0.13.2
 	github.com/golang/mock v1.6.0
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/holiman/uint256 v1.2.0

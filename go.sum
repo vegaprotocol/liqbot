@@ -40,6 +40,8 @@ code.vegaprotocol.io/shared v0.0.0-20220321185018-3b5684b00533 h1:IxTWvyF0i0AgUA
 code.vegaprotocol.io/shared v0.0.0-20220321185018-3b5684b00533/go.mod h1:pNHKwqRDkotUN0s6jErl7Eb2EpZa2HAf03lyPMTCUT0=
 code.vegaprotocol.io/vegawallet v0.13.2-0.20220322164721-c0e96d14aacb h1:vd+H4xK/rbUGze+ueqwkPH68RCKDr/02oVjg1JipLHg=
 code.vegaprotocol.io/vegawallet v0.13.2-0.20220322164721-c0e96d14aacb/go.mod h1:5/7nkGV+PIIUrZHp09Sk4eB6msJ+M8O78EqUzLg1VxU=
+code.vegaprotocol.io/vegawallet v0.13.2 h1:bslUXYtYCexBW4zRHpEEHuNA+aBiWI5pYxFjBsAPmVI=
+code.vegaprotocol.io/vegawallet v0.13.2/go.mod h1:5FW9zisuN2NU655g+glPhTadhsroT5sl5JLD6S5kAqQ=
 dmitri.shuralyov.com/gpu/mtl v0.0.0-20190408044501-666a987793e9/go.mod h1:H6x//7gZCb22OMCxBHrMx7a5I7Hp++hsVxbQ4BYO7hU=
 gioui.org v0.0.0-20210308172011-57750fc8a0a6/go.mod h1:RSH6KIUZ0p2xy5zHDxgAM4zumjgTw83q2ge/PI+yyw8=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
