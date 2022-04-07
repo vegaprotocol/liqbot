@@ -79,7 +79,7 @@ type Strategy struct {
 	LongeningShape  Shape `yaml:"longeningShape"`
 }
 
-// LimitOrderDistParams for configuring the way price steering orders are sent
+// LimitOrderDistParams for configuring the way price steering orders are sent.
 type LimitOrderDistParams struct {
 	Method              string  `yaml:"method"`
 	GttLength           uint64  `yaml:"gttLengthSeconds"`
@@ -88,7 +88,7 @@ type LimitOrderDistParams struct {
 	NumIdenticalBots    int     `yaml:"numIdenticalBots"`
 }
 
-// Shape describes the buy and sell sides of a Liquidity Provision instruction
+// Shape describes the buy and sell sides of a Liquidity Provision instruction.
 type Shape struct {
 	Sells []LiquidityOrder `yaml:"sells"`
 	Buys  []LiquidityOrder `yaml:"buys"`
@@ -101,7 +101,7 @@ type LiquidityOrder struct {
 	Offset     string `yaml:"offset"`
 }
 
-// WalletConfig describes the settings for running an internal wallet server
+// WalletConfig describes the settings for running an internal wallet server.
 type WalletConfig struct {
 	RootPath    string `yaml:"rootPath"`
 	TokenExpiry int    `yaml:"tokenExpiry"`
@@ -118,7 +118,7 @@ type Config struct {
 }
 
 var (
-	// ErrNil indicates that a nil/null pointer was encountered
+	// ErrNil indicates that a nil/null pointer was encountered.
 	ErrNil = errors.New("nil pointer")
 
 	// ErrMissingEmptyConfigSection indicates that a required config file section is missing (not present) or empty (zero-length).

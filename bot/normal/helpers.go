@@ -48,7 +48,7 @@ func doze(d time.Duration, stop chan bool) error {
 	return nil
 }
 
-// DiscreteThreeLevelProbabilities is a method for calculating price levels
+// DiscreteThreeLevelProbabilities is a method for calculating price levels.
 func DiscreteThreeLevelProbabilities(V []float64, muHat float64, sigmaHat float64) ([]float64, error) {
 	Vsq := make([]float64, len(V))
 	A := mat.NewDense(3, len(V), nil)
@@ -58,15 +58,15 @@ func DiscreteThreeLevelProbabilities(V []float64, muHat float64, sigmaHat float6
 		A.Set(1, i, Vsq[i])
 		A.Set(2, i, 1.0)
 	}
-	//fa := mat.Formatted(A, mat.Prefix("    "), mat.Squeeze())
-	//fmt.Printf("A = %v\n\n", fa)
+	// fa := mat.Formatted(A, mat.Prefix("    "), mat.Squeeze())
+	// fmt.Printf("A = %v\n\n", fa)
 
 	b := mat.NewVecDense(3, nil)
 	b.SetVec(0, muHat)
 	b.SetVec(1, sigmaHat*sigmaHat+muHat*muHat)
 	b.SetVec(2, 1.0)
 
-	//p := mat.NewVecDense(3, nil)
+	// p := mat.NewVecDense(3, nil)
 
 	fnToMinimize := func(x []float64) float64 {
 		xVec := mat.NewVecDense(3, x)
@@ -80,7 +80,7 @@ func DiscreteThreeLevelProbabilities(V []float64, muHat float64, sigmaHat float6
 			penaltyTerm := math.Min(0.0, x[i])
 			penalty += 1e5 * penaltyTerm * penaltyTerm
 		}
-		//fmt.Printf("norm = %v, penalty = %v\n", norm, penalty)
+		// fmt.Printf("norm = %v, penalty = %v\n", norm, penalty)
 		return norm + penalty
 	}
 
@@ -97,14 +97,14 @@ func DiscreteThreeLevelProbabilities(V []float64, muHat float64, sigmaHat float6
 		return p0, err
 	}
 	p := optResult.X
-	//fmt.Printf("optResult.Status: %v\n", optResult.Status)
-	//fmt.Printf("optResult.p: %0.4g\n", p)
-	//fmt.Printf("result.F: %0.4g\n", optResult.F)
-	//fmt.Printf("result.Stats.FuncEvaluations: %d\n", optResult.Stats.FuncEvaluations)
+	// fmt.Printf("optResult.Status: %v\n", optResult.Status)
+	// fmt.Printf("optResult.p: %0.4g\n", p)
+	// fmt.Printf("result.F: %0.4g\n", optResult.F)
+	// fmt.Printf("result.Stats.FuncEvaluations: %d\n", optResult.Stats.FuncEvaluations)
 
-	//err := p.SolveVec(A, b)
-	//fa = mat.Formatted(p, mat.Prefix("    "), mat.Squeeze())
-	//fmt.Printf("p = %v\n\n", fa)
+	// err := p.SolveVec(A, b)
+	// fa = mat.Formatted(p, mat.Prefix("    "), mat.Squeeze())
+	// fmt.Printf("p = %v\n\n", fa)
 	correction := 0.0
 	for i := 0; i < len(p); i++ {
 		if p[i] < 0 {
@@ -118,7 +118,7 @@ func DiscreteThreeLevelProbabilities(V []float64, muHat float64, sigmaHat float6
 
 // GeneratePriceUsingDiscreteThreeLevel is a method for calculating price levels
 // input is a float price (so divide uint64 price  by 10^{num of decimals})
-// it returns a float price which you want to multiply by 10^{num of decimals} and then round
+// it returns a float price which you want to multiply by 10^{num of decimals} and then round.
 func GeneratePriceUsingDiscreteThreeLevel(M0, delta, sigma, tgtTimeHorizonYrFrac, N float64) (price float64, err error) {
 	err = nil
 	muHat := -0.5 * sigma * sigma * tgtTimeHorizonYrFrac
@@ -136,7 +136,6 @@ func GeneratePriceUsingDiscreteThreeLevel(M0, delta, sigma, tgtTimeHorizonYrFrac
 	Y := math.Exp(shockX / float64(N))
 	price = M0 * Y
 	return price, err
-
 }
 
 func randomChoice(probabilities []float64) uint64 {
@@ -146,7 +145,6 @@ func randomChoice(probabilities []float64) uint64 {
 		if x <= 0 {
 			return i
 		}
-
 	}
 	return 0
 }

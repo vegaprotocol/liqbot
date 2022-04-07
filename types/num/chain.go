@@ -12,19 +12,19 @@ type UChain struct {
 // Things like x := NewUint(0).Add(y, z)
 // x.Mul(x, foo)
 // can be written as:
-// x := UintChain(NewUint(0)).Add(y, z).Mul(foo).Get()
+// x := UintChain(NewUint(0)).Add(y, z).Mul(foo).Get().
 func UintChain(z *Uint) *UChain {
 	return &UChain{
 		z: z,
 	}
 }
 
-// Get gets the result of the chained operation (the value of the wrapped uint)
+// Get gets the result of the chained operation (the value of the wrapped uint).
 func (c *UChain) Get() *Uint {
 	return c.z
 }
 
-// Add is equivalent to AddSum
+// Add is equivalent to AddSum.
 func (c *UChain) Add(vals ...*Uint) *UChain {
 	if len(vals) == 0 {
 		return c
@@ -33,7 +33,7 @@ func (c *UChain) Add(vals ...*Uint) *UChain {
 	return c
 }
 
-// Sub subtracts any numbers from the chainable value
+// Sub subtracts any numbers from the chainable value.
 func (c *UChain) Sub(vals ...*Uint) *UChain {
 	for _, v := range vals {
 		c.z.Sub(c.z, v)
@@ -41,13 +41,13 @@ func (c *UChain) Sub(vals ...*Uint) *UChain {
 	return c
 }
 
-// Mul multiplies the current value by x
+// Mul multiplies the current value by x.
 func (c *UChain) Mul(x *Uint) *UChain {
 	c.z.Mul(c.z, x)
 	return c
 }
 
-// Div divides the current value by x
+// Div divides the current value by x.
 func (c *UChain) Div(x *Uint) *UChain {
 	c.z.Div(c.z, x)
 	return c
@@ -56,7 +56,7 @@ func (c *UChain) Div(x *Uint) *UChain {
 // DecRounding ...
 type DecRounding int
 
-// constants
+// constants.
 const (
 	DecFloor DecRounding = iota
 	DecRound
@@ -69,7 +69,7 @@ type DChain struct {
 }
 
 // UintDecChain returns a chainable decimal from a given uint
-// this moves the conversion stuff out from the caller
+// this moves the conversion stuff out from the caller.
 func UintDecChain(u *Uint) *DChain {
 	// @TODO once the updates to the decimal file are merged, call the coversion function from that file
 	return &DChain{
@@ -77,14 +77,14 @@ func UintDecChain(u *Uint) *DChain {
 	}
 }
 
-// DecChain offers the same chainable interface for decimals
+// DecChain offers the same chainable interface for decimals.
 func DecChain(d Decimal) *DChain {
 	return &DChain{
 		d: d,
 	}
 }
 
-// Get returns the final value
+// Get returns the final value.
 func (d *DChain) Get() Decimal {
 	return d.d
 }
@@ -92,7 +92,7 @@ func (d *DChain) Get() Decimal {
 // GetUint returns the decimal as a uint, returns true on overflow
 // pass in type of rounding to apply
 // not that the rounding does not affect the underlying decimal value
-// rounding is applied to a copy only
+// rounding is applied to a copy only.
 func (d *DChain) GetUint(round DecRounding) (*Uint, bool) {
 	v := d.d
 	switch round {
@@ -106,7 +106,7 @@ func (d *DChain) GetUint(round DecRounding) (*Uint, bool) {
 	return UintFromBig(v.BigInt())
 }
 
-// Add adds any number of decimals together
+// Add adds any number of decimals together.
 func (d *DChain) Add(vals ...Decimal) *DChain {
 	for _, v := range vals {
 		d.d = d.d.Add(v)
@@ -114,7 +114,7 @@ func (d *DChain) Add(vals ...Decimal) *DChain {
 	return d
 }
 
-// Sub subtracts any number of decimals from the chainable value
+// Sub subtracts any number of decimals from the chainable value.
 func (d *DChain) Sub(vals ...Decimal) *DChain {
 	for _, v := range vals {
 		d.d = d.d.Sub(v)
@@ -122,19 +122,19 @@ func (d *DChain) Sub(vals ...Decimal) *DChain {
 	return d
 }
 
-// Mul multiplies, obviously
+// Mul multiplies, obviously.
 func (d *DChain) Mul(x Decimal) *DChain {
 	d.d = d.d.Mul(x)
 	return d
 }
 
-// Div divides
+// Div divides.
 func (d *DChain) Div(x Decimal) *DChain {
 	d.d = d.d.Div(x)
 	return d
 }
 
-// DivRound divides with a specified precision
+// DivRound divides with a specified precision.
 func (d *DChain) DivRound(x Decimal, precision int32) *DChain {
 	d.d = d.d.DivRound(x, precision)
 	return d

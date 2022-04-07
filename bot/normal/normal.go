@@ -319,7 +319,7 @@ func (b *Bot) Stop() {
 	close(b.stopPriceSteer)
 }
 
-// GetTraderDetails returns information relating to the trader
+// GetTraderDetails returns information relating to the trader.
 func (b *Bot) GetTraderDetails() string {
 	name := b.config.Name
 	pubKey := b.walletPubKey
@@ -460,7 +460,6 @@ func (b *Bot) checkForShapeChange() {
 	// If we flipped then send the new LP order
 	if (b.openVolume > 0 && b.previousOpenVolume <= 0) ||
 		(b.openVolume < 0 && b.previousOpenVolume >= 0) {
-
 		b.log.WithFields(log.Fields{"shape": shape}).Debug("Flipping LP direction")
 		err := b.sendLiquidityProvisionAmendment(b.buyShape, b.sellShape)
 		if err != nil {
@@ -781,7 +780,7 @@ func (b *Bot) runPositionManagement() {
 }
 
 // calculateOrderSizes calculates the size of the orders using the total commitment, price, distance from mid and chance
-// of trading liquidity.supplied.updateSizes(obligation, currentPrice, liquidityOrders, true, minPrice, maxPrice)
+// of trading liquidity.supplied.updateSizes(obligation, currentPrice, liquidityOrders, true, minPrice, maxPrice).
 func (b *Bot) calculateOrderSizes(marketID, partyID string, obligation *num.Uint, liquidityOrders []*vega.LiquidityOrder) []*vega.Order {
 	orders := make([]*vega.Order, 0, len(liquidityOrders))
 	// Work out the total proportion for the shape
@@ -813,7 +812,7 @@ func (b *Bot) calculateOrderSizes(marketID, partyID string, obligation *num.Uint
 	return orders
 }
 
-// calculateMarginCost estimates the margin cost of the set of orders
+// calculateMarginCost estimates the margin cost of the set of orders.
 func (b *Bot) calculateMarginCost(risk float64, orders []*vega.Order) *num.Uint {
 	// totalMargin := num.Zero()
 	margins := make([]*num.Uint, len(orders))
@@ -947,7 +946,7 @@ func (b *Bot) runPriceSteering() {
 	}
 }
 
-// GetRealisticOrderDetails uses magic to return a realistic order price and size
+// GetRealisticOrderDetails uses magic to return a realistic order price and size.
 func (b *Bot) GetRealisticOrderDetails(externalPrice *num.Uint) (price, size *num.Uint, err error) {
 	// Collect stuff from config that's common to all methods
 	method := b.strategy.LimitOrderDistributionParams.Method

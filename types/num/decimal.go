@@ -6,7 +6,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// Decimal is a shopspring.Decimal
+// Decimal is a shopspring.Decimal.
 type Decimal = decimal.Decimal
 
 var (

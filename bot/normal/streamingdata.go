@@ -16,7 +16,7 @@ import (
 // Subscribe to all the events that we need to keep the bot happy
 // These include:
 // * Account Information (Margin, General and Bond)
-// * Market Data
+// * Market Data.
 func (b *Bot) subscribeToEvents() error {
 	// Party related events
 	eventBusDataReq := &dataapipb.ObserveEventBusRequest{
