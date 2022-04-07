@@ -20,7 +20,7 @@ type Engine struct {
 	client http.Client
 }
 
-// NewEngine creates a new pricing engine
+// NewEngine creates a new pricing engine.
 func NewEngine(cfg config.PricingConfig) *Engine {
 	e := Engine{
 		config: cfg,

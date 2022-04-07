@@ -19,7 +19,7 @@ import (
 	ppservice "code.vegaprotocol.io/priceproxy/service"
 	store "code.vegaprotocol.io/vegawallet/wallet/store/v1"
 	"code.vegaprotocol.io/vegawallet/wallets"
-	// "code.vegaprotocol.io/shared/paths"
+	// "code.vegaprotocol.io/shared/paths".
 	"github.com/julienschmidt/httprouter"
 	log "github.com/sirupsen/logrus"
 )
@@ -186,7 +186,7 @@ func (s *Service) Status(w http.ResponseWriter, r *http.Request, _ httprouter.Pa
 	}
 }
 
-// TradersSettlement is an endpoint to show details of all active traders
+// TradersSettlement is an endpoint to show details of all active traders.
 func (s *Service) TradersSettlement(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Go through all the bots and ask for details
 	msg := "["
@@ -240,7 +240,7 @@ func ensureDir(path string) error {
 	_, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return os.Mkdir(path, 0700)
+			return os.Mkdir(path, 0o700)
 		}
 		return err
 	}
