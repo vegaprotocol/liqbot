@@ -1,3 +1,4 @@
+# FILE IS AUTOMATICALLY MANAGED BY github.com/vegaprotocol/terraform//github
 [run]
 allow-parallel-runners = true
 print-linter-name = true
