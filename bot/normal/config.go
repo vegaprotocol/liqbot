@@ -12,7 +12,7 @@ import (
 	"github.com/hashicorp/go-multierror"
 )
 
-// ShapeConfig is the top level definition of a liquidity shape
+// ShapeConfig is the top level definition of a liquidity shape.
 type ShapeConfig struct {
 	Sells []*vega.LiquidityOrder
 	Buys  []*vega.LiquidityOrder
@@ -104,15 +104,15 @@ func refStringToEnum(reference string) vega.PeggedReference {
 	}
 }
 
-// SteeringMethod is an enum for all the possible price calculations methods for price steering
+// SteeringMethod is an enum for all the possible price calculations methods for price steering.
 type SteeringMethod int
 
 const (
-	// NotSet for when we cannot parse the input string
+	// NotSet for when we cannot parse the input string.
 	NotSet SteeringMethod = iota
-	// DiscreteThreeLevel uses the discrete three level method
+	// DiscreteThreeLevel uses the discrete three level method.
 	DiscreteThreeLevel
-	// CoinAndBinomial uses the coin and binomial method
+	// CoinAndBinomial uses the coin and binomial method.
 	CoinAndBinomial
 )
 
@@ -211,7 +211,7 @@ func validateStrategyConfig(details config.Strategy) (s *Strategy, err error) {
 
 	s.TargetLNVol = details.TargetLNVol
 	err = errs.ErrorOrNil()
-	return
+	return s, err
 }
 
 func (s *Strategy) String() string {

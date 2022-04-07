@@ -51,7 +51,7 @@ func (n *DataNode) GetAddress() (url.URL, error) {
 
 // === CoreService ===
 
-// SubmitTransaction submits a signed v2 transaction
+// SubmitTransaction submits a signed v2 transaction.
 func (n *DataNode) SubmitTransaction(req *vegaapipb.SubmitTransactionRequest) (response *vegaapipb.SubmitTransactionResponse, err error) {
 	msg := "gRPC call failed: SubmitTransaction: %w"
 	if n == nil {
