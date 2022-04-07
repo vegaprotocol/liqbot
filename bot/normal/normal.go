@@ -174,7 +174,6 @@ type Bot struct {
 	buyShape   []*vega.LiquidityOrder
 	sellShape  []*vega.LiquidityOrder
 	marketData *vega.MarketData
-	positions  []*vega.Position
 
 	currentPrice       *num.Uint
 	staticMidPrice     *num.Uint
@@ -433,10 +432,6 @@ func (b *Bot) sendLiquidityProvisionCancellation(balTotal *num.Uint) error {
 	return nil
 }
 
-func calculatePositionMarginCost(openVolume int64, currentPrice *num.Uint, riskParameters *struct{}) *num.Uint {
-	return num.NewUint(1)
-}
-
 func (b *Bot) checkForShapeChange() {
 	var shape string
 	if b.openVolume <= 0 {
@@ -668,7 +663,7 @@ func (b *Bot) initialiseData() error {
 // around the current price at upto 50+/- from it.
 func (b *Bot) placeAuctionOrders() {
 	// Check we have not placed them already
-	if b.auctionOrdersPlaced == true {
+	if b.auctionOrdersPlaced {
 		return
 	}
 	// Check we have a currentPrice we can use
@@ -818,9 +813,9 @@ func (b *Bot) calculateMarginCost(risk float64, orders []*vega.Order) *num.Uint 
 	margins := make([]*num.Uint, len(orders))
 	for i, order := range orders {
 		if order.Side == vega.Side_SIDE_BUY {
-			margins[i] = num.NewUint(uint64(1 + order.Size))
+			margins[i] = num.NewUint(1 + order.Size)
 		} else {
-			margins[i] = num.NewUint(uint64(order.Size))
+			margins[i] = num.NewUint(order.Size)
 		}
 	}
 	totalMargin := num.UintChain(num.NewUint(0)).Add(margins...).Mul(b.currentPrice).Get()
@@ -829,8 +824,8 @@ func (b *Bot) calculateMarginCost(risk float64, orders []*vega.Order) *num.Uint 
 }
 
 func (b *Bot) runPriceSteering() {
-	externalPrice := num.Zero()
-	currentPrice := num.Zero()
+	var externalPrice *num.Uint
+	var currentPrice *num.Uint
 	var err error
 	var externalPriceResponse ppservice.PriceResponse
 
@@ -956,7 +951,7 @@ func (b *Bot) GetRealisticOrderDetails(externalPrice *num.Uint) (price, size *nu
 	tgtTimeHorizonYrFrac := tgtTimeHorizonHours / 24.0 / 365.25
 	numOrdersPerSec := b.strategy.MarketPriceSteeringRatePerSecond
 	N := 3600 * numOrdersPerSec / tgtTimeHorizonHours
-	tickSize := float64(1 / math.Pow(10, float64(b.market.DecimalPlaces)))
+	tickSize := 1.0 / math.Pow(10, float64(b.market.DecimalPlaces))
 	delta := float64(b.strategy.LimitOrderDistributionParams.NumTicksFromMid) * tickSize
 
 	// this converts something like BTCUSD 3912312345 (five decimal places)
@@ -1019,5 +1014,5 @@ func (b *Bot) setupWallet() (mnemonic string, err error) {
 		}
 	}
 	b.log = b.log.WithFields(log.Fields{"pubkey": b.walletPubKey})
-	return
+	return mnemonic, err
 }

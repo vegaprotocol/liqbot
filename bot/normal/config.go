@@ -211,7 +211,7 @@ func validateStrategyConfig(details config.Strategy) (s *Strategy, err error) {
 
 	s.TargetLNVol = details.TargetLNVol
 	err = errs.ErrorOrNil()
-	return
+	return s, err
 }
 
 func (s *Strategy) String() string {

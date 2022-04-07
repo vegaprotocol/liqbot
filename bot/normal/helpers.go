@@ -11,27 +11,6 @@ import (
 	"gonum.org/v1/gonum/stat/distuv"
 )
 
-func max(a, b uint64) uint64 {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-func min(a, b uint64) uint64 {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func abs(a int64) int64 {
-	if a < 0 {
-		return -a
-	}
-	return a
-}
-
 func doze(d time.Duration, stop chan bool) error {
 	interval := 100 * time.Millisecond
 	for d > interval {
@@ -88,7 +67,7 @@ func DiscreteThreeLevelProbabilities(V []float64, muHat float64, sigmaHat float6
 		Func: fnToMinimize,
 		Grad: nil,
 	}
-	p0 := []float64{1 / 3, 1 / 3, 1 / 3}
+	p0 := []float64{1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0}
 	optResult, err := optimize.Minimize(optProblem, p0, nil, nil)
 	if err != nil {
 		return p0, err
@@ -120,7 +99,6 @@ func DiscreteThreeLevelProbabilities(V []float64, muHat float64, sigmaHat float6
 // input is a float price (so divide uint64 price  by 10^{num of decimals})
 // it returns a float price which you want to multiply by 10^{num of decimals} and then round.
 func GeneratePriceUsingDiscreteThreeLevel(M0, delta, sigma, tgtTimeHorizonYrFrac, N float64) (price float64, err error) {
-	err = nil
 	muHat := -0.5 * sigma * sigma * tgtTimeHorizonYrFrac
 	sigmaHat := math.Sqrt(N*tgtTimeHorizonYrFrac) * sigma
 	V := make([]float64, 3)
@@ -133,7 +111,7 @@ func GeneratePriceUsingDiscreteThreeLevel(M0, delta, sigma, tgtTimeHorizonYrFrac
 	}
 	// now we have the probabilities - we just need to generate a random sample
 	shockX := V[randomChoice(probabilities)]
-	Y := math.Exp(shockX / float64(N))
+	Y := math.Exp(shockX / N)
 	price = M0 * Y
 	return price, err
 }

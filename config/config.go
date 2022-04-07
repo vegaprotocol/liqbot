@@ -32,7 +32,7 @@ type BotConfig struct {
 	// It is *not* a public key seen by Vega.
 	Name string `yaml:"name"`
 
-	// Location points to a Vega node gRPC endpoint (host:port)
+	// Location points to a Vega node gRPC endpoint (host:port).
 	Location string `yaml:"location"`
 
 	// ConnectTimeout is the timeout (in milliseconds) for connecting to the Vega node gRPC endpoint.
@@ -41,16 +41,16 @@ type BotConfig struct {
 	// CallTimeout is the per-call timeout (in milliseconds) for communicating with the Vega node gRPC endpoint.
 	CallTimeout int `yaml:"callTimeout"`
 
-	// InstrumentBase is the base asset of the instrument
+	// InstrumentBase is the base asset of the instrument.
 	InstrumentBase string `yaml:"instrumentBase"`
 
-	// InstrumentQuote is the quote asset of the instrument
+	// InstrumentQuote is the quote asset of the instrument.
 	InstrumentQuote string `yaml:"instrumentQuote"`
 
 	// Strategy specifies which algorithm the bot is to use.
 	Strategy string `yaml:"strategy"`
 
-	// StrategyDetails contains the parameters needed by the strategy algorithm
+	// StrategyDetails contains the parameters needed by the strategy algorithm.
 	StrategyDetails Strategy `yaml:"strategyDetails"`
 }
 

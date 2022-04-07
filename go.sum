@@ -33,13 +33,10 @@ cloud.google.com/go/storage v1.8.0/go.mod h1:Wv1Oy7z6Yz3DshWRJFhqM/UCfaWIRTdp0RX
 cloud.google.com/go/storage v1.10.0/go.mod h1:FLPqc6j+Ki4BU591ie1oL6qBQGu2Bl/tZ9ullr3+Kg0=
 code.vegaprotocol.io/priceproxy v0.0.2 h1:yeaX4nAuZCxbODsF5/YOosIXCyNtY91M8FQzgvFB430=
 code.vegaprotocol.io/priceproxy v0.0.2/go.mod h1:lj5Y3+LPxiGKUhAxz0RQ11wjQ3gtTqIHHqSQDCgndKI=
-code.vegaprotocol.io/protos v0.49.3-0.20220318134118-b50784501b9d/go.mod h1:K6FWDdxWzEgZjz2G1f8gmrSPMey720ryHnzNRn1pW7w=
 code.vegaprotocol.io/protos v0.49.3 h1:hKFrfsMaoRHJNeOjJ1cTkyltmkZGc17m9F2r+84d3jE=
 code.vegaprotocol.io/protos v0.49.3/go.mod h1:K6FWDdxWzEgZjz2G1f8gmrSPMey720ryHnzNRn1pW7w=
 code.vegaprotocol.io/shared v0.0.0-20220321185018-3b5684b00533 h1:IxTWvyF0i0AgUAS+FTgQKIpbsS6Ki/Y9Ug0GSlgChJw=
 code.vegaprotocol.io/shared v0.0.0-20220321185018-3b5684b00533/go.mod h1:pNHKwqRDkotUN0s6jErl7Eb2EpZa2HAf03lyPMTCUT0=
-code.vegaprotocol.io/vegawallet v0.13.2-0.20220322164721-c0e96d14aacb h1:vd+H4xK/rbUGze+ueqwkPH68RCKDr/02oVjg1JipLHg=
-code.vegaprotocol.io/vegawallet v0.13.2-0.20220322164721-c0e96d14aacb/go.mod h1:5/7nkGV+PIIUrZHp09Sk4eB6msJ+M8O78EqUzLg1VxU=
 code.vegaprotocol.io/vegawallet v0.13.2 h1:bslUXYtYCexBW4zRHpEEHuNA+aBiWI5pYxFjBsAPmVI=
 code.vegaprotocol.io/vegawallet v0.13.2/go.mod h1:5FW9zisuN2NU655g+glPhTadhsroT5sl5JLD6S5kAqQ=
 dmitri.shuralyov.com/gpu/mtl v0.0.0-20190408044501-666a987793e9/go.mod h1:H6x//7gZCb22OMCxBHrMx7a5I7Hp++hsVxbQ4BYO7hU=
@@ -526,7 +523,6 @@ github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UV
 github.com/stretchr/testify v1.4.0/go.mod h1:j7eGeouHqKxXV5pUuKE4zz7dFj8WfuZ+81PSLYec5m4=
 github.com/stretchr/testify v1.5.1/go.mod h1:5W2xD1RspED5o8YsWQXVCued0rvSQ+mT+I5cxcmMvtA=
 github.com/stretchr/testify v1.6.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
-github.com/stretchr/testify v1.7.0 h1:nwc3DEeHmmLAfoZucVR881uASk0Mfjw8xYJ99tb5CcY=
 github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/stretchr/testify v1.7.1 h1:5TQK59W5E3v0r2duFAb7P95B6hEeOyEnHRa8MjYSMTY=
 github.com/stretchr/testify v1.7.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
@@ -922,7 +918,6 @@ google.golang.org/genproto v0.0.0-20201111145450-ac7456db90a6/go.mod h1:FWY/as6D
 google.golang.org/genproto v0.0.0-20201119123407-9b1e624d6bc4/go.mod h1:FWY/as6DDZQgahTzZj3fqbO1CbirC29ZNUFHwi0/+no=
 google.golang.org/genproto v0.0.0-20220118154757-00ab72f36ad5/go.mod h1:5CzLGKJ67TSI2B9POpiiyGha0AjJvZIUgRMt1dSmuhc=
 google.golang.org/genproto v0.0.0-20220314164441-57ef72a4c106/go.mod h1:hAL49I2IFola2sVEjAn7MEwsja0xp51I0tlGAf9hz4E=
-google.golang.org/genproto v0.0.0-20220317150908-0efb43f6373e h1:fNKDNuUyC4WH+inqDMpfXDdfvwfYILbsX+oskGZ8hxg=
 google.golang.org/genproto v0.0.0-20220317150908-0efb43f6373e/go.mod h1:hAL49I2IFola2sVEjAn7MEwsja0xp51I0tlGAf9hz4E=
 google.golang.org/genproto v0.0.0-20220405205423-9d709892a2bf h1:JTjwKJX9erVpsw17w+OIPP7iAgEkN/r8urhWSunEDTs=
 google.golang.org/genproto v0.0.0-20220405205423-9d709892a2bf/go.mod h1:8w6bsBMX6yCPbAVTeqQHvzxW0EIFigd5lZyahWgyfDo=
@@ -967,7 +962,6 @@ google.golang.org/protobuf v1.24.0/go.mod h1:r/3tXBNzIEhYS9I1OUVjXDlt8tc493IdKGj
 google.golang.org/protobuf v1.25.0/go.mod h1:9JNX74DMeImyA3h4bdi1ymwjUzf21/xIlbajtzgsN7c=
 google.golang.org/protobuf v1.26.0-rc.1/go.mod h1:jlhhOSvTdKEhbULTjvd4ARK9grFBp09yW+WbY/TyQbw=
 google.golang.org/protobuf v1.26.0/go.mod h1:9q0QmTI4eRPtz6boOQmLYwt+qCgq0jsYwAQnmE0givc=
-google.golang.org/protobuf v1.27.1 h1:SnqbnDw1V7RiZcXPx5MEeqPv2s79L9i7BJUlG/+RurQ=
 google.golang.org/protobuf v1.27.1/go.mod h1:9q0QmTI4eRPtz6boOQmLYwt+qCgq0jsYwAQnmE0givc=
 google.golang.org/protobuf v1.28.0 h1:w43yiav+6bVFTBQFZX0r7ipe9JQ1QsbMgHwbBziscLw=
 google.golang.org/protobuf v1.28.0/go.mod h1:HV8QOd/L58Z+nl8r43ehVNZIU/HEI6OcFqwMG9pJV4I=

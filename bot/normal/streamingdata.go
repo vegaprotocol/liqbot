@@ -122,8 +122,7 @@ func (b *Bot) processEventBusData(stream vegaapipb.CoreService_ObserveEventBusCl
 					b.currentPrice = markPrice
 				}
 
-				staticMidPrice := num.Zero()
-				staticMidPrice, err = convertUint256(b.marketData.StaticMidPrice)
+				staticMidPrice, err := convertUint256(b.marketData.StaticMidPrice)
 				if err != nil {
 					b.log.WithFields(log.Fields{
 						"staticMidPrice": b.marketData.StaticMidPrice,
