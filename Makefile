@@ -1,24 +1,8 @@
 # Makefile
+export GO111MODULE := on
 
-ifeq ($(CI),)
-	# Not in CI
-	VERSION := dev-$(USER)
-	VERSION_HASH := $(shell git rev-parse HEAD | cut -b1-8)
-else
-	# In CI
-	ifneq ($(RELEASE_VERSION),)
-		VERSION := $(RELEASE_VERSION)
-	else
-		# No tag, so make one
-		VERSION := $(shell git describe --tags 2>/dev/null)
-	endif
-	VERSION_HASH := $(shell echo "$(GITHUB_SHA)" | cut -b1-8)
-endif
-
-GO_FLAGS := -ldflags "-X main.Version=$(VERSION) -X main.VersionHash=$(VERSION_HASH)"
-
-.PHONY: all
-default: deps build test lint vet
+.PHONY: default
+default: install test
 
 .PHONY: coverage
 coverage:
@@ -30,53 +14,24 @@ coveragehtml: coverage
 	@go tool cover -html=coverage.txt -o coverage.html
 
 .PHONY: deps
-deps:
-	@go get -t -d ./...
+deps: ## Get the dependencies
+	@go mod download
 
 .PHONY: gosec
 gosec:
-	@gosec ./...
-
-.PHONY: mocks
-mocks:
-	@find -name '*_mock.go' -print0 | xargs -0r rm
-	@go generate ./...
+	gosec ./...
 
 .PHONY: build
-build:
-	@mkdir -p build
-	@go build $(GO_FLAGS) -o build/liqbot ./cmd/liqbot
-
-.PHONY: install
-install:
-	@go install $(GO_FLAGS) ./cmd/liqbot
-
-.PHONY: release-ubuntu-latest
-release-ubuntu-latest:
-	@mkdir -p build
-	@env GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build -v -o build/liqbot-linux-amd64 $(GO_FLAGS) ./cmd/liqbot
-	@cd build && zip liqbot-linux-amd64.zip liqbot-linux-amd64
-
-.PHONY: release-macos-latest
-release-macos-latest:
-	@mkdir -p build
-	@env GOOS=darwin GOARCH=amd64 CGO_ENABLED=1 go build -v -o build/liqbot-darwin-amd64 $(GO_FLAGS) ./cmd/liqbot
-	@cd build && zip liqbot-darwin-amd64.zip liqbot-darwin-amd64
-
-.PHONY: release-windows-latest
-release-windows-latest:
-	@env GOOS=windows GOARCH=amd64 CGO_ENABLED=1 go build -v -o build/liqbot-amd64.exe $(GO_FLAGS) ./cmd/liqbot
-	@cd build && 7z a -tzip liqbot-windows-amd64.zip liqbot-amd64.exe
+build: ## install the binary in GOPATH/bin
+	go build -v -o bin/traderbot ./cmd/traderbot
 
 .PHONY: lint
 lint:
-	@go install golang.org/x/lint/golint
-	@outputfile="$$(mktemp)" ; \
-	go list ./... | xargs golint 2>&1 | \
-		sed -e "s#^$$GOPATH/src/##" | tee "$$outputfile" ; \
-	lines="$$(wc -l <"$$outputfile")" ; \
-	rm -f "$$outputfile" ; \
-	exit "$$lines"
+	golangci-lint run -v --config .golangci.toml
+
+.PHONY: mocks
+mocks: ## Make mocks
+	@go generate ./...
 
 .PHONY: race
 race: ## Run data race detector
@@ -99,5 +54,9 @@ vet: deps
 	@go vet ./...
 
 .PHONY: clean
-clean:
-	@rm -rf ./build ./cmd/liqbot/liqbot
+clean: ## Remove previous build
+	@rm -f ./traderbot ./cmd/traderbot/traderbot
+
+.PHONY: help
+help: ## Display this help screen
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
