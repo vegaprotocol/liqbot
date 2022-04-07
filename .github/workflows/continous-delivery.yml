@@ -6,15 +6,13 @@ name: "Continous Delivery Workflow"
       - v*
 jobs:
   integration:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: ./.github/workflows/continous-integration
+    uses: ./.github/workflows/continous-integration.yml
 
   release-docker:
     needs: integration
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
@@ -37,7 +35,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
           go-version: "1.18.0"
 
@@ -47,7 +45,7 @@ jobs:
 
       # private registry build
       - name: Build and push
-        uses: docker/build-push-action@v2.10.0
+        uses: docker/build-push-action@v2
         with:
           context: .
           push: true
@@ -55,7 +53,7 @@ jobs:
 
       # public registry builds
       - name: Build and push
-        uses: docker/build-push-action@v2.10.0
+        uses: docker/build-push-action@v2
         if: ${{!github.event.repository.private}}
         with:
           context: .
@@ -69,7 +67,7 @@ jobs:
     strategy:
       matrix:
         go:
-          - '1.18'
+          - '1.18.0'
         os:
           - macos-latest
           - windows-latest
