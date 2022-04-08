@@ -198,7 +198,7 @@ func (u *Uint) SubOverflow(x, y *Uint) (*Uint, bool) {
 // unless x-y overflowed, in which case the neg field will be set
 // and the result of y - x is set instead.
 func (u *Uint) Delta(x, y *Uint) (*Uint, bool) {
-	// y is the bigger value - swap the two
+	// y is the bigger value - swap the two.
 	if y.GT(x) {
 		_ = u.Sub(y, x)
 		return u, true

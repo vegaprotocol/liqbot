@@ -71,7 +71,7 @@ type DChain struct {
 // UintDecChain returns a chainable decimal from a given uint
 // this moves the conversion stuff out from the caller.
 func UintDecChain(u *Uint) *DChain {
-	// @TODO once the updates to the decimal file are merged, call the coversion function from that file
+	// @TODO once the updates to the decimal file are merged, call the coversion function from that file.
 	return &DChain{
 		d: decimal.NewFromBigInt(u.u.ToBig(), 0),
 	}
@@ -101,7 +101,7 @@ func (d *DChain) GetUint(round DecRounding) (*Uint, bool) {
 	case DecCeil:
 		v = v.Ceil()
 	case DecRound:
-		v = v.Round(0) // we're converting to Uint, so round to 0 places
+		v = v.Round(0) // we're converting to Uint, so round to 0 places.
 	}
 	return UintFromBig(v.BigInt())
 }

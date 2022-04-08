@@ -1,6 +1,7 @@
 package pricing
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -45,7 +46,7 @@ func (e *Engine) GetPrice(pricecfg ppconfig.PriceConfig) (pi ppservice.PriceResp
 	v.Set("wander", fmt.Sprintf("%v", pricecfg.Wander))
 	relativeURL := &url.URL{RawQuery: v.Encode()}
 	fullURL := e.config.Address.ResolveReference(relativeURL).String()
-	req, _ := http.NewRequest(http.MethodGet, fullURL, nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, fullURL, nil)
 
 	var resp *http.Response
 	resp, err = e.client.Do(req)
