@@ -174,7 +174,6 @@ type Bot struct {
 	buyShape   []*vega.LiquidityOrder
 	sellShape  []*vega.LiquidityOrder
 	marketData *vega.MarketData
-	positions  []*vega.Position
 
 	currentPrice       *num.Uint
 	staticMidPrice     *num.Uint
@@ -319,7 +318,7 @@ func (b *Bot) Stop() {
 	close(b.stopPriceSteer)
 }
 
-// GetTraderDetails returns information relating to the trader
+// GetTraderDetails returns information relating to the trader.
 func (b *Bot) GetTraderDetails() string {
 	name := b.config.Name
 	pubKey := b.walletPubKey
@@ -433,10 +432,6 @@ func (b *Bot) sendLiquidityProvisionCancellation(balTotal *num.Uint) error {
 	return nil
 }
 
-func calculatePositionMarginCost(openVolume int64, currentPrice *num.Uint, riskParameters *struct{}) *num.Uint {
-	return num.NewUint(1)
-}
-
 func (b *Bot) checkForShapeChange() {
 	var shape string
 	if b.openVolume <= 0 {
@@ -460,7 +455,6 @@ func (b *Bot) checkForShapeChange() {
 	// If we flipped then send the new LP order
 	if (b.openVolume > 0 && b.previousOpenVolume <= 0) ||
 		(b.openVolume < 0 && b.previousOpenVolume >= 0) {
-
 		b.log.WithFields(log.Fields{"shape": shape}).Debug("Flipping LP direction")
 		err := b.sendLiquidityProvisionAmendment(b.buyShape, b.sellShape)
 		if err != nil {
@@ -669,7 +663,7 @@ func (b *Bot) initialiseData() error {
 // around the current price at upto 50+/- from it.
 func (b *Bot) placeAuctionOrders() {
 	// Check we have not placed them already
-	if b.auctionOrdersPlaced == true {
+	if b.auctionOrdersPlaced {
 		return
 	}
 	// Check we have a currentPrice we can use
@@ -781,7 +775,7 @@ func (b *Bot) runPositionManagement() {
 }
 
 // calculateOrderSizes calculates the size of the orders using the total commitment, price, distance from mid and chance
-// of trading liquidity.supplied.updateSizes(obligation, currentPrice, liquidityOrders, true, minPrice, maxPrice)
+// of trading liquidity.supplied.updateSizes(obligation, currentPrice, liquidityOrders, true, minPrice, maxPrice).
 func (b *Bot) calculateOrderSizes(marketID, partyID string, obligation *num.Uint, liquidityOrders []*vega.LiquidityOrder) []*vega.Order {
 	orders := make([]*vega.Order, 0, len(liquidityOrders))
 	// Work out the total proportion for the shape
@@ -813,15 +807,15 @@ func (b *Bot) calculateOrderSizes(marketID, partyID string, obligation *num.Uint
 	return orders
 }
 
-// calculateMarginCost estimates the margin cost of the set of orders
+// calculateMarginCost estimates the margin cost of the set of orders.
 func (b *Bot) calculateMarginCost(risk float64, orders []*vega.Order) *num.Uint {
 	// totalMargin := num.Zero()
 	margins := make([]*num.Uint, len(orders))
 	for i, order := range orders {
 		if order.Side == vega.Side_SIDE_BUY {
-			margins[i] = num.NewUint(uint64(1 + order.Size))
+			margins[i] = num.NewUint(1 + order.Size)
 		} else {
-			margins[i] = num.NewUint(uint64(order.Size))
+			margins[i] = num.NewUint(order.Size)
 		}
 	}
 	totalMargin := num.UintChain(num.NewUint(0)).Add(margins...).Mul(b.currentPrice).Get()
@@ -830,8 +824,8 @@ func (b *Bot) calculateMarginCost(risk float64, orders []*vega.Order) *num.Uint 
 }
 
 func (b *Bot) runPriceSteering() {
-	externalPrice := num.Zero()
-	currentPrice := num.Zero()
+	var externalPrice *num.Uint
+	var currentPrice *num.Uint
 	var err error
 	var externalPriceResponse ppservice.PriceResponse
 
@@ -947,7 +941,7 @@ func (b *Bot) runPriceSteering() {
 	}
 }
 
-// GetRealisticOrderDetails uses magic to return a realistic order price and size
+// GetRealisticOrderDetails uses magic to return a realistic order price and size.
 func (b *Bot) GetRealisticOrderDetails(externalPrice *num.Uint) (price, size *num.Uint, err error) {
 	// Collect stuff from config that's common to all methods
 	method := b.strategy.LimitOrderDistributionParams.Method
@@ -957,7 +951,7 @@ func (b *Bot) GetRealisticOrderDetails(externalPrice *num.Uint) (price, size *nu
 	tgtTimeHorizonYrFrac := tgtTimeHorizonHours / 24.0 / 365.25
 	numOrdersPerSec := b.strategy.MarketPriceSteeringRatePerSecond
 	N := 3600 * numOrdersPerSec / tgtTimeHorizonHours
-	tickSize := float64(1 / math.Pow(10, float64(b.market.DecimalPlaces)))
+	tickSize := 1.0 / math.Pow(10, float64(b.market.DecimalPlaces))
 	delta := float64(b.strategy.LimitOrderDistributionParams.NumTicksFromMid) * tickSize
 
 	// this converts something like BTCUSD 3912312345 (five decimal places)
@@ -1020,5 +1014,5 @@ func (b *Bot) setupWallet() (mnemonic string, err error) {
 		}
 	}
 	b.log = b.log.WithFields(log.Fields{"pubkey": b.walletPubKey})
-	return
+	return mnemonic, err
 }

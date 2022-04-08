@@ -1,0 +1,99 @@
+# FILE IS AUTOMATICALLY MANAGED BY github.com/vegaprotocol/terraform//github
+[run]
+allow-parallel-runners = true
+print-linter-name = true
+timeout = '5m0s'
+
+[issues]
+max-issues-per-linter = 0
+max-same-issues = 0
+
+[linters]
+enable-all = true
+disable = [
+    "promlinter",
+    "wrapcheck",
+    "tagliatelle",
+    "paralleltest",
+    "nlreturn",
+    "gomnd",
+    "goerr113",
+    "tparallel",
+    "testpackage",
+    "gochecknoglobals",
+    "forcetypeassert",
+    "exhaustivestruct",
+    "exhaustive",
+    "errorlint",
+    "cyclop",
+    "wsl",
+    "unparam",
+    "scopelint",
+    "revive",
+    "nestif",
+    "maligned",
+    "lll",
+    "interfacer",
+    "gosec",
+    "gomoddirectives",
+    "golint",
+    "goimports",
+    "godox",
+    "gocritic",
+    "goconst",
+    "gocognit",
+    "gochecknoinits",
+    "stylecheck",
+    "gci",
+    "errcheck",
+    "dupl",
+    "dogsled",
+    "funlen",
+    "gocyclo",
+    "errname",
+    # New in golangci-lint 1.45 but would be nice to address
+    "maintidx",
+    "contextcheck",
+    "containedctx",
+    "varnamelen",
+    "ireturn",
+    "nilnil",
+    "errchkjson",
+    "ifshort",
+    "predeclared",
+    "nolintlint",
+]
+
+[[issues.exclude-rules]]
+linters = ["staticcheck"]
+text = "SA1019:"
+
+[[issues.exclude-rules]]
+linters = ["staticcheck"]
+text = "SA5008:"
+
+[[issues.exclude-rules]]
+path = "_test\\.go"
+linters = ["forbidigo"]
+
+[[issues.exclude-rules]]
+path = "cmd/"
+linters = ["forbidigo"]
+
+[[issues.exclude-rules]]
+path = "flags.go"
+linters = ["forbidigo"]
+
+[[issues.exclude-rules]]
+path = "print.go"
+linters = ["forbidigo"]
+
+[linters-settings.forbidigo]
+forbid = ["fmt\\.Print.*"]
+
+# protoc doesn't want us copying protobuf messages because they can have some internal state
+# that shouldn't be copied; but we do it a lot. see below for details
+# https://stackoverflow.com/questions/64183794/why-do-the-go-generated-protobuf-files-contain-mutex-locks
+[[issues.exclude-rules]]
+linters = ["govet"]
+text = "impl.MessageState contains sync.Mutex"

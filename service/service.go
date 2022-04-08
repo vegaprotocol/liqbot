@@ -19,7 +19,7 @@ import (
 	ppservice "code.vegaprotocol.io/priceproxy/service"
 	store "code.vegaprotocol.io/vegawallet/wallet/store/v1"
 	"code.vegaprotocol.io/vegawallet/wallets"
-	// "code.vegaprotocol.io/shared/paths"
+
 	"github.com/julienschmidt/httprouter"
 	log "github.com/sirupsen/logrus"
 )
@@ -105,7 +105,7 @@ func NewService(config config.Config, pe PricingEngine, ws *wallets.Handler) (s 
 	s.addRoutes()
 	s.server = s.getServer()
 
-	return
+	return s, err
 }
 
 func (s *Service) addRoutes() {
@@ -186,7 +186,7 @@ func (s *Service) Status(w http.ResponseWriter, r *http.Request, _ httprouter.Pa
 	}
 }
 
-// TradersSettlement is an endpoint to show details of all active traders
+// TradersSettlement is an endpoint to show details of all active traders.
 func (s *Service) TradersSettlement(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Go through all the bots and ask for details
 	msg := "["
@@ -223,24 +223,11 @@ func writeError(w http.ResponseWriter, e error, status int) {
 	_, _ = w.Write(buf)
 }
 
-func fileExists(path string) (bool, error) {
-	fs, err := os.Stat(path)
-	if err == nil {
-		// fileStat -> is not a directory
-		ok := !fs.IsDir()
-		return ok, nil
-	}
-	if os.IsNotExist(err) {
-		return false, nil // do not return error here
-	}
-	return false, err
-}
-
 func ensureDir(path string) error {
 	_, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return os.Mkdir(path, 0700)
+			return os.Mkdir(path, 0o700)
 		}
 		return err
 	}

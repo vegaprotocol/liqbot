@@ -12,7 +12,7 @@ import (
 )
 
 // As the streaming service only gives us data when it changes
-// we need to look up the initial data manually
+// we need to look up the initial data manually.
 func (b *Bot) lookupInitialValues() error {
 	// Collateral
 	err := b.getAccountGeneral()
@@ -126,7 +126,7 @@ func (b *Bot) getPositions() ([]*vega.Position, error) {
 	return response.Positions, nil
 }
 
-// getMarketData gets the latest info about the market
+// getMarketData gets the latest info about the market.
 func (b *Bot) getMarketData() error {
 	response, err := b.node.MarketDataByID(&dataapipb.MarketDataByIDRequest{
 		MarketId: b.market.Id,

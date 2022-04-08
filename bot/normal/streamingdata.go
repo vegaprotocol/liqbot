@@ -16,7 +16,7 @@ import (
 // Subscribe to all the events that we need to keep the bot happy
 // These include:
 // * Account Information (Margin, General and Bond)
-// * Market Data
+// * Market Data.
 func (b *Bot) subscribeToEvents() error {
 	// Party related events
 	eventBusDataReq := &dataapipb.ObserveEventBusRequest{
@@ -122,8 +122,7 @@ func (b *Bot) processEventBusData(stream vegaapipb.CoreService_ObserveEventBusCl
 					b.currentPrice = markPrice
 				}
 
-				staticMidPrice := num.Zero()
-				staticMidPrice, err = convertUint256(b.marketData.StaticMidPrice)
+				staticMidPrice, err := convertUint256(b.marketData.StaticMidPrice)
 				if err != nil {
 					b.log.WithFields(log.Fields{
 						"staticMidPrice": b.marketData.StaticMidPrice,

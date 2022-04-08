@@ -1,4 +1,6 @@
 # Makefile
+export GO111MODULE := on
+export REPO_NAME := liqbot
 
 ifeq ($(CI),)
 	# Not in CI
@@ -18,7 +20,7 @@ endif
 GO_FLAGS := -ldflags "-X main.Version=$(VERSION) -X main.VersionHash=$(VERSION_HASH)"
 
 .PHONY: all
-default: deps build test lint vet
+default: deps build test lint
 
 .PHONY: coverage
 coverage:
@@ -30,53 +32,44 @@ coveragehtml: coverage
 	@go tool cover -html=coverage.txt -o coverage.html
 
 .PHONY: deps
-deps:
-	@go get -t -d ./...
-
-.PHONY: gosec
-gosec:
-	@gosec ./...
-
-.PHONY: mocks
-mocks:
-	@find -name '*_mock.go' -print0 | xargs -0r rm
-	@go generate ./...
-
-.PHONY: build
-build:
-	@mkdir -p build
-	@go build $(GO_FLAGS) -o build/liqbot ./cmd/liqbot
+deps: ## Get the dependencies
+	@go mod download
 
 .PHONY: install
 install:
-	@go install $(GO_FLAGS) ./cmd/liqbot
+	@go install $(GO_FLAGS) ./cmd/${REPO_NAME}
 
 .PHONY: release-ubuntu-latest
 release-ubuntu-latest:
 	@mkdir -p build
-	@env GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build -v -o build/liqbot-linux-amd64 $(GO_FLAGS) ./cmd/liqbot
-	@cd build && zip liqbot-linux-amd64.zip liqbot-linux-amd64
+	@env GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build -v -o build/${REPO_NAME}-linux-amd64 $(GO_FLAGS) ./cmd/${REPO_NAME}
+	@cd build && zip ${REPO_NAME}-linux-amd64.zip ${REPO_NAME}-linux-amd64
 
 .PHONY: release-macos-latest
 release-macos-latest:
 	@mkdir -p build
-	@env GOOS=darwin GOARCH=amd64 CGO_ENABLED=1 go build -v -o build/liqbot-darwin-amd64 $(GO_FLAGS) ./cmd/liqbot
-	@cd build && zip liqbot-darwin-amd64.zip liqbot-darwin-amd64
+	@env GOOS=darwin GOARCH=amd64 CGO_ENABLED=1 go build -v -o build/${REPO_NAME}-darwin-amd64 $(GO_FLAGS) ./cmd/${REPO_NAME}
+	@cd build && zip ${REPO_NAME}-darwin-amd64.zip ${REPO_NAME}-darwin-amd64
 
 .PHONY: release-windows-latest
 release-windows-latest:
-	@env GOOS=windows GOARCH=amd64 CGO_ENABLED=1 go build -v -o build/liqbot-amd64.exe $(GO_FLAGS) ./cmd/liqbot
-	@cd build && 7z a -tzip liqbot-windows-amd64.zip liqbot-amd64.exe
+	@env GOOS=windows GOARCH=amd64 CGO_ENABLED=1 go build -v -o build/${REPO_NAME}-amd64.exe $(GO_FLAGS) ./cmd/${REPO_NAME}
+	@cd build && 7z a -tzip ${REPO_NAME}-windows-amd64.zip ${REPO_NAME}-amd64.exe
+
+
+.PHONY: build
+build: ## install the binary in GOPATH/bin
+	@if [ ! -d bin ]; then mkdir bin && echo "${REPO_NAME}" > bin/.gitignore; fi
+	@go build -v -o bin/${REPO_NAME} ./cmd/${REPO_NAME}
 
 .PHONY: lint
 lint:
-	@go install golang.org/x/lint/golint
-	@outputfile="$$(mktemp)" ; \
-	go list ./... | xargs golint 2>&1 | \
-		sed -e "s#^$$GOPATH/src/##" | tee "$$outputfile" ; \
-	lines="$$(wc -l <"$$outputfile")" ; \
-	rm -f "$$outputfile" ; \
-	exit "$$lines"
+	@golangci-lint run -v --config .golangci.toml
+
+.PHONY: mocks
+mocks: ## Make mocks
+	@find -name '*_mock.go' -print0 | xargs -0r rm
+	@go generate ./...
 
 .PHONY: race
 race: ## Run data race detector
@@ -86,18 +79,14 @@ race: ## Run data race detector
 retest: ## Force re-run of all tests
 	@go test -count=1 ./...
 
-.PHONY: staticcheck
-staticcheck: ## Run statick analysis checks
-	@staticcheck ./...
-
 .PHONY: test
 test: ## Run tests
 	@go test ./...
 
-.PHONY: vet
-vet: deps
-	@go vet ./...
-
 .PHONY: clean
-clean:
-	@rm -rf ./build ./cmd/liqbot/liqbot
+clean: ## Remove previous build
+	@rm -f ./bin/${REPO_NAME}
+
+.PHONY: help
+help: ## Display this help screen
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'

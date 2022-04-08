@@ -74,7 +74,7 @@ func TestRandomChoice(t *testing.T) {
 }
 
 func TestThreeLevelPriceGen(t *testing.T) {
-	//GeneratePriceUsingDiscreteThreeLevel(M0, delta, sigma, tgtTimeHorizonYrFrac, N float64)
+	// GeneratePriceUsingDiscreteThreeLevel(M0, delta, sigma, tgtTimeHorizonYrFrac, N float64)
 	M0 := 39123.0                               // external price
 	delta := float64(10)                        // i.e. we want jumps of this size
 	sigma := 1.0                                // e.g. 5.0 = 500%
