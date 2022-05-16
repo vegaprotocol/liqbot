@@ -58,7 +58,7 @@ jobs:
 
   release-binary:
     needs: integration
-    name: Release on ${{ matrix.os }} with Go ${{ matrix.go }}
+    name: Release on ${{ matrix.os }} with Go ${{ env.GO_VERSION }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
