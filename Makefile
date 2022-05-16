@@ -59,7 +59,7 @@ release-windows-latest:
 
 .PHONY: build
 build: ## install the binary in GOPATH/bin
-	@go build -v -o bin/${REPO_NAME} ./cmd/${REPO_NAME}
+	@env GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build -v -o bin/${REPO_NAME} ./cmd/${REPO_NAME}
 
 .PHONY: lint
 lint:
