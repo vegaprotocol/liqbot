@@ -6,12 +6,25 @@ name: "Continous Deployment Workflow"
     branches:
       - main
 jobs:
+  get-current-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - run: echo "::set-output name=tag::$(git describe --tags --abbrev=0)"
+        id: set_tag
   commit-k8s:
     runs-on: ubuntu-latest
     steps:
-      - run: |
-          echo "${GITHUB_REF##*/}"
+      - uses: webfactory/ssh-agent@v0.5.4
+        with:
+          ssh-private-key: ${{ secrets.VEGA_CI_SSH_KEY }}
       - uses: actions/checkout@v3
         with:
           repository: vegaprotocol/k8s
-          ref: refs/heads/main
+          ref: main
+      - run: |
+          echo "${{ steps.set_tag.outputs.tag }}" > charts/apps/liqbot/versions/devnet
+          git config --global user.name 'vega-ci-bot'
+          git config --global user.email 'dev@vega.xyz'
+          git commit -am "Automated version update"
+          git push
