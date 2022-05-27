@@ -1,0 +1,16 @@
+"on":
+#   release:
+#     types: [published]
+  push:
+    branches:
+      - main
+jobs:
+  commit-k8s:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          name: vegaprotocol/k8s
+          ref: refs/heads/release
+      - run: |
+          echo "${GITHUB_REF##*/}"
