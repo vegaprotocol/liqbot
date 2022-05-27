@@ -1,3 +1,4 @@
+name: "Continous Deployment Workflow"
 "on":
 #   release:
 #     types: [published]
@@ -8,9 +9,9 @@ jobs:
   commit-k8s:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-        with:
-          name: vegaprotocol/k8s
-          ref: refs/heads/release
       - run: |
           echo "${GITHUB_REF##*/}"
+      - uses: actions/checkout@v3
+        with:
+          repository: vegaprotocol/k8s
+          ref: refs/heads/main
