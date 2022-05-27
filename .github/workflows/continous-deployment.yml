@@ -20,6 +20,7 @@ jobs:
           git config --global user.name 'vega-ci-bot'
           git config --global user.email 'dev@vega.xyz'
           git clone git@github.com:vegaprotocol/k8s.git
-          echo "$version" > k8s/charts/apps/liqbot/versions/devnet
+          cd k8s
+          echo "$version" > charts/apps/liqbot/versions/devnet
           git commit -am "Automated version update"
           git push
