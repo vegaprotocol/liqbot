@@ -1,10 +1,7 @@
 name: "Continous Deployment Workflow"
 "on":
-#   release:
-#     types: [published]
-  push:
-    branches:
-      - main
+  release:
+    types: [published]
 jobs:
   update-manifest-repo:
     runs-on: ubuntu-latest
@@ -21,6 +18,6 @@ jobs:
           git config --global user.email 'dev@vega.xyz'
           git clone git@github.com:vegaprotocol/k8s.git
           cd k8s
-          echo "$version" > charts/apps/liqbot/versions/devnet
-          git commit -am "Automated version update"
+                    echo -n "$version" > charts/apps/liqbot/devnet/VERSION
+                    git commit -am "Automated version update for liqbot: $version"
           git push
