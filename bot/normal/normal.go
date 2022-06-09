@@ -361,7 +361,7 @@ func (b *Bot) sendLiquidityProvision(buys, sells []*vega.LiquidityOrder) error {
 	}
 	err := b.signSubmitTx(submitTxReq, nil)
 	if err != nil {
-		return fmt.Errorf("failed to submit LiquidityProvisionSubmission: %w", err)
+		return fmt.Errorf("failed to submit LiquidityProvisionSubmission(%v): %w", cmd, err)
 	}
 	b.log.WithFields(log.Fields{
 		"commitment":         commitment,
