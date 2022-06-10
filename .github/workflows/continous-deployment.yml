@@ -20,5 +20,5 @@ jobs:
           git clone git@github.com:vegaprotocol/k8s.git
           cd k8s
                     echo -n "$version" > charts/apps/liqbot/devnet/VERSION
-                    git commit -am "Automated version update for liqbot: $version"
+                    git commit -am "Automated version update for liqbot: $version, from repository: $GITHUB_REPOSITORY"
           git push
