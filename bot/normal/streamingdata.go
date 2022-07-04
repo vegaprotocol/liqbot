@@ -17,7 +17,30 @@ import (
 // These include:
 // * Account Information (Margin, General and Bond)
 // * Market Data.
-func (b *Bot) subscribeToEvents() error {
+func (b *Bot) subscribeToMarketEvents() error {
+	// Market related events
+	eventBusDataReq := &vegaapipb.ObserveEventBusRequest{
+		Type: []eventspb.BusEventType{
+			eventspb.BusEventType_BUS_EVENT_TYPE_MARKET_DATA,
+		},
+		MarketId: b.market.Id,
+	}
+	stream, err := b.node.ObserveEventBus()
+	if err != nil {
+		return fmt.Errorf("Failed to subscribe to event bus data: : %w", err)
+	}
+
+	// Then we subscribe to the data
+	err = stream.SendMsg(eventBusDataReq)
+	if err != nil {
+		return fmt.Errorf("Unable to send event bus request on the stream: %w", err)
+	}
+	b.eventStreamLive = true
+	go b.processEventBusData(stream)
+	return nil
+}
+
+func (b *Bot) subscribeToAccountEvents() error {
 	// Party related events
 	eventBusDataReq := &dataapipb.ObserveEventBusRequest{
 		Type: []eventspb.BusEventType{
@@ -28,35 +51,38 @@ func (b *Bot) subscribeToEvents() error {
 	// First we have to create the stream
 	stream, err := b.node.ObserveEventBus()
 	if err != nil {
-		return fmt.Errorf("Failed to subscribe to event bus data: %w", err)
+		return fmt.Errorf("failed to subscribe to event bus data: %w", err)
 	}
 
 	// Then we subscribe to the data
 	err = stream.SendMsg(eventBusDataReq)
 	if err != nil {
-		return fmt.Errorf("Unable to send event bus request on the stream: %w", err)
+		return fmt.Errorf("unable to send event bus request on the stream: %w", err)
 	}
 	go b.processEventBusData(stream)
+	return nil
+}
 
-	// Market related events
-	eventBusDataReq2 := &vegaapipb.ObserveEventBusRequest{
+func (b *Bot) subscribeToProposalEvents() error {
+	// Party related events
+	eventBusDataReq := &dataapipb.ObserveEventBusRequest{
 		Type: []eventspb.BusEventType{
-			eventspb.BusEventType_BUS_EVENT_TYPE_MARKET_DATA,
+			eventspb.BusEventType_BUS_EVENT_TYPE_PROPOSAL,
 		},
-		MarketId: b.market.Id,
+		PartyId: b.walletPubKey,
 	}
-	stream2, err := b.node.ObserveEventBus()
+	// First we have to create the stream
+	stream, err := b.node.ObserveEventBus()
 	if err != nil {
-		return fmt.Errorf("Failed to subscribe to event bus data: : %w", err)
+		return fmt.Errorf("failed to subscribe to event bus data: %w", err)
 	}
 
 	// Then we subscribe to the data
-	err = stream2.SendMsg(eventBusDataReq2)
+	err = stream.SendMsg(eventBusDataReq)
 	if err != nil {
-		return fmt.Errorf("Unable to send event bus request on the stream: %w", err)
+		return fmt.Errorf("unable to send event bus request on the stream: %w", err)
 	}
-	b.eventStreamLive = true
-	go b.processEventBusData(stream2)
+	go b.processEventBusData(stream)
 	return nil
 }
 
@@ -76,6 +102,18 @@ func (b *Bot) processEventBusData(stream vegaapipb.CoreService_ObserveEventBusCl
 
 		for _, event := range eb.Events {
 			switch event.Type {
+			case eventspb.BusEventType_BUS_EVENT_TYPE_PROPOSAL:
+				if event.GetProposal().State == vega.Proposal_STATE_OPEN {
+					go func() {
+						b.proposalIDCh <- event.GetProposal().Id
+						close(b.proposalIDCh)
+					}()
+				} else if event.GetProposal().State == vega.Proposal_STATE_ENACTED {
+					go func() {
+						b.proposalEnactedCh <- event.GetProposal().Id
+						close(b.proposalEnactedCh)
+					}()
+				}
 			case eventspb.BusEventType_BUS_EVENT_TYPE_ACCOUNT:
 				acct := event.GetAccount()
 				// Filter out any that are for different assets

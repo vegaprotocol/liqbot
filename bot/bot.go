@@ -4,12 +4,12 @@ import (
 	"errors"
 	"fmt"
 
-	"code.vegaprotocol.io/liqbot/bot/normal"
-	"code.vegaprotocol.io/liqbot/config"
-
 	ppconfig "code.vegaprotocol.io/priceproxy/config"
 	ppservice "code.vegaprotocol.io/priceproxy/service"
-	"code.vegaprotocol.io/vegawallet/wallets"
+
+	"code.vegaprotocol.io/liqbot/bot/normal"
+	"code.vegaprotocol.io/liqbot/config"
+	"code.vegaprotocol.io/liqbot/types"
 )
 
 // Bot is the generic bot interface.
@@ -27,10 +27,10 @@ type PricingEngine interface {
 }
 
 // New returns a new Bot instance.
-func New(config config.BotConfig, pe PricingEngine, ws *wallets.Handler) (b Bot, err error) {
+func New(config config.BotConfig, pe PricingEngine, wc types.WalletClient) (b Bot, err error) {
 	switch config.Strategy {
 	case "normal":
-		b, err = normal.New(config, pe, ws)
+		b, err = normal.New(config, pe, wc)
 	default:
 		err = errors.New("unrecognised bot strategy")
 	}

@@ -5,23 +5,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
-	"strings"
 	"sync"
 	"time"
+
+	ppconfig "code.vegaprotocol.io/priceproxy/config"
+	ppservice "code.vegaprotocol.io/priceproxy/service"
+	"github.com/julienschmidt/httprouter"
+	log "github.com/sirupsen/logrus"
 
 	"code.vegaprotocol.io/liqbot/bot"
 	"code.vegaprotocol.io/liqbot/config"
 	"code.vegaprotocol.io/liqbot/pricing"
-
-	ppconfig "code.vegaprotocol.io/priceproxy/config"
-	ppservice "code.vegaprotocol.io/priceproxy/service"
-	store "code.vegaprotocol.io/vegawallet/wallet/store/v1"
-	"code.vegaprotocol.io/vegawallet/wallets"
-
-	"github.com/julienschmidt/httprouter"
-	log "github.com/sirupsen/logrus"
+	"code.vegaprotocol.io/liqbot/wallet"
 )
 
 // Bot is the generic bot interface.
@@ -59,43 +54,20 @@ type Service struct {
 
 	pricingEngine PricingEngine
 	server        *http.Server
-	walletServer  *wallets.Handler
 }
 
 // NewService creates a new service instance (with optional mocks for test purposes).
-func NewService(config config.Config, pe PricingEngine, ws *wallets.Handler) (s *Service, err error) {
+func NewService(config config.Config, pe PricingEngine) (s *Service, err error) {
 	if pe == nil {
 		pe = pricing.NewEngine(*config.Pricing)
 	}
-	if ws == nil {
-		// Use internal WalletHandler
-		if !strings.HasPrefix(config.Wallet.RootPath, "/") {
-			config.Wallet.RootPath = filepath.Join(os.Getenv("HOME"), config.Wallet.RootPath)
-		}
-		if err = ensureDir(config.Wallet.RootPath); err != nil {
-			return
-		}
-		walletsDir := filepath.Join(config.Wallet.RootPath, "wallets")
-		if err = ensureDir(walletsDir); err != nil {
-			return
-		}
-		// path := paths.CustomPaths{
-		// 	CustomHome: config.Wallet.RootPath,
-		// }
-		// ConfigPath(filepath.Join(ConsoleConfigHome.String(), "config.toml"))
-		stor, err := store.InitialiseStore(config.Wallet.RootPath)
-		if err != nil {
-			return nil, err
-		}
-		ws = wallets.NewHandler(stor)
-	}
+
 	s = &Service{
 		Router: httprouter.New(),
 
 		config:        config,
 		bots:          make(map[string]Bot),
 		pricingEngine: pe,
-		walletServer:  ws,
 	}
 
 	if err := s.initBots(); err != nil {
@@ -156,7 +128,8 @@ func (s *Service) initBots() error {
 	defer s.botsMu.Unlock()
 
 	for _, botcfg := range s.config.Bots {
-		b, err := bot.New(botcfg, s.pricingEngine, s.walletServer)
+		wc := wallet.NewClient(s.config.Wallet.URL)
+		b, err := bot.New(botcfg, s.pricingEngine, wc)
 		if err != nil {
 			return fmt.Errorf("failed to create bot %s: %w", botcfg.Name, err)
 		}
@@ -177,7 +150,7 @@ func (s *Service) initBots() error {
 }
 
 // Status is an endpoint to show the service is up (always returns succeeded=true).
-func (s *Service) Status(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func (s *Service) Status(w http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
 	var err error
 	if err != nil {
 		writeError(w, err, http.StatusBadRequest)
@@ -187,15 +160,15 @@ func (s *Service) Status(w http.ResponseWriter, r *http.Request, _ httprouter.Pa
 }
 
 // TradersSettlement is an endpoint to show details of all active traders.
-func (s *Service) TradersSettlement(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func (s *Service) TradersSettlement(w http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
 	// Go through all the bots and ask for details
 	msg := "["
 	count := 0
-	for _, bot := range s.bots {
+	for _, b := range s.bots {
 		if count > 0 {
 			msg += ","
 		}
-		ts := bot.GetTraderDetails()
+		ts := b.GetTraderDetails()
 		msg += ts
 		count++
 	}
@@ -221,15 +194,4 @@ func writeError(w http.ResponseWriter, e error, status int) {
 	w.WriteHeader(status)
 	buf, _ := json.Marshal(ErrorResponse{Error: e.Error()})
 	_, _ = w.Write(buf)
-}
-
-func ensureDir(path string) error {
-	_, err := os.Stat(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return os.Mkdir(path, 0o700)
-		}
-		return err
-	}
-	return nil
 }

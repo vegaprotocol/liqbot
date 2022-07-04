@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"strconv"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -103,7 +102,7 @@ type LiquidityOrder struct {
 
 // WalletConfig describes the settings for running an internal wallet server.
 type WalletConfig struct {
-	RootPath    string `yaml:"rootPath"`
+	URL         string `yaml:"url"`
 	TokenExpiry int    `yaml:"tokenExpiry"`
 }
 
@@ -123,9 +122,6 @@ var (
 
 	// ErrMissingEmptyConfigSection indicates that a required config file section is missing (not present) or empty (zero-length).
 	ErrMissingEmptyConfigSection = errors.New("config file section is missing/empty")
-
-	// ErrInvalidValue indicates that a value was invalid.
-	ErrInvalidValue = errors.New("invalid value")
 )
 
 // CheckConfig checks the config for valid structure and values.
@@ -192,24 +188,4 @@ func ConfigureLogging(cfg *ServerConfig) error {
 		log.SetLevel(log.WarnLevel)
 	}
 	return nil
-}
-
-// ReadFloat64 extracts a float64 from a strategy config map.
-func ReadFloat64(details map[string]string, key string) (v float64, err error) {
-	value, found := details[key]
-	if !found {
-		err = errors.New("missing config")
-		return
-	}
-	return strconv.ParseFloat(value, 64)
-}
-
-// ReadUint64 extracts a uint64 from a strategy config map.
-func ReadUint64(details map[string]string, key string) (v uint64, err error) {
-	value, found := details[key]
-	if !found {
-		err = errors.New("missing config")
-		return
-	}
-	return strconv.ParseUint(value, 0, 64)
 }

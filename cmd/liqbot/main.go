@@ -10,11 +10,11 @@ import (
 	"syscall"
 	"time"
 
-	"code.vegaprotocol.io/liqbot/config"
-	"code.vegaprotocol.io/liqbot/service"
-
 	"github.com/jinzhu/configor"
 	log "github.com/sirupsen/logrus"
+
+	"code.vegaprotocol.io/liqbot/config"
+	"code.vegaprotocol.io/liqbot/service"
 )
 
 var (
@@ -67,7 +67,8 @@ func main() {
 	}).Info("Version")
 
 	var s *service.Service
-	s, err = service.NewService(cfg, nil, nil)
+
+	s, err = service.NewService(cfg, nil)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"error": err.Error(),

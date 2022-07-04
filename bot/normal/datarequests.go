@@ -128,13 +128,13 @@ func (b *Bot) getPositions() ([]*vega.Position, error) {
 
 // getMarketData gets the latest info about the market.
 func (b *Bot) getMarketData() error {
-	response, err := b.node.MarketDataByID(&dataapipb.MarketDataByIDRequest{
-		MarketId: b.market.Id,
-	})
+	response, err := b.node.MarketDataByID(&dataapipb.MarketDataByIDRequest{MarketId: b.market.Id})
 	if err != nil {
 		return fmt.Errorf("failed to get market data (ID:%s): %w", b.market.Id, err)
 	}
+
 	b.marketData = response.MarketData
+
 	b.currentPrice, err = convertUint256(response.MarketData.StaticMidPrice)
 	if err != nil {
 		return fmt.Errorf("failed to get current price from market data (ID:%s): price=\"%s\" %w", b.market.Id, response.MarketData.StaticMidPrice, err)
