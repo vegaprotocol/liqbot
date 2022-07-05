@@ -25,6 +25,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// TODO: make thread safe
 // Bot represents one Normal liquidity bot.
 type Bot struct {
 	config                 config.BotConfig
@@ -199,6 +200,55 @@ func (b *Bot) Start() error {
 	return nil
 }
 
+func (b *Bot) seedOrders() error {
+	// GTC SELL 400@1000
+	if err := b.createSeedOrder(num.NewUint(1000), 400, vega.Side_SIDE_SELL, vega.Order_TIME_IN_FORCE_GTC); err != nil {
+		return fmt.Errorf("failed to create seed order: %w", err)
+	}
+
+	// GTC BUY 400@250
+	if err := b.createSeedOrder(num.NewUint(250), 400, vega.Side_SIDE_BUY, vega.Order_TIME_IN_FORCE_GTC); err != nil {
+		return fmt.Errorf("failed to create seed order: %w", err)
+	}
+
+	for i := 0; !b.canPlaceOrders(); i++ {
+		side := vega.Side_SIDE_BUY
+		if i%2 == 0 {
+			side = vega.Side_SIDE_SELL
+		}
+
+		if err := b.createSeedOrder(num.NewUint(500), 400, side, vega.Order_TIME_IN_FORCE_GFA); err != nil {
+			return fmt.Errorf("failed to create seed order: %w", err)
+		}
+	}
+
+	b.log.Debug("seed orders created")
+	return nil
+}
+
+func (b *Bot) createSeedOrder(price *num.Uint, size uint64, side vega.Side, tif vega.Order_TimeInForce) error {
+	b.log.WithFields(log.Fields{
+		"size":  size,
+		"side":  side,
+		"price": price,
+		"tif":   tif.String(),
+	}).Debug("Submitting seed order")
+
+	if err := b.submitOrder(
+		size,
+		price,
+		side,
+		tif,
+		vega.Order_TYPE_LIMIT,
+		"MarketCreation",
+		int64(b.strategy.PosManagementFraction)); err != nil {
+		return fmt.Errorf("failed to submit order: %w", err)
+	}
+
+	time.Sleep(time.Second * 2)
+	return nil
+}
+
 // Stop stops the liquidity bot goroutine(s).
 func (b *Bot) Stop() {
 	if !b.active {
@@ -254,7 +304,7 @@ func (b *Bot) createMarket() (*dataapipb.MarketsResponse, error) {
 }
 
 func (b *Bot) canPlaceOrders() bool {
-	return b.marketData.MarketTradingMode == vega.Market_TRADING_MODE_CONTINUOUS
+	return b.marketData != nil && b.marketData.MarketTradingMode == vega.Market_TRADING_MODE_CONTINUOUS
 }
 
 func (b *Bot) waitForProposalID() (string, error) {
@@ -764,6 +814,12 @@ func (b *Bot) calculateMarginCost(risk float64, orders []*vega.Order) *num.Uint 
 }
 
 func (b *Bot) runPriceSteering() {
+	if !b.canPlaceOrders() {
+		if err := b.seedOrders(); err != nil {
+			b.log.Error("Failed to seed orders")
+		}
+	}
+
 	var externalPrice *num.Uint
 	var currentPrice *num.Uint
 	var err error
@@ -784,7 +840,7 @@ func (b *Bot) runPriceSteering() {
 			return
 
 		default:
-			canPlaceOrders := b.canPlaceOrders()
+			canPlaceOrders := b.canPlaceOrders() // redundant?
 			if b.strategy.PriceSteerOrderScale > 0 && canPlaceOrders {
 				externalPriceResponse, err = b.pricingEngine.GetPrice(ppcfg)
 				if err != nil {

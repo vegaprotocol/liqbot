@@ -30,7 +30,7 @@ bots:
       posManagementFraction: 0.25
       stakeFraction: 0.1
       ordersFraction: 0.25
-      commitmentFraction: 0.50
+      commitmentFraction: 0.10
       fee: 0.01
 
       shorteningShape:
@@ -56,7 +56,7 @@ bots:
           - {reference: Bid, proportion: 20, offset: 4}
           - {reference: Bid, proportion: 10, offset: 8}
       posManagementSleepMilliseconds: 5050
-      marketPriceSteeringRatePerSecond: 1.0
+      marketPriceSteeringRatePerSecond: 0.25
       minPriceSteerFraction: 0.00001
       priceSteerOrderScale: 20.5
       limitOrderDistributionParams:

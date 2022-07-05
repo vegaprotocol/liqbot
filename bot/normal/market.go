@@ -120,10 +120,16 @@ func getExampleMarketProposal() *v1.ProposalSubmission {
 						Fee:              "0.01",
 						CommitmentAmount: "500000000",
 						Buys: []*vega.LiquidityOrder{
-							{Reference: vega.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: "1600", Proportion: 25},
+							{Reference: vega.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: "2", Proportion: 40},
+							{Reference: vega.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: "4", Proportion: 30},
+							{Reference: vega.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: "8", Proportion: 20},
+							{Reference: vega.PeggedReference_PEGGED_REFERENCE_BEST_BID, Offset: "16", Proportion: 10},
 						},
 						Sells: []*vega.LiquidityOrder{
-							{Reference: vega.PeggedReference_PEGGED_REFERENCE_BEST_ASK, Offset: "1600", Proportion: 25},
+							{Reference: vega.PeggedReference_PEGGED_REFERENCE_BEST_ASK, Offset: "16", Proportion: 10},
+							{Reference: vega.PeggedReference_PEGGED_REFERENCE_BEST_ASK, Offset: "8", Proportion: 20},
+							{Reference: vega.PeggedReference_PEGGED_REFERENCE_BEST_ASK, Offset: "4", Proportion: 30},
+							{Reference: vega.PeggedReference_PEGGED_REFERENCE_BEST_ASK, Offset: "2", Proportion: 40},
 						},
 					},
 				},
