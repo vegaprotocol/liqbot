@@ -11,12 +11,12 @@ pricing:
     host: prices.ops.vega.xyz
     path: /prices
 wallet:
-  url: http://127.0.0.1:1789
+  url: http://host.docker.internal:1789
   tokenExpiry: 31536000  # seconds
-  ethereumAddress: https://127.0.0.1:8545
+  ethereumAddress: https://host.docker.internal:8545
 bots:
   - name: w00
-    location: localhost:3027
+    location: host.docker.internal:3027
     connectTimeout: 30000  # milliseconds
     callTimeout: 10000  # milliseconds
     marketID: b07e975907e117d7b82f767771f1983ba2023f7d2a61a88f3206d8a7c43b69d5  # BTC/USD

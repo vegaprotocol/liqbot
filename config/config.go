@@ -102,8 +102,9 @@ type LiquidityOrder struct {
 
 // WalletConfig describes the settings for running an internal wallet server.
 type WalletConfig struct {
-	URL         string `yaml:"url"`
-	TokenExpiry int    `yaml:"tokenExpiry"`
+	URL             string `yaml:"url"`
+	TokenExpiry     int    `yaml:"tokenExpiry"`
+	EthereumAddress string `yaml:"ethereumAddress"`
 }
 
 // Config describes the top level config file format.

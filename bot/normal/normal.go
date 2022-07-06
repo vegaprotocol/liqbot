@@ -11,6 +11,7 @@ import (
 
 	"code.vegaprotocol.io/liqbot/config"
 	"code.vegaprotocol.io/liqbot/node"
+	"code.vegaprotocol.io/liqbot/seed"
 	"code.vegaprotocol.io/liqbot/types"
 	"code.vegaprotocol.io/liqbot/types/num"
 
@@ -29,6 +30,7 @@ import (
 // Bot represents one Normal liquidity bot.
 type Bot struct {
 	config                 config.BotConfig
+	ethereumAddress        string
 	active                 bool
 	log                    *log.Entry
 	pricingEngine          PricingEngine
@@ -50,6 +52,7 @@ type Bot struct {
 
 	proposalIDCh      chan string
 	proposalEnactedCh chan string
+	stakeLinkingCh    chan struct{}
 
 	buyShape   []*vega.LiquidityOrder
 	sellShape  []*vega.LiquidityOrder
@@ -70,9 +73,10 @@ type Bot struct {
 }
 
 // New returns a new instance of Bot.
-func New(config config.BotConfig, pe PricingEngine, wc types.WalletClient) (b *Bot, err error) {
+func New(config config.BotConfig, ethereumAddress string, pe PricingEngine, wc types.WalletClient) (b *Bot, err error) {
 	b = &Bot{
-		config: config,
+		config:          config,
+		ethereumAddress: ethereumAddress,
 		log: log.WithFields(log.Fields{
 			"bot":  config.Name,
 			"node": config.Location,
@@ -84,6 +88,7 @@ func New(config config.BotConfig, pe PricingEngine, wc types.WalletClient) (b *B
 		auctionOrdersPlaced: false,
 		proposalIDCh:        make(chan string),
 		proposalEnactedCh:   make(chan string),
+		stakeLinkingCh:      make(chan struct{}),
 	}
 
 	b.strategy, err = validateStrategyConfig(config.StrategyDetails)
@@ -124,10 +129,6 @@ func (b *Bot) Start() error {
 	b.market = nil
 
 	if len(marketsResponse.Markets) == 0 {
-		if err = b.subscribeToProposalEvents(); err != nil {
-			return fmt.Errorf("failed to subscribe to proposal events: %w", err)
-		}
-
 		marketsResponse, err = b.createMarket()
 		if err != nil {
 			return fmt.Errorf("failed to create market: %w", err)
@@ -274,22 +275,57 @@ func (b *Bot) GetTraderDetails() string {
 }
 
 func (b *Bot) createMarket() (*dataapipb.MarketsResponse, error) {
+	if err := b.subscribeToStakeLinkingEvents(); err != nil {
+		return nil, fmt.Errorf("failed to subscribe to stake linking events: %w", err)
+	}
+
+	b.log.Debug("minting and staking tokens")
+
+	seedSvc := seed.NewService(b.ethereumAddress)
+
+	if err := seedSvc.SeedStakeDeposit(b.walletPubKey); err != nil {
+		return nil, fmt.Errorf("failed to seed stake tokens: %w", err)
+	}
+
+	b.log.Debug("waiting for stake to propagate...")
+
+	if err := b.waitForStakeLinking(); err != nil {
+		return nil, fmt.Errorf("failed stake linking: %w", err)
+	}
+
+	b.log.Debug("successfully linked stake")
+
+	if err := b.subscribeToProposalEvents(); err != nil {
+		return nil, fmt.Errorf("failed to subscribe to proposal events: %w", err)
+	}
+
+	b.log.Debug("sending new market proposal")
+
 	if err := b.sendNewMarketProposal(); err != nil {
 		return nil, fmt.Errorf("failed to send new market proposal: %w", err)
 	}
+
+	b.log.Debug("waiting for proposal ID...")
 
 	proposalID, err := b.waitForProposalID()
 	if err != nil {
 		return nil, fmt.Errorf("failed to wait for proposal ID: %w", err)
 	}
 
+	b.log.Debug("successfully sent new market proposal")
+	b.log.Debug("sending votes for market proposal")
+
 	if err = b.sendVote(b.walletPubKey, proposalID, true); err != nil {
 		return nil, fmt.Errorf("failed to send vote: %w", err)
 	}
 
+	b.log.Debug("waiting for proposal to be enacted...")
+
 	if err = b.waitForProposalEnacted(proposalID); err != nil {
 		return nil, fmt.Errorf("failed to wait for proposal to be enacted: %w", err)
 	}
+
+	b.log.Debug("market proposal successfully enacted")
 
 	marketsResponse, err := b.node.Markets(&dataapipb.MarketsRequest{})
 	if err != nil {
@@ -307,6 +343,17 @@ func (b *Bot) canPlaceOrders() bool {
 	return b.marketData != nil && b.marketData.MarketTradingMode == vega.Market_TRADING_MODE_CONTINUOUS
 }
 
+func (b *Bot) waitForStakeLinking() error {
+	for {
+		select {
+		case <-b.stakeLinkingCh:
+			return nil
+		case <-time.NewTimer(time.Second * 20).C:
+			return fmt.Errorf("timeout waiting for stake linking")
+		}
+	}
+}
+
 func (b *Bot) waitForProposalID() (string, error) {
 	for {
 		select {
@@ -315,7 +362,7 @@ func (b *Bot) waitForProposalID() (string, error) {
 				"proposalID": id,
 			}).Info("Received proposal ID")
 			return id, nil
-		case <-time.NewTimer(time.Second * 10).C:
+		case <-time.NewTimer(time.Second * 15).C:
 			return "", fmt.Errorf("timeout waiting for proposal ID")
 		}
 	}
@@ -331,7 +378,7 @@ func (b *Bot) waitForProposalEnacted(pID string) error {
 				}).Info("Proposal was enacted")
 				return nil
 			}
-		case <-time.NewTimer(time.Second * 20).C:
+		case <-time.NewTimer(time.Second * 25).C:
 			return fmt.Errorf("timeout waiting for proposal to be enacted")
 		}
 	}
