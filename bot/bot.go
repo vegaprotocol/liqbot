@@ -27,15 +27,15 @@ type PricingEngine interface {
 }
 
 // New returns a new Bot instance.
-func New(config config.BotConfig, ethereumAddress string, pe PricingEngine, wc types.WalletClient) (b Bot, err error) {
-	switch config.Strategy {
+func New(botConf config.BotConfig, seedConf *config.SeedConfig, pe PricingEngine, wc types.WalletClient) (b Bot, err error) {
+	switch botConf.Strategy {
 	case "normal":
-		b, err = normal.New(config, ethereumAddress, pe, wc)
+		b, err = normal.New(botConf, seedConf, pe, wc)
 	default:
 		err = errors.New("unrecognised bot strategy")
 	}
 	if err != nil {
-		err = fmt.Errorf("failed to create new bot with strategy %s: %w", config.Strategy, err)
+		err = fmt.Errorf("failed to create new bot with strategy %s: %w", botConf.Strategy, err)
 	}
 	return
 }

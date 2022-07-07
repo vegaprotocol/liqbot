@@ -30,7 +30,7 @@ import (
 // Bot represents one Normal liquidity bot.
 type Bot struct {
 	config                 config.BotConfig
-	ethereumAddress        string
+	seedConfig             *config.SeedConfig
 	active                 bool
 	log                    *log.Entry
 	pricingEngine          PricingEngine
@@ -73,13 +73,13 @@ type Bot struct {
 }
 
 // New returns a new instance of Bot.
-func New(config config.BotConfig, ethereumAddress string, pe PricingEngine, wc types.WalletClient) (b *Bot, err error) {
+func New(botConf config.BotConfig, seedConf *config.SeedConfig, pe PricingEngine, wc types.WalletClient) (b *Bot, err error) {
 	b = &Bot{
-		config:          config,
-		ethereumAddress: ethereumAddress,
+		config:     botConf,
+		seedConfig: seedConf,
 		log: log.WithFields(log.Fields{
-			"bot":  config.Name,
-			"node": config.Location,
+			"bot":  botConf.Name,
+			"node": botConf.Location,
 		}),
 		pricingEngine:       pe,
 		walletClient:        wc,
@@ -91,7 +91,7 @@ func New(config config.BotConfig, ethereumAddress string, pe PricingEngine, wc t
 		stakeLinkingCh:      make(chan struct{}),
 	}
 
-	b.strategy, err = validateStrategyConfig(config.StrategyDetails)
+	b.strategy, err = validateStrategyConfig(botConf.StrategyDetails)
 	if err != nil {
 		err = fmt.Errorf("failed to read strategy details: %w", err)
 		return
@@ -207,10 +207,14 @@ func (b *Bot) seedOrders() error {
 		return fmt.Errorf("failed to create seed order: %w", err)
 	}
 
+	time.Sleep(time.Second * 2)
+
 	// GTC BUY 400@250
 	if err := b.createSeedOrder(num.NewUint(250), 400, vega.Side_SIDE_BUY, vega.Order_TIME_IN_FORCE_GTC); err != nil {
 		return fmt.Errorf("failed to create seed order: %w", err)
 	}
+
+	time.Sleep(time.Second * 2)
 
 	for i := 0; !b.canPlaceOrders(); i++ {
 		side := vega.Side_SIDE_BUY
@@ -221,6 +225,8 @@ func (b *Bot) seedOrders() error {
 		if err := b.createSeedOrder(num.NewUint(500), 400, side, vega.Order_TIME_IN_FORCE_GFA); err != nil {
 			return fmt.Errorf("failed to create seed order: %w", err)
 		}
+
+		time.Sleep(time.Second * 2)
 	}
 
 	b.log.Debug("seed orders created")
@@ -246,7 +252,6 @@ func (b *Bot) createSeedOrder(price *num.Uint, size uint64, side vega.Side, tif 
 		return fmt.Errorf("failed to submit order: %w", err)
 	}
 
-	time.Sleep(time.Second * 2)
 	return nil
 }
 
@@ -281,7 +286,10 @@ func (b *Bot) createMarket() (*dataapipb.MarketsResponse, error) {
 
 	b.log.Debug("minting and staking tokens")
 
-	seedSvc := seed.NewService(b.ethereumAddress)
+	seedSvc, err := seed.NewService(b.seedConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create seed service: %w", err)
+	}
 
 	if err := seedSvc.SeedStakeDeposit(b.walletPubKey); err != nil {
 		return nil, fmt.Errorf("failed to seed stake tokens: %w", err)
@@ -863,7 +871,10 @@ func (b *Bot) calculateMarginCost(risk float64, orders []*vega.Order) *num.Uint 
 func (b *Bot) runPriceSteering() {
 	if !b.canPlaceOrders() {
 		if err := b.seedOrders(); err != nil {
-			b.log.Error("Failed to seed orders")
+			b.log.WithFields(
+				log.Fields{
+					"error": err.Error(),
+				}).Error("Failed to seed orders")
 		}
 	}
 

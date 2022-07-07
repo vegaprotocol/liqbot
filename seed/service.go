@@ -11,33 +11,41 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-)
 
-var (
-	erc20BridgeAddress   = common.HexToAddress("0x9708FF7510D4A7B9541e1699d15b53Ecb1AFDc54")
-	stakingBridgeAddress = common.HexToAddress("0x9135f5afd6F055e731bca2348429482eE614CFfA")
-	tUSDCTokenAddress    = common.HexToAddress("0x1b8a1B6CBE5c93609b46D1829Cc7f3Cb8eeE23a0")
-	vegaTokenAddress     = common.HexToAddress("0x67175Da1D5e966e40D11c4B2519392B2058373de")
-	contractOwnerAddress = common.HexToAddress("0xEe7D375bcB50C26d52E1A4a472D8822A2A22d94F")
-
-	contractOwnerPrivateKey = "a37f4c2a678aefb5037bf415a826df1540b330b7e471aa54184877ba901b9ef0"
+	"code.vegaprotocol.io/liqbot/config"
 )
 
 type Service struct {
-	ethereumAddress string
-	log             *log.Entry
+	ethereumAddress         string
+	erc20BridgeAddress      common.Address
+	stakingBridgeAddress    common.Address
+	tUSDCTokenAddress       common.Address
+	vegaTokenAddress        common.Address
+	contractOwnerAddress    common.Address
+	contractOwnerPrivateKey string
+	amount                  *big.Int
+	log                     *log.Entry
 }
 
-func NewService(ethereumAddress string) Service {
-	return Service{
-		ethereumAddress: ethereumAddress,
-		log:             log.WithFields(log.Fields{"service": "seed"}),
+func NewService(conf *config.SeedConfig) (Service, error) {
+	if conf == nil {
+		return Service{}, fmt.Errorf("config is nil")
 	}
+
+	return Service{
+		ethereumAddress:         conf.EthereumAddress,
+		erc20BridgeAddress:      common.HexToAddress(conf.Erc20BridgeAddress),
+		stakingBridgeAddress:    common.HexToAddress(conf.StakingBridgeAddress),
+		tUSDCTokenAddress:       common.HexToAddress(conf.TUSDCTokenAddress),
+		vegaTokenAddress:        common.HexToAddress(conf.VegaTokenAddress),
+		contractOwnerAddress:    common.HexToAddress(conf.ContractOwnerAddress),
+		contractOwnerPrivateKey: conf.ContractOwnerPrivateKey,
+		amount:                  big.NewInt(conf.Amount),
+		log:                     log.WithFields(log.Fields{"service": "seed"}),
+	}, nil
 }
 
 func (s Service) SeedStakeDeposit(vegaPubKey string) error {
-	amount := big.NewInt(1000000000000000000)
-
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 
@@ -46,39 +54,39 @@ func (s Service) SeedStakeDeposit(vegaPubKey string) error {
 		return fmt.Errorf("failed to create Ethereum client: %w", err)
 	}
 
-	stakingBridge, err := client.NewStakingBridgeSession(ctx, contractOwnerPrivateKey, stakingBridgeAddress, nil)
+	stakingBridge, err := client.NewStakingBridgeSession(ctx, s.contractOwnerPrivateKey, s.stakingBridgeAddress, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create staking bridge: %w", err)
 	}
 
-	erc20bridge, err := client.NewERC20BridgeSession(ctx, contractOwnerPrivateKey, erc20BridgeAddress, nil)
+	erc20bridge, err := client.NewERC20BridgeSession(ctx, s.contractOwnerPrivateKey, s.erc20BridgeAddress, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create staking bridge: %w", err)
 	}
 
-	tUSDCToken, err := client.NewBaseTokenSession(ctx, contractOwnerPrivateKey, tUSDCTokenAddress, nil)
+	tUSDCToken, err := client.NewBaseTokenSession(ctx, s.contractOwnerPrivateKey, s.tUSDCTokenAddress, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create tUSDC token: %w", err)
 	}
 
-	vegaToken, err := client.NewBaseTokenSession(ctx, contractOwnerPrivateKey, vegaTokenAddress, nil)
+	vegaToken, err := client.NewBaseTokenSession(ctx, s.contractOwnerPrivateKey, s.vegaTokenAddress, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create vega token: %w", err)
 	}
 
-	if err := s.mintTokenAndShowBalances(tUSDCToken, contractOwnerAddress, amount); err != nil {
+	if err := s.mintTokenAndShowBalances(tUSDCToken, s.contractOwnerAddress, s.amount); err != nil {
 		return fmt.Errorf("failed to mint and show balances for tUSDCToken: %w", err)
 	}
 
-	if err := s.mintTokenAndShowBalances(vegaToken, contractOwnerAddress, amount); err != nil {
+	if err := s.mintTokenAndShowBalances(vegaToken, s.contractOwnerAddress, s.amount); err != nil {
 		return fmt.Errorf("failed to mint and show balances for vegaToken: %w", err)
 	}
 
-	if err := s.approveAndDepositToken(tUSDCToken, erc20bridge, amount, vegaPubKey); err != nil {
+	if err := s.approveAndDepositToken(tUSDCToken, erc20bridge, s.amount, vegaPubKey); err != nil {
 		return fmt.Errorf("failed to approve and deposit token on erc20 bridge: %w", err)
 	}
 
-	if err := s.approveAndStakeToken(vegaToken, stakingBridge, amount, vegaPubKey); err != nil {
+	if err := s.approveAndStakeToken(vegaToken, stakingBridge, s.amount, vegaPubKey); err != nil {
 		return fmt.Errorf("failed to approve and stake token on staking bridge: %w", err)
 	}
 

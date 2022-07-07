@@ -13,4 +13,3 @@ FROM alpine:${ALPINE_VERSION}
 # USER nonroot:nonroot
 # COPY --chown=nonroot:nonroot bin/liqbot /liqbot
 COPY --from=builder /build/bin/liqbot /liqbot
-COPY --from=builder /build/config/config_docker.yaml /config/config.yaml

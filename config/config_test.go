@@ -29,6 +29,10 @@ func TestCheckConfig(t *testing.T) {
 	err = config.CheckConfig(&cfg)
 	assert.True(t, strings.HasPrefix(err.Error(), config.ErrMissingEmptyConfigSection.Error()))
 
+	cfg.Seed = &config.SeedConfig{}
+	err = config.CheckConfig(&cfg)
+	assert.True(t, strings.HasPrefix(err.Error(), config.ErrMissingEmptyConfigSection.Error()))
+
 	cfg.Bots = []config.BotConfig{}
 	err = config.CheckConfig(&cfg)
 	assert.True(t, strings.HasPrefix(err.Error(), config.ErrMissingEmptyConfigSection.Error()))

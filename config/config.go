@@ -107,12 +107,24 @@ type WalletConfig struct {
 	EthereumAddress string `yaml:"ethereumAddress"`
 }
 
+type SeedConfig struct {
+	EthereumAddress         string `yaml:"ethereumAddress"`
+	Erc20BridgeAddress      string `yaml:"erc20BridgeAddress"`
+	StakingBridgeAddress    string `yaml:"stakingBridgeAddress"`
+	TUSDCTokenAddress       string `yaml:"tUSDCTokenAddress"`
+	VegaTokenAddress        string `yaml:"vegaTokenAddress"`
+	ContractOwnerAddress    string `yaml:"contractOwnerAddress"`
+	ContractOwnerPrivateKey string `yaml:"contractOwnerPrivateKey"`
+	Amount                  int64  `yaml:"amount"`
+}
+
 // Config describes the top level config file format.
 type Config struct {
 	Server *ServerConfig `yaml:"server"`
 
 	Pricing *PricingConfig `yaml:"pricing"`
 	Wallet  *WalletConfig  `yaml:"wallet"`
+	Seed    *SeedConfig    `yaml:"seed"`
 
 	Bots []BotConfig `yaml:"bots"`
 }

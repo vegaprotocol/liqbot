@@ -13,7 +13,15 @@ pricing:
 wallet:
   url: http://127.0.0.1:1789
   tokenExpiry: 31536000  # seconds
-  ethereumAddress: https://127.0.0.1:8545
+seed:
+  ethereumAddress:      https://127.0.0.1:8545
+  erc20BridgeAddress:   0x9708FF7510D4A7B9541e1699d15b53Ecb1AFDc54
+  stakingBridgeAddress: 0x9135f5afd6F055e731bca2348429482eE614CFfA
+  tUSDCTokenAddress:    0x1b8a1B6CBE5c93609b46D1829Cc7f3Cb8eeE23a0
+  vegaTokenAddress:     0x67175Da1D5e966e40D11c4B2519392B2058373de
+  contractOwnerAddress: 0xEe7D375bcB50C26d52E1A4a472D8822A2A22d94F
+  contractOwnerPrivateKey: a37f4c2a678aefb5037bf415a826df1540b330b7e471aa54184877ba901b9ef0
+  amount: 1000000000000000000
 bots:
   - name: w00
     location: localhost:3027
