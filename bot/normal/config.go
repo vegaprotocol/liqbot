@@ -41,6 +41,9 @@ type Strategy struct {
 	// CommitmentFraction is the fractional amount of stake for the LP
 	CommitmentFraction float64
 
+	// CommitmentAmount is the amount of stake for the LP
+	CommitmentAmount string
+
 	// Fee is the 0->1 fee for supplying liquidity
 	Fee float64
 
@@ -123,7 +126,7 @@ func steeringMethodToEnum(method string) (SteeringMethod, error) {
 	case "coinAndBinomial":
 		return CoinAndBinomial, nil
 	}
-	return NotSet, fmt.Errorf("Steering method unknown:%s", method)
+	return NotSet, fmt.Errorf("steering method unknown:%s", method)
 }
 
 func validateStrategyConfig(details config.Strategy) (s *Strategy, err error) {
@@ -140,14 +143,15 @@ func validateStrategyConfig(details config.Strategy) (s *Strategy, err error) {
 	s.StakeFraction = details.StakeFraction
 	s.OrdersFraction = details.OrdersFraction
 	s.CommitmentFraction = details.CommitmentFraction
+	s.CommitmentAmount = details.CommitmentAmount
 	s.Fee, _ = strconv.ParseFloat(details.Fee, 64)
 
-	var shorteningShape *ShapeConfig = &ShapeConfig{
+	shorteningShape := &ShapeConfig{
 		Sells: []*vega.LiquidityOrder{},
 		Buys:  []*vega.LiquidityOrder{},
 	}
 
-	var longeningShape *ShapeConfig = &ShapeConfig{
+	longeningShape := &ShapeConfig{
 		Sells: []*vega.LiquidityOrder{},
 		Buys:  []*vega.LiquidityOrder{},
 	}

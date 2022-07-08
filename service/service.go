@@ -129,10 +129,12 @@ func (s *Service) initBots() error {
 
 	for _, botcfg := range s.config.Bots {
 		wc := wallet.NewClient(s.config.Wallet.URL)
+
 		b, err := bot.New(botcfg, s.config.Seed, s.pricingEngine, wc)
 		if err != nil {
 			return fmt.Errorf("failed to create bot %s: %w", botcfg.Name, err)
 		}
+
 		s.bots[botcfg.Name] = b
 		log.WithFields(log.Fields{
 			"name": botcfg.Name,

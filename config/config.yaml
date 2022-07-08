@@ -31,6 +31,7 @@ bots:
     instrumentBase: BTC
     instrumentQuote: USD
     strategy: normal
+    settlementAsset: 993ed98f4f770d91a796faab1738551193ba45c62341d20597df70fea6704ede
     strategyDetails:
       expectedMarkPrice: 0
       auctionVolume: 100
@@ -39,6 +40,7 @@ bots:
       posManagementFraction: 0.25
       stakeFraction: 0.1
       ordersFraction: 0.25
+      commitmentAmount: 500000000
       commitmentFraction: 0.10
       fee: 0.01
 

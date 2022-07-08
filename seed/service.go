@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math/big"
-	"time"
 
 	vgethereum "code.vegaprotocol.io/shared/libs/ethereum"
 	log "github.com/sirupsen/logrus"
@@ -45,10 +44,7 @@ func NewService(conf *config.SeedConfig) (Service, error) {
 	}, nil
 }
 
-func (s Service) SeedStakeDeposit(vegaPubKey string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer cancel()
-
+func (s Service) SeedStakeDeposit(ctx context.Context, vegaPubKey string) error {
 	client, err := vgethereum.NewClient(ctx, s.ethereumAddress, 1440)
 	if err != nil {
 		return fmt.Errorf("failed to create Ethereum client: %w", err)
@@ -74,11 +70,11 @@ func (s Service) SeedStakeDeposit(vegaPubKey string) error {
 		return fmt.Errorf("failed to create vega token: %w", err)
 	}
 
-	if err := s.mintTokenAndShowBalances(tUSDCToken, s.contractOwnerAddress, s.amount); err != nil {
+	if err := s.mintToken(tUSDCToken, s.contractOwnerAddress, s.amount); err != nil {
 		return fmt.Errorf("failed to mint and show balances for tUSDCToken: %w", err)
 	}
 
-	if err := s.mintTokenAndShowBalances(vegaToken, s.contractOwnerAddress, s.amount); err != nil {
+	if err := s.mintToken(vegaToken, s.contractOwnerAddress, s.amount); err != nil {
 		return fmt.Errorf("failed to mint and show balances for vegaToken: %w", err)
 	}
 
@@ -103,21 +99,7 @@ type token interface {
 	Address() common.Address
 }
 
-func (s Service) mintTokenAndShowBalances(token token, address common.Address, amount *big.Int) error {
-	s.log.Debug("---- Minting new token")
-
-	balance, err := token.BalanceOf(address)
-	if err != nil {
-		return fmt.Errorf("failed to get balance for %s: %w", address, err)
-	}
-
-	s.log.WithFields(
-		log.Fields{
-			"token":   token.Address(),
-			"address": address,
-			"balance": balance,
-		}).Debug("Initial balance")
-
+func (s Service) mintToken(token token, address common.Address, amount *big.Int) error {
 	s.log.WithFields(
 		log.Fields{
 			"token":   token.Address(),
@@ -129,26 +111,17 @@ func (s Service) mintTokenAndShowBalances(token token, address common.Address, a
 		return fmt.Errorf("failed to call Mint contract: %w", err)
 	}
 
-	balance, err = token.BalanceOf(address)
-	if err != nil {
-		return fmt.Errorf("failed to get balance for %s: %w", address, err)
-	}
-
 	s.log.WithFields(
 		log.Fields{
 			"token":   token.Address(),
 			"amount":  amount,
 			"address": address,
-		}).Debug("Balance after minting")
-
-	s.log.Debug("---- Token minted")
+		}).Debug("Token minted")
 
 	return nil
 }
 
 func (s Service) approveAndDepositToken(token token, bridge *vgethereum.ERC20BridgeSession, amount *big.Int, vegaPubKey string) error {
-	s.log.Debug("---- Deposit token")
-
 	s.log.WithFields(
 		log.Fields{
 			"token":   token.Address(),
@@ -176,14 +149,17 @@ func (s Service) approveAndDepositToken(token token, bridge *vgethereum.ERC20Bri
 		return fmt.Errorf("failed to deposit asset: %w", err)
 	}
 
-	s.log.Debug("---- Token deposited")
+	s.log.WithFields(
+		log.Fields{
+			"token":   token.Address(),
+			"amount":  amount,
+			"address": bridge.Address(),
+		}).Debug("Token deposited")
 
 	return nil
 }
 
 func (s Service) approveAndStakeToken(token token, bridge *vgethereum.StakingBridgeSession, amount *big.Int, vegaPubKey string) error {
-	s.log.Debug("---- Stake token")
-
 	s.log.WithFields(
 		log.Fields{
 			"token":   token.Address(),
@@ -211,7 +187,12 @@ func (s Service) approveAndStakeToken(token token, bridge *vgethereum.StakingBri
 		return fmt.Errorf("failed to stake asset: %w", err)
 	}
 
-	s.log.Debug("---- Token staked")
+	s.log.WithFields(
+		log.Fields{
+			"token":      token.Address(),
+			"amount":     amount,
+			"vegaPubKey": vegaPubKey,
+		}).Debug("Token staked")
 
 	return nil
 }

@@ -49,6 +49,9 @@ type BotConfig struct {
 	// Strategy specifies which algorithm the bot is to use.
 	Strategy string `yaml:"strategy"`
 
+	// SettlementAsset is the asset used for settlement.
+	SettlementAsset string `yaml:"settlementAsset"`
+
 	// StrategyDetails contains the parameters needed by the strategy algorithm.
 	StrategyDetails Strategy `yaml:"strategyDetails"`
 }
@@ -64,6 +67,7 @@ type Strategy struct {
 	StakeFraction         float64 `yaml:"stakeFraction"`
 	OrdersFraction        float64 `yaml:"ordersFraction"`
 	CommitmentFraction    float64 `yaml:"commitmentFraction"`
+	CommitmentAmount      string  `yaml:"commitmentAmount"`
 	Fee                   string  `yaml:"fee"`
 
 	PosManagementSleepMilliseconds   int     `yaml:"posManagementSleepMilliseconds"`

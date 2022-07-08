@@ -1,6 +1,7 @@
 package normal
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -11,7 +12,6 @@ import (
 
 	"code.vegaprotocol.io/liqbot/config"
 	"code.vegaprotocol.io/liqbot/node"
-	"code.vegaprotocol.io/liqbot/seed"
 	"code.vegaprotocol.io/liqbot/types"
 	"code.vegaprotocol.io/liqbot/types/num"
 
@@ -19,7 +19,6 @@ import (
 	ppservice "code.vegaprotocol.io/priceproxy/service"
 	dataapipb "code.vegaprotocol.io/protos/data-node/api/v1"
 	"code.vegaprotocol.io/protos/vega"
-	vegaapipb "code.vegaprotocol.io/protos/vega/api/v1"
 	commandspb "code.vegaprotocol.io/protos/vega/commands/v1"
 	walletpb "code.vegaprotocol.io/protos/vega/wallet/v1"
 	"code.vegaprotocol.io/vegawallet/wallets"
@@ -46,7 +45,7 @@ type Bot struct {
 	balanceMargin  *num.Uint
 	balanceBond    *num.Uint
 
-	walletClient     types.WalletClient
+	walletClient     WalletClient
 	walletPassphrase string
 	walletPubKey     string // "58595a" ...
 
@@ -73,7 +72,7 @@ type Bot struct {
 }
 
 // New returns a new instance of Bot.
-func New(botConf config.BotConfig, seedConf *config.SeedConfig, pe PricingEngine, wc types.WalletClient) (b *Bot, err error) {
+func New(botConf config.BotConfig, seedConf *config.SeedConfig, pe PricingEngine, wc WalletClient) (b *Bot, err error) {
 	b = &Bot{
 		config:     botConf,
 		seedConfig: seedConf,
@@ -118,6 +117,7 @@ func (b *Bot) Start() error {
 	if err != nil {
 		return fmt.Errorf("failed to connect to Vega gRPC node: %w", err)
 	}
+
 	b.log.WithFields(log.Fields{
 		"address": b.config.Location,
 	}).Debug("Connected to Vega gRPC node")
@@ -126,10 +126,11 @@ func (b *Bot) Start() error {
 	if err != nil {
 		return fmt.Errorf("failed to get markets: %w", err)
 	}
+
 	b.market = nil
 
 	if len(marketsResponse.Markets) == 0 {
-		marketsResponse, err = b.createMarket()
+		marketsResponse, err = b.createMarket(context.Background())
 		if err != nil {
 			return fmt.Errorf("failed to create market: %w", err)
 		}
@@ -162,9 +163,11 @@ func (b *Bot) Start() error {
 			}
 		}
 	}
+
 	if b.market == nil {
 		return fmt.Errorf("failed to find futures markets: base/ticker=%s, quote=%s", b.config.InstrumentBase, b.config.InstrumentQuote)
 	}
+
 	b.log.WithFields(log.Fields{
 		"id":                b.market.Id,
 		"base/ticker":       b.config.InstrumentBase,
@@ -177,6 +180,7 @@ func (b *Bot) Start() error {
 	if err != nil {
 		return fmt.Errorf("unable to look up asset details for %s", b.settlementAssetID)
 	}
+
 	erc20 := assetResponse.Asset.Details.GetErc20()
 	if erc20 != nil {
 		b.settlementAssetAddress = erc20.ContractAddress
@@ -186,71 +190,25 @@ func (b *Bot) Start() error {
 
 	b.balanceGeneral = num.Zero()
 	b.balanceMargin = num.Zero()
-
 	b.active = true
 	b.stopPosMgmt = make(chan bool)
 	b.stopPriceSteer = make(chan bool)
 
-	err = b.initialiseData()
-	if err != nil {
+	if err = b.initialiseData(); err != nil {
 		return fmt.Errorf("failed to initialise data: %w", err)
 	}
-	go b.runPositionManagement()
-	go b.runPriceSteering()
 
-	return nil
-}
+	ctx, cancel := context.WithCancel(context.Background())
 
-func (b *Bot) seedOrders() error {
-	// GTC SELL 400@1000
-	if err := b.createSeedOrder(num.NewUint(1000), 400, vega.Side_SIDE_SELL, vega.Order_TIME_IN_FORCE_GTC); err != nil {
-		return fmt.Errorf("failed to create seed order: %w", err)
-	}
+	go func() {
+		defer cancel()
+		b.runPositionManagement(ctx)
+	}()
 
-	time.Sleep(time.Second * 2)
-
-	// GTC BUY 400@250
-	if err := b.createSeedOrder(num.NewUint(250), 400, vega.Side_SIDE_BUY, vega.Order_TIME_IN_FORCE_GTC); err != nil {
-		return fmt.Errorf("failed to create seed order: %w", err)
-	}
-
-	time.Sleep(time.Second * 2)
-
-	for i := 0; !b.canPlaceOrders(); i++ {
-		side := vega.Side_SIDE_BUY
-		if i%2 == 0 {
-			side = vega.Side_SIDE_SELL
-		}
-
-		if err := b.createSeedOrder(num.NewUint(500), 400, side, vega.Order_TIME_IN_FORCE_GFA); err != nil {
-			return fmt.Errorf("failed to create seed order: %w", err)
-		}
-
-		time.Sleep(time.Second * 2)
-	}
-
-	b.log.Debug("seed orders created")
-	return nil
-}
-
-func (b *Bot) createSeedOrder(price *num.Uint, size uint64, side vega.Side, tif vega.Order_TimeInForce) error {
-	b.log.WithFields(log.Fields{
-		"size":  size,
-		"side":  side,
-		"price": price,
-		"tif":   tif.String(),
-	}).Debug("Submitting seed order")
-
-	if err := b.submitOrder(
-		size,
-		price,
-		side,
-		tif,
-		vega.Order_TYPE_LIMIT,
-		"MarketCreation",
-		int64(b.strategy.PosManagementFraction)); err != nil {
-		return fmt.Errorf("failed to submit order: %w", err)
-	}
+	go func() {
+		defer cancel()
+		b.runPriceSteering(ctx)
+	}()
 
 	return nil
 }
@@ -279,117 +237,8 @@ func (b *Bot) GetTraderDetails() string {
 		settlementEthereumContractAddress + "\"}"
 }
 
-func (b *Bot) createMarket() (*dataapipb.MarketsResponse, error) {
-	if err := b.subscribeToStakeLinkingEvents(); err != nil {
-		return nil, fmt.Errorf("failed to subscribe to stake linking events: %w", err)
-	}
-
-	b.log.Debug("minting and staking tokens")
-
-	seedSvc, err := seed.NewService(b.seedConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create seed service: %w", err)
-	}
-
-	if err := seedSvc.SeedStakeDeposit(b.walletPubKey); err != nil {
-		return nil, fmt.Errorf("failed to seed stake tokens: %w", err)
-	}
-
-	b.log.Debug("waiting for stake to propagate...")
-
-	if err := b.waitForStakeLinking(); err != nil {
-		return nil, fmt.Errorf("failed stake linking: %w", err)
-	}
-
-	b.log.Debug("successfully linked stake")
-
-	if err := b.subscribeToProposalEvents(); err != nil {
-		return nil, fmt.Errorf("failed to subscribe to proposal events: %w", err)
-	}
-
-	b.log.Debug("sending new market proposal")
-
-	if err := b.sendNewMarketProposal(); err != nil {
-		return nil, fmt.Errorf("failed to send new market proposal: %w", err)
-	}
-
-	b.log.Debug("waiting for proposal ID...")
-
-	proposalID, err := b.waitForProposalID()
-	if err != nil {
-		return nil, fmt.Errorf("failed to wait for proposal ID: %w", err)
-	}
-
-	b.log.Debug("successfully sent new market proposal")
-	b.log.Debug("sending votes for market proposal")
-
-	if err = b.sendVote(b.walletPubKey, proposalID, true); err != nil {
-		return nil, fmt.Errorf("failed to send vote: %w", err)
-	}
-
-	b.log.Debug("waiting for proposal to be enacted...")
-
-	if err = b.waitForProposalEnacted(proposalID); err != nil {
-		return nil, fmt.Errorf("failed to wait for proposal to be enacted: %w", err)
-	}
-
-	b.log.Debug("market proposal successfully enacted")
-
-	marketsResponse, err := b.node.Markets(&dataapipb.MarketsRequest{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get markets: %w", err)
-	}
-
-	if len(marketsResponse.Markets) != 0 {
-		b.market = marketsResponse.Markets[0]
-	}
-
-	return marketsResponse, nil
-}
-
 func (b *Bot) canPlaceOrders() bool {
 	return b.marketData != nil && b.marketData.MarketTradingMode == vega.Market_TRADING_MODE_CONTINUOUS
-}
-
-func (b *Bot) waitForStakeLinking() error {
-	for {
-		select {
-		case <-b.stakeLinkingCh:
-			return nil
-		case <-time.NewTimer(time.Second * 20).C:
-			return fmt.Errorf("timeout waiting for stake linking")
-		}
-	}
-}
-
-func (b *Bot) waitForProposalID() (string, error) {
-	for {
-		select {
-		case id := <-b.proposalIDCh:
-			b.log.WithFields(log.Fields{
-				"proposalID": id,
-			}).Info("Received proposal ID")
-			return id, nil
-		case <-time.NewTimer(time.Second * 15).C:
-			return "", fmt.Errorf("timeout waiting for proposal ID")
-		}
-	}
-}
-
-func (b *Bot) waitForProposalEnacted(pID string) error {
-	for {
-		select {
-		case id := <-b.proposalEnactedCh:
-			if id == pID {
-				b.log.WithFields(log.Fields{
-					"proposalID": id,
-				}).Info("Proposal was enacted")
-				return nil
-			}
-		case <-time.NewTimer(time.Second * 25).C:
-			return fmt.Errorf("timeout waiting for proposal to be enacted")
-		}
-	}
 }
 
 func mulFrac(n *num.Uint, x float64, precision float64) *num.Uint {
@@ -399,7 +248,7 @@ func mulFrac(n *num.Uint, x float64, precision float64) *num.Uint {
 	return val
 }
 
-func (b *Bot) sendLiquidityProvision(buys, sells []*vega.LiquidityOrder) error {
+func (b *Bot) sendLiquidityProvision(ctx context.Context, buys, sells []*vega.LiquidityOrder) error {
 	// CommitmentAmount is the fractional commitment value * total collateral
 	balTotal := num.Sum(b.balanceGeneral, b.balanceMargin, b.balanceBond)
 	commitment := mulFrac(balTotal, b.strategy.CommitmentFraction, 15)
@@ -417,10 +266,12 @@ func (b *Bot) sendLiquidityProvision(buys, sells []*vega.LiquidityOrder) error {
 		PubKey:  b.walletPubKey,
 		Command: cmd,
 	}
-	err := b.signSubmitTx(submitTxReq, nil)
+
+	err := b.signSubmitTx(ctx, submitTxReq)
 	if err != nil {
 		return fmt.Errorf("failed to submit LiquidityProvisionSubmission(%v): %w", cmd, err)
 	}
+
 	b.log.WithFields(log.Fields{
 		"commitment":         commitment,
 		"commitmentFraction": b.strategy.CommitmentFraction,
@@ -429,12 +280,12 @@ func (b *Bot) sendLiquidityProvision(buys, sells []*vega.LiquidityOrder) error {
 	return nil
 }
 
-func (b *Bot) sendLiquidityProvisionAmendment(buys, sells []*vega.LiquidityOrder) error {
+func (b *Bot) sendLiquidityProvisionAmendment(ctx context.Context, buys, sells []*vega.LiquidityOrder) error {
 	balTotal := num.Sum(b.balanceGeneral, b.balanceMargin, b.balanceBond)
 	commitment := mulFrac(balTotal, b.strategy.CommitmentFraction, 15)
 
 	if commitment == num.NewUint(0) {
-		return b.sendLiquidityProvisionCancellation(balTotal)
+		return b.sendLiquidityProvisionCancellation(ctx, balTotal)
 	}
 
 	cmd := &walletpb.SubmitTransactionRequest_LiquidityProvisionAmendment{
@@ -452,7 +303,7 @@ func (b *Bot) sendLiquidityProvisionAmendment(buys, sells []*vega.LiquidityOrder
 		Command: cmd,
 	}
 
-	err := b.signSubmitTx(submitTxReq, nil)
+	err := b.signSubmitTx(ctx, submitTxReq)
 	if err != nil {
 		return fmt.Errorf("failed to submit LiquidityProvisionAmendment: %w", err)
 	}
@@ -465,7 +316,7 @@ func (b *Bot) sendLiquidityProvisionAmendment(buys, sells []*vega.LiquidityOrder
 	return nil
 }
 
-func (b *Bot) sendLiquidityProvisionCancellation(balTotal *num.Uint) error {
+func (b *Bot) sendLiquidityProvisionCancellation(ctx context.Context, balTotal *num.Uint) error {
 	cmd := &walletpb.SubmitTransactionRequest_LiquidityProvisionCancellation{
 		LiquidityProvisionCancellation: &commandspb.LiquidityProvisionCancellation{
 			MarketId: b.market.Id,
@@ -477,7 +328,7 @@ func (b *Bot) sendLiquidityProvisionCancellation(balTotal *num.Uint) error {
 		Command: cmd,
 	}
 
-	err := b.signSubmitTx(submitTxReq, nil)
+	err := b.signSubmitTx(ctx, submitTxReq)
 	if err != nil {
 		return fmt.Errorf("failed to submit LiquidityProvisionCancellation: %w", err)
 	}
@@ -490,7 +341,7 @@ func (b *Bot) sendLiquidityProvisionCancellation(balTotal *num.Uint) error {
 	return nil
 }
 
-func (b *Bot) checkForShapeChange() {
+func (b *Bot) checkForShapeChange(ctx context.Context) {
 	var shape string
 	if b.openVolume <= 0 {
 		shape = "longening"
@@ -514,7 +365,7 @@ func (b *Bot) checkForShapeChange() {
 	if (b.openVolume > 0 && b.previousOpenVolume <= 0) ||
 		(b.openVolume < 0 && b.previousOpenVolume >= 0) {
 		b.log.WithFields(log.Fields{"shape": shape}).Debug("Flipping LP direction")
-		err := b.sendLiquidityProvisionAmendment(b.buyShape, b.sellShape)
+		err := b.sendLiquidityProvisionAmendment(ctx, b.buyShape, b.sellShape)
 		if err != nil {
 			b.log.WithFields(log.Fields{
 				"error": err.Error(),
@@ -525,7 +376,7 @@ func (b *Bot) checkForShapeChange() {
 	}
 }
 
-func (b *Bot) checkPositionManagement() {
+func (b *Bot) checkPositionManagement(ctx context.Context) {
 	if !b.canPlaceOrders() {
 		// Only allow position management during continuous trading
 		return
@@ -559,7 +410,7 @@ func (b *Bot) checkPositionManagement() {
 		return
 	}
 
-	err := b.submitOrder(size, num.Zero(), side, vega.Order_TIME_IN_FORCE_IOC, vega.Order_TYPE_MARKET, "PosManagement", 0)
+	err := b.submitOrder(ctx, size, num.Zero(), side, vega.Order_TIME_IN_FORCE_IOC, vega.Order_TYPE_MARKET, "PosManagement", 0)
 	if err != nil {
 		b.log.WithFields(log.Fields{
 			"error": err,
@@ -569,23 +420,12 @@ func (b *Bot) checkPositionManagement() {
 	}
 }
 
-func (b *Bot) signSubmitTx(
-	submitTxReq *walletpb.SubmitTransactionRequest,
-	blockData *vegaapipb.LastBlockHeightResponse,
-) error {
+func (b *Bot) signSubmitTx(ctx context.Context, submitTxReq *walletpb.SubmitTransactionRequest) error {
 	msg := "failed to sign+submit tx: %w"
-
-	if blockData == nil {
-		var err error
-		blockData, err = b.node.LastBlockData()
-		if err != nil {
-			return fmt.Errorf(msg, fmt.Errorf("failed to get block height: %w", err))
-		}
-	}
 
 	submitTxReq.Propagate = true
 
-	_, err := b.walletClient.SignTx(submitTxReq)
+	_, err := b.walletClient.SignTx(ctx, submitTxReq)
 	if err != nil {
 		return fmt.Errorf(msg, fmt.Errorf("failed to sign tx: %w", err))
 	}
@@ -594,6 +434,7 @@ func (b *Bot) signSubmitTx(
 }
 
 func (b *Bot) submitOrder(
+	ctx context.Context,
 	size uint64,
 	price *num.Uint,
 	side vega.Side,
@@ -615,9 +456,11 @@ func (b *Bot) submitOrder(
 			PeggedOrder: nil,
 		},
 	}
+
 	if tif == vega.Order_TIME_IN_FORCE_GTT {
 		cmd.OrderSubmission.ExpiresAt = time.Now().UnixNano() + (secondsFromNow * 1000000000)
 	}
+
 	if orderType != vega.Order_TYPE_MARKET {
 		cmd.OrderSubmission.Price = price.String()
 	}
@@ -626,10 +469,11 @@ func (b *Bot) submitOrder(
 		PubKey:  b.walletPubKey,
 		Command: cmd,
 	}
-	err := b.signSubmitTx(submitTxReq, nil)
-	if err != nil {
+
+	if err := b.signSubmitTx(ctx, submitTxReq); err != nil {
 		return fmt.Errorf("failed to submit OrderSubmission: %w", err)
 	}
+
 	return nil
 }
 
@@ -706,7 +550,7 @@ func (b *Bot) initialiseData() error {
 
 // Divide the auction amount into 10 orders and place them randomly
 // around the current price at upto 50+/- from it.
-func (b *Bot) placeAuctionOrders() {
+func (b *Bot) placeAuctionOrders(ctx context.Context) {
 	// Check we have not placed them already
 	if b.auctionOrdersPlaced {
 		return
@@ -729,7 +573,7 @@ func (b *Bot) placeAuctionOrders() {
 		if rand.Intn(2) == 0 {
 			side = vega.Side_SIDE_SELL
 		}
-		err := b.submitOrder(size.Uint64(), price, side, vega.Order_TIME_IN_FORCE_GTT, vega.Order_TYPE_LIMIT, "AuctionOrder", 330)
+		err := b.submitOrder(ctx, size.Uint64(), price, side, vega.Order_TIME_IN_FORCE_GTT, vega.Order_TYPE_LIMIT, "AuctionOrder", 330)
 		if err == nil {
 			totalVolume = num.Zero().Add(totalVolume, size)
 		} else {
@@ -740,25 +584,31 @@ func (b *Bot) placeAuctionOrders() {
 	b.auctionOrdersPlaced = true
 }
 
-func (b *Bot) runPositionManagement() {
-	var err error
-	var firstTime bool = true
+func (b *Bot) runPositionManagement(ctx context.Context) {
+	defer b.log.Warning("Position management stopped")
+
+	firstTime := true
 
 	// We always start off with longening shapes
 	b.buyShape = b.strategy.LongeningShape.Buys
 	b.sellShape = b.strategy.LongeningShape.Sells
 
 	sleepTime := b.strategy.PosManagementSleepMilliseconds
+
 	for {
 		select {
 		case <-b.stopPosMgmt:
 			b.log.Debug("Stopping bot position management")
 			b.active = false
 			return
-
+		case <-ctx.Done():
+			b.log.Warning(ctx.Err())
+			return
 		default:
 			// At the start of each loop, wait for positive general account balance. This is in case the network has
 			// been restarted.
+			var err error
+
 			if firstTime {
 				err = b.checkInitialMargin()
 				if err != nil {
@@ -769,7 +619,7 @@ func (b *Bot) runPositionManagement() {
 					return
 				}
 				// Submit LP order to market.
-				err = b.sendLiquidityProvision(b.buyShape, b.sellShape)
+				err = b.sendLiquidityProvision(ctx, b.buyShape, b.sellShape)
 				if err != nil {
 					b.log.WithFields(log.Fields{
 						"error": err.Error(),
@@ -781,10 +631,10 @@ func (b *Bot) runPositionManagement() {
 			// Only update liquidity and position if we are not in auction
 			if b.canPlaceOrders() {
 				b.auctionOrdersPlaced = false
-				b.checkForShapeChange()
-				b.checkPositionManagement()
+				b.checkForShapeChange(ctx)
+				b.checkPositionManagement(ctx)
 			} else {
-				b.placeAuctionOrders()
+				b.placeAuctionOrders(ctx)
 			}
 
 			// If we have lost the incoming streams we should attempt to reconnect
@@ -868,9 +718,11 @@ func (b *Bot) calculateMarginCost(risk float64, orders []*vega.Order) *num.Uint 
 	return totalMargin
 }
 
-func (b *Bot) runPriceSteering() {
+func (b *Bot) runPriceSteering(ctx context.Context) {
+	defer b.log.Warning("Price steering stopped")
+
 	if !b.canPlaceOrders() {
-		if err := b.seedOrders(); err != nil {
+		if err := b.seedOrders(ctx); err != nil {
 			b.log.WithFields(
 				log.Fields{
 					"error": err.Error(),
@@ -896,7 +748,9 @@ func (b *Bot) runPriceSteering() {
 			b.log.Debug("Stopping bot market price steering")
 			b.active = false
 			return
-
+		case <-ctx.Done():
+			b.log.Warning(ctx.Err())
+			return
 		default:
 			canPlaceOrders := b.canPlaceOrders() // redundant?
 			if b.strategy.PriceSteerOrderScale > 0 && canPlaceOrders {
@@ -952,6 +806,7 @@ func (b *Bot) runPriceSteering() {
 						}).Debug("Submitting order")
 
 						err = b.submitOrder(
+							ctx,
 							size.Uint64(),
 							price,
 							side,
@@ -985,8 +840,8 @@ func (b *Bot) runPriceSteering() {
 					"canPlaceOrders":       canPlaceOrders,
 				}).Debug("Price steering: Cannot place orders")
 			}
-			err = doze(time.Duration(sleepTime)*time.Millisecond, b.stopPriceSteer)
-			if err != nil {
+
+			if err = doze(time.Duration(sleepTime)*time.Millisecond, b.stopPriceSteer); err != nil {
 				b.log.Debug("Stopping bot market price steering")
 				b.active = false
 				return
@@ -1031,11 +886,13 @@ func (b *Bot) GetRealisticOrderDetails(externalPrice *num.Uint) (price, size *nu
 }
 
 func (b *Bot) setupWallet() error {
+	ctx := context.Background()
+
 	b.walletPassphrase = "123"
 
-	if err := b.walletClient.LoginWallet(b.config.Name, b.walletPassphrase); err != nil {
+	if err := b.walletClient.LoginWallet(ctx, b.config.Name, b.walletPassphrase); err != nil {
 		if strings.Contains(err.Error(), wallets.ErrWalletDoesNotExists.Error()) {
-			if err = b.walletClient.CreateWallet(b.config.Name, b.walletPassphrase); err != nil {
+			if err = b.walletClient.CreateWallet(ctx, b.config.Name, b.walletPassphrase); err != nil {
 				return fmt.Errorf("failed to create wallet: %w", err)
 			}
 			b.log.Debug("Created and logged into wallet")
@@ -1047,13 +904,13 @@ func (b *Bot) setupWallet() error {
 	b.log.Debug("Logged into wallet")
 
 	if b.walletPubKey == "" {
-		publicKeys, err := b.walletClient.ListPublicKeys()
+		publicKeys, err := b.walletClient.ListPublicKeys(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to list public keys: %w", err)
 		}
 
 		if len(publicKeys) == 0 {
-			key, err := b.walletClient.GenerateKeyPair(b.walletPassphrase, []types.Meta{})
+			key, err := b.walletClient.GenerateKeyPair(ctx, b.walletPassphrase, []types.Meta{})
 			if err != nil {
 				return fmt.Errorf("failed to generate keypair: %w", err)
 			}

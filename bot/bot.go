@@ -9,7 +9,6 @@ import (
 
 	"code.vegaprotocol.io/liqbot/bot/normal"
 	"code.vegaprotocol.io/liqbot/config"
-	"code.vegaprotocol.io/liqbot/types"
 )
 
 // Bot is the generic bot interface.
@@ -27,7 +26,7 @@ type PricingEngine interface {
 }
 
 // New returns a new Bot instance.
-func New(botConf config.BotConfig, seedConf *config.SeedConfig, pe PricingEngine, wc types.WalletClient) (b Bot, err error) {
+func New(botConf config.BotConfig, seedConf *config.SeedConfig, pe PricingEngine, wc normal.WalletClient) (b Bot, err error) {
 	switch botConf.Strategy {
 	case "normal":
 		b, err = normal.New(botConf, seedConf, pe, wc)

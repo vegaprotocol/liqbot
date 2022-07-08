@@ -2,6 +2,7 @@ package wallet
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -30,7 +31,7 @@ func NewClient(walletURL string) *Client {
 	}
 }
 
-func (c *Client) CreateWallet(name, passphrase string) error {
+func (c *Client) CreateWallet(ctx context.Context, name, passphrase string) error {
 	postBody, _ := json.Marshal(struct {
 		Wallet     string `json:"wallet"`
 		Passphrase string `json:"passphrase"`
@@ -39,10 +40,17 @@ func (c *Client) CreateWallet(name, passphrase string) error {
 		Passphrase: passphrase,
 	})
 
-	resp, err := c.client.Post(
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
 		fmt.Sprintf("%s/api/v1/wallets", c.walletURL),
-		"application/json",
-		bytes.NewBuffer(postBody))
+		bytes.NewBuffer(postBody),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %v", err)
+	}
+
+	resp, err := c.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to create wallet at vegawallet API: %v", err)
 	}
@@ -77,7 +85,7 @@ type tokenResponse struct {
 	Token string `json:"token"`
 }
 
-func (c *Client) LoginWallet(name, passphrase string) error {
+func (c *Client) LoginWallet(ctx context.Context, name, passphrase string) error {
 	postBody, _ := json.Marshal(struct {
 		Wallet     string `json:"wallet"`
 		Passphrase string `json:"passphrase"`
@@ -86,10 +94,17 @@ func (c *Client) LoginWallet(name, passphrase string) error {
 		Passphrase: passphrase,
 	})
 
-	resp, err := c.client.Post(
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
 		fmt.Sprintf("%s/api/v1/auth/token", c.walletURL),
-		"application/json",
-		bytes.NewBuffer(postBody))
+		bytes.NewBuffer(postBody),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %v", err)
+	}
+
+	resp, err := c.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to login with vegawallet API: %v", err)
 	}
@@ -121,7 +136,7 @@ type keyPairResponse struct {
 	Key *types.Key `json:"key"`
 }
 
-func (c Client) GenerateKeyPair(passphrase string, meta []types.Meta) (*types.Key, error) {
+func (c Client) GenerateKeyPair(ctx context.Context, passphrase string, meta []types.Meta) (*types.Key, error) {
 	postBody, _ := json.Marshal(struct {
 		Passphrase string       `json:"passphrase"`
 		Meta       []types.Meta `json:"meta"`
@@ -130,7 +145,8 @@ func (c Client) GenerateKeyPair(passphrase string, meta []types.Meta) (*types.Ke
 		Meta:       meta,
 	})
 
-	req, err := http.NewRequest(
+	req, err := http.NewRequestWithContext(
+		ctx,
 		http.MethodPost,
 		fmt.Sprintf("%s/api/v1/keys", c.walletURL),
 		bytes.NewBuffer(postBody))
@@ -170,11 +186,13 @@ type listKeysResponse struct {
 	Keys []types.Key `json:"keys"`
 }
 
-func (c *Client) ListPublicKeys() ([]string, error) {
-	req, err := http.NewRequest(
+func (c *Client) ListPublicKeys(ctx context.Context) ([]string, error) {
+	req, err := http.NewRequestWithContext(
+		ctx,
 		http.MethodGet,
 		fmt.Sprintf("%s/api/v1/keys", c.walletURL),
-		nil)
+		nil,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
@@ -218,17 +236,19 @@ type SignTxRequest struct {
 	Propagate bool   `json:"propagate"`
 }
 
-func (c *Client) SignTx(request *walletpb.SubmitTransactionRequest) (*commandspb.Transaction, error) {
+func (c *Client) SignTx(ctx context.Context, request *walletpb.SubmitTransactionRequest) (*commandspb.Transaction, error) {
 	m := jsonpb.Marshaler{Indent: "    "}
 	data, err := m.MarshalToString(request)
 	if err != nil {
 		return nil, fmt.Errorf("couldn't marshal input data: %w", err)
 	}
 
-	req, err := http.NewRequest(
+	req, err := http.NewRequestWithContext(
+		ctx,
 		http.MethodPost,
 		fmt.Sprintf("%s/api/v1/command/sync", c.walletURL),
-		bytes.NewBuffer([]byte(data)))
+		bytes.NewBuffer([]byte(data)),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
