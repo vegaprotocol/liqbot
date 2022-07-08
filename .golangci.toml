@@ -62,9 +62,6 @@ disable = [
     "ifshort",
     "predeclared",
     "nolintlint",
-    # New in golangci-lint 1.46
-    "exhaustruct",
-    "nonamedreturns"
 ]
 
 [[issues.exclude-rules]]
