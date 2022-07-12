@@ -4,7 +4,7 @@ go 1.16
 
 require (
 	code.vegaprotocol.io/priceproxy v0.0.2
-	code.vegaprotocol.io/protos v0.49.3
+	code.vegaprotocol.io/protos v0.53.0
 	code.vegaprotocol.io/shared v0.0.0-20220321185018-3b5684b00533
 	code.vegaprotocol.io/vegawallet v0.13.2
 	github.com/golang/mock v1.6.0

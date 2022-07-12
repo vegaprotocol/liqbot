@@ -35,6 +35,8 @@ code.vegaprotocol.io/priceproxy v0.0.2 h1:yeaX4nAuZCxbODsF5/YOosIXCyNtY91M8FQzgv
 code.vegaprotocol.io/priceproxy v0.0.2/go.mod h1:lj5Y3+LPxiGKUhAxz0RQ11wjQ3gtTqIHHqSQDCgndKI=
 code.vegaprotocol.io/protos v0.49.3 h1:hKFrfsMaoRHJNeOjJ1cTkyltmkZGc17m9F2r+84d3jE=
 code.vegaprotocol.io/protos v0.49.3/go.mod h1:K6FWDdxWzEgZjz2G1f8gmrSPMey720ryHnzNRn1pW7w=
+code.vegaprotocol.io/protos v0.53.0 h1:3Xl/2o+IWd3dxe1kHnLCbF5DqKq5AoiaI8rVIdpjcng=
+code.vegaprotocol.io/protos v0.53.0/go.mod h1:4BqwDw6jhc/mnwbXq8ZFUtYBFCnk8tBW6zuPsBt8OrQ=
 code.vegaprotocol.io/shared v0.0.0-20220321185018-3b5684b00533 h1:IxTWvyF0i0AgUAS+FTgQKIpbsS6Ki/Y9Ug0GSlgChJw=
 code.vegaprotocol.io/shared v0.0.0-20220321185018-3b5684b00533/go.mod h1:pNHKwqRDkotUN0s6jErl7Eb2EpZa2HAf03lyPMTCUT0=
 code.vegaprotocol.io/vegawallet v0.13.2 h1:bslUXYtYCexBW4zRHpEEHuNA+aBiWI5pYxFjBsAPmVI=
