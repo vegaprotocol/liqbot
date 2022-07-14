@@ -2,11 +2,14 @@ package normal
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	dataapipb "code.vegaprotocol.io/protos/data-node/api/v1"
 	"code.vegaprotocol.io/protos/vega"
+	commandspb "code.vegaprotocol.io/protos/vega/commands/v1"
 	v1 "code.vegaprotocol.io/protos/vega/commands/v1"
 	oraclesv1 "code.vegaprotocol.io/protos/vega/oracles/v1"
 	walletpb "code.vegaprotocol.io/protos/vega/wallet/v1"
@@ -16,11 +19,88 @@ import (
 	"code.vegaprotocol.io/liqbot/types/num"
 )
 
-func (b *Bot) createMarket(ctx context.Context) (*dataapipb.MarketsResponse, error) {
-	if err := b.subscribeToStakeLinkingEvents(); err != nil {
-		return nil, fmt.Errorf("failed to subscribe to stake linking events: %w", err)
+func (b *bot) setupMarket() error {
+	marketsResponse, err := b.node.Markets(&dataapipb.MarketsRequest{})
+	if err != nil {
+		return fmt.Errorf("failed to get markets: %w", err)
 	}
 
+	var market *vega.Market
+
+	if len(marketsResponse.Markets) == 0 {
+		if err = b.marketStream.Subscribe(); err != nil {
+			return fmt.Errorf("failed to subscribe to market stream: %w", err)
+		}
+
+		marketsResponse, err = b.createMarket(context.Background())
+		if err != nil {
+			return fmt.Errorf("failed to create market: %w", err)
+		}
+
+		if len(marketsResponse.Markets) > 0 {
+			market = marketsResponse.Markets[0]
+		} else {
+			return errors.New("no markets created")
+		}
+	}
+
+	market, err = b.findMarket(marketsResponse, market)
+	if err != nil {
+		return fmt.Errorf("failed to find market: %w", err)
+	}
+
+	b.marketID = market.Id
+	b.decimalPlaces = int(market.DecimalPlaces)
+	b.log = b.log.WithFields(log.Fields{"marketID": b.marketID})
+
+	return nil
+}
+
+func (b *bot) findMarket(marketsResponse *dataapipb.MarketsResponse, market *vega.Market) (*vega.Market, error) {
+	for _, mkt := range marketsResponse.Markets {
+		instrument := mkt.TradableInstrument.GetInstrument()
+		if instrument == nil {
+			continue
+		}
+
+		base := ""
+		quote := ""
+
+		for _, tag := range instrument.Metadata.Tags {
+			parts := strings.Split(tag, ":")
+			if len(parts) != 2 {
+				continue
+			}
+			if parts[0] == "quote" {
+				quote = parts[1]
+			}
+			if parts[0] == "base" || parts[0] == "ticker" {
+				base = parts[1]
+			}
+		}
+
+		if base != b.config.InstrumentBase || quote != b.config.InstrumentQuote {
+			continue
+		}
+
+		future := mkt.TradableInstrument.Instrument.GetFuture()
+		if future == nil {
+			continue
+		}
+
+		b.settlementAssetID = future.SettlementAsset
+		market = mkt
+		break
+	}
+
+	if market == nil {
+		return nil, fmt.Errorf("failed to find futures markets: base/ticker=%s, quote=%s", b.config.InstrumentBase, b.config.InstrumentQuote)
+	}
+
+	return market, nil
+}
+
+func (b *bot) createMarket(ctx context.Context) (*dataapipb.MarketsResponse, error) {
 	b.log.Debug("minting and staking tokens")
 
 	seedSvc, err := seed.NewService(b.seedConfig)
@@ -28,31 +108,26 @@ func (b *Bot) createMarket(ctx context.Context) (*dataapipb.MarketsResponse, err
 		return nil, fmt.Errorf("failed to create seed service: %w", err)
 	}
 
-	if err := seedSvc.SeedStakeDeposit(ctx, b.walletPubKey); err != nil {
+	if err = seedSvc.SeedStakeDeposit(ctx, b.walletPubKey); err != nil {
 		return nil, fmt.Errorf("failed to seed stake tokens: %w", err)
 	}
 
 	b.log.Debug("waiting for stake to propagate...")
 
-	if err := b.waitForStakeLinking(); err != nil {
+	if err = b.marketStream.WaitForStakeLinking(); err != nil {
 		return nil, fmt.Errorf("failed stake linking: %w", err)
 	}
 
 	b.log.Debug("successfully linked stake")
-
-	if err := b.subscribeToProposalEvents(); err != nil {
-		return nil, fmt.Errorf("failed to subscribe to proposal events: %w", err)
-	}
-
 	b.log.Debug("sending new market proposal")
 
-	if err := b.sendNewMarketProposal(ctx); err != nil {
+	if err = b.sendNewMarketProposal(ctx); err != nil {
 		return nil, fmt.Errorf("failed to send new market proposal: %w", err)
 	}
 
 	b.log.Debug("waiting for proposal ID...")
 
-	proposalID, err := b.waitForProposalID()
+	proposalID, err := b.marketStream.WaitForProposalID()
 	if err != nil {
 		return nil, fmt.Errorf("failed to wait for proposal ID: %w", err)
 	}
@@ -60,13 +135,13 @@ func (b *Bot) createMarket(ctx context.Context) (*dataapipb.MarketsResponse, err
 	b.log.Debug("successfully sent new market proposal")
 	b.log.Debug("sending votes for market proposal")
 
-	if err = b.sendVote(ctx, b.walletPubKey, proposalID, true); err != nil {
+	if err = b.sendVote(ctx, proposalID, true); err != nil {
 		return nil, fmt.Errorf("failed to send vote: %w", err)
 	}
 
 	b.log.Debug("waiting for proposal to be enacted...")
 
-	if err = b.waitForProposalEnacted(proposalID); err != nil {
+	if err = b.marketStream.WaitForProposalEnacted(proposalID); err != nil {
 		return nil, fmt.Errorf("failed to wait for proposal to be enacted: %w", err)
 	}
 
@@ -77,14 +152,10 @@ func (b *Bot) createMarket(ctx context.Context) (*dataapipb.MarketsResponse, err
 		return nil, fmt.Errorf("failed to get markets: %w", err)
 	}
 
-	if len(marketsResponse.Markets) != 0 {
-		b.market = marketsResponse.Markets[0]
-	}
-
 	return marketsResponse, nil
 }
 
-func (b *Bot) sendNewMarketProposal(ctx context.Context) error {
+func (b *bot) sendNewMarketProposal(ctx context.Context) error {
 	cmd := &walletpb.SubmitTransactionRequest_ProposalSubmission{
 		ProposalSubmission: b.getExampleMarketProposal(),
 	}
@@ -95,51 +166,14 @@ func (b *Bot) sendNewMarketProposal(ctx context.Context) error {
 		Command:   cmd,
 	}
 
-	if err := b.signSubmitTx(ctx, submitTxReq); err != nil {
+	if _, err := b.walletClient.SignTx(ctx, submitTxReq); err != nil {
 		return fmt.Errorf("failed to sign transaction: %v", err)
 	}
 
 	return nil
 }
 
-func (b *Bot) waitForStakeLinking() error {
-	select {
-	case <-b.stakeLinkingCh:
-		return nil
-	case <-time.NewTimer(time.Second * 40).C:
-		return fmt.Errorf("timeout waiting for stake linking")
-	}
-}
-
-func (b *Bot) waitForProposalID() (string, error) {
-	select {
-	case id := <-b.proposalIDCh:
-		b.log.WithFields(log.Fields{
-			"proposalID": id,
-		}).Info("Received proposal ID")
-		return id, nil
-	case <-time.NewTimer(time.Second * 15).C:
-		return "", fmt.Errorf("timeout waiting for proposal ID")
-	}
-}
-
-func (b *Bot) waitForProposalEnacted(pID string) error {
-	select {
-	case id := <-b.proposalEnactedCh:
-		if id == pID {
-			b.log.WithFields(log.Fields{
-				"proposalID": id,
-			}).Info("Proposal was enacted")
-			return nil
-		}
-	case <-time.NewTimer(time.Second * 25).C:
-		return fmt.Errorf("timeout waiting for proposal to be enacted")
-	}
-
-	return nil
-}
-
-func (b *Bot) sendVote(ctx context.Context, pubKeyHex string, proposalId string, vote bool) error {
+func (b *bot) sendVote(ctx context.Context, proposalId string, vote bool) error {
 	value := vega.Vote_VALUE_NO
 	if vote {
 		value = vega.Vote_VALUE_YES
@@ -153,27 +187,96 @@ func (b *Bot) sendVote(ctx context.Context, pubKeyHex string, proposalId string,
 	}
 
 	submitTxReq := &walletpb.SubmitTransactionRequest{
-		PubKey:  pubKeyHex,
+		PubKey:  b.walletPubKey,
 		Command: cmd,
 	}
 
-	if err := b.signSubmitTx(ctx, submitTxReq); err != nil {
+	if _, err := b.walletClient.SignTx(ctx, submitTxReq); err != nil {
 		return fmt.Errorf("failed to submit Vote Submission: %w", err)
 	}
 
 	return nil
 }
 
-func (b *Bot) seedOrders(ctx context.Context) error {
+func (b *bot) submitOrder(
+	ctx context.Context,
+	size uint64,
+	price *num.Uint,
+	side vega.Side,
+	tif vega.Order_TimeInForce,
+	orderType vega.Order_Type,
+	reference string,
+	secondsFromNow int64,
+) error {
+	cmd := &walletpb.SubmitTransactionRequest_OrderSubmission{
+		OrderSubmission: &commandspb.OrderSubmission{
+			MarketId:    b.marketID,
+			Price:       "", // added below
+			Size:        size,
+			Side:        side,
+			TimeInForce: tif,
+			ExpiresAt:   0, // added below
+			Type:        orderType,
+			Reference:   reference,
+			PeggedOrder: nil,
+		},
+	}
+
+	b.log.WithFields(log.Fields{
+		"size":  size,
+		"side":  side,
+		"price": price,
+		"tif":   tif.String(),
+	}).Debug("Submitting order")
+
+	if tif == vega.Order_TIME_IN_FORCE_GTT {
+		cmd.OrderSubmission.ExpiresAt = time.Now().UnixNano() + (secondsFromNow * 1000000000)
+	}
+
+	if orderType != vega.Order_TYPE_MARKET {
+		cmd.OrderSubmission.Price = price.String()
+	}
+
+	submitTxReq := &walletpb.SubmitTransactionRequest{
+		PubKey:  b.walletPubKey,
+		Command: cmd,
+	}
+
+	if _, err := b.walletClient.SignTx(ctx, submitTxReq); err != nil {
+		return fmt.Errorf("failed to submit OrderSubmission: %w", err)
+	}
+
+	return nil
+}
+
+func (b *bot) seedOrders(ctx context.Context) error {
+	b.log.Debug("seeding orders")
 	// GTC SELL 400@1000
-	if err := b.createSeedOrder(ctx, num.NewUint(1000), 400, vega.Side_SIDE_SELL, vega.Order_TIME_IN_FORCE_GTC); err != nil {
+	secFromNow := int64(b.config.StrategyDetails.PosManagementFraction)
+
+	if err := b.submitOrder(ctx,
+		400, num.NewUint(1000),
+		vega.Side_SIDE_SELL,
+		vega.Order_TIME_IN_FORCE_GTC,
+		vega.Order_TYPE_LIMIT,
+		"MarketCreation",
+		secFromNow,
+	); err != nil {
 		return fmt.Errorf("failed to create seed order: %w", err)
 	}
 
 	time.Sleep(time.Second * 2)
 
 	// GTC BUY 400@250
-	if err := b.createSeedOrder(ctx, num.NewUint(250), 400, vega.Side_SIDE_BUY, vega.Order_TIME_IN_FORCE_GTC); err != nil {
+	if err := b.submitOrder(ctx,
+		400,
+		num.NewUint(250),
+		vega.Side_SIDE_BUY,
+		vega.Order_TIME_IN_FORCE_GTC,
+		vega.Order_TYPE_LIMIT,
+		"MarketCreation",
+		secFromNow,
+	); err != nil {
 		return fmt.Errorf("failed to create seed order: %w", err)
 	}
 
@@ -185,41 +288,35 @@ func (b *Bot) seedOrders(ctx context.Context) error {
 			side = vega.Side_SIDE_SELL
 		}
 
-		if err := b.createSeedOrder(ctx, num.NewUint(500), 400, side, vega.Order_TIME_IN_FORCE_GFA); err != nil {
+		if err := b.submitOrder(ctx,
+			400,
+			num.NewUint(500),
+			side,
+			vega.Order_TIME_IN_FORCE_GFA,
+			vega.Order_TYPE_LIMIT,
+			"MarketCreation",
+			secFromNow,
+		); err != nil {
 			return fmt.Errorf("failed to create seed order: %w", err)
 		}
 
 		time.Sleep(time.Second * 2)
+
+		if i == 20 { // TODO: make this configurable
+			return fmt.Errorf("seeding orders did not end the auction")
+		}
 	}
 
-	b.log.Debug("seed orders created")
+	b.log.Debug("seeding orders finished")
 	return nil
 }
 
-func (b *Bot) createSeedOrder(ctx context.Context, price *num.Uint, size uint64, side vega.Side, tif vega.Order_TimeInForce) error {
-	b.log.WithFields(log.Fields{
-		"size":  size,
-		"side":  side,
-		"price": price,
-		"tif":   tif.String(),
-	}).Debug("Submitting seed order")
-
-	if err := b.submitOrder(
-		ctx,
-		size,
-		price,
-		side,
-		tif,
-		vega.Order_TYPE_LIMIT,
-		"MarketCreation",
-		int64(b.strategy.PosManagementFraction)); err != nil {
-		return fmt.Errorf("failed to submit order: %w", err)
-	}
-
-	return nil
+func (b *bot) canPlaceOrders() bool {
+	marketData := b.data.MarketDataGet()
+	return marketData != nil && marketData.TradingMode == vega.Market_TRADING_MODE_CONTINUOUS
 }
 
-func (b *Bot) getExampleMarketProposal() *v1.ProposalSubmission {
+func (b *bot) getExampleMarketProposal() *v1.ProposalSubmission {
 	return &v1.ProposalSubmission{
 		Rationale: &vega.ProposalRationale{
 			Description: "some description",
@@ -250,10 +347,10 @@ func (b *Bot) getExampleMarketProposal() *v1.ProposalSubmission {
 						},
 					},
 					LiquidityCommitment: &vega.NewMarketCommitment{
-						Fee:              fmt.Sprint(b.strategy.Fee),
-						CommitmentAmount: b.strategy.CommitmentAmount,
-						Buys:             b.strategy.ShorteningShape.Buys,
-						Sells:            b.strategy.LongeningShape.Sells,
+						Fee:              fmt.Sprint(b.config.StrategyDetails.Fee),
+						CommitmentAmount: b.config.StrategyDetails.CommitmentAmount,
+						Buys:             b.config.StrategyDetails.ShorteningShape.Buys.ToVegaLiquidityOrders(),
+						Sells:            b.config.StrategyDetails.LongeningShape.Sells.ToVegaLiquidityOrders(),
 					},
 				},
 			},
@@ -261,7 +358,7 @@ func (b *Bot) getExampleMarketProposal() *v1.ProposalSubmission {
 	}
 }
 
-func (b *Bot) getExampleProduct() *vega.InstrumentConfiguration_Future {
+func (b *bot) getExampleProduct() *vega.InstrumentConfiguration_Future {
 	return &vega.InstrumentConfiguration_Future{
 		Future: &vega.FutureProduct{
 			SettlementAsset: b.config.SettlementAsset,

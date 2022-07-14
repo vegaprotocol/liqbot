@@ -3,12 +3,16 @@
 package config
 
 import (
-	"errors"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
+	"code.vegaprotocol.io/protos/vega"
 	log "github.com/sirupsen/logrus"
+
+	"code.vegaprotocol.io/liqbot/errors"
+	"code.vegaprotocol.io/liqbot/types"
 )
 
 // ServerConfig describes the settings for running the liquidity bot.
@@ -58,43 +62,212 @@ type BotConfig struct {
 
 // Strategy describes parameters for the bot's strategy.
 type Strategy struct {
+	// ExpectedMarkPrice (optional) specifies the expected mark price for a market that may not yet
+	// have a mark price. It is used to calculate margin cost of orders meeting liquidity
+	// requirement.
 	ExpectedMarkPrice Uint `yaml:"expectedMarkPrice"`
-	AuctionVolume     Uint `yaml:"auctionVolume"`
-	MaxLong           Uint `yaml:"maxLong"`
-	MaxShort          Uint `yaml:"maxShort"`
 
+	// AuctionVolume ...
+	AuctionVolume Uint `yaml:"auctionVolume"`
+
+	// CommitmentFraction is the fractional amount of stake for the LP
+	CommitmentFraction float64 `yaml:"commitmentFraction"`
+
+	// CommitmentAmount is the amount of stake for the LP
+	CommitmentAmount string `yaml:"commitmentAmount"`
+
+	// Fee is the 0->1 fee for supplying liquidity
+	Fee string `yaml:"fee"`
+
+	// MaxLong specifies the maximum long position that the bot will tolerate.
+	MaxLong Uint `yaml:"maxLong"`
+
+	// MaxShort specifies the maximum short position that the bot will tolerate.
+	MaxShort Uint `yaml:"maxShort"`
+
+	// PosManagementFraction controls the size of market orders used to manage the bot's position.
 	PosManagementFraction float64 `yaml:"posManagementFraction"`
-	StakeFraction         float64 `yaml:"stakeFraction"`
-	OrdersFraction        float64 `yaml:"ordersFraction"`
-	CommitmentFraction    float64 `yaml:"commitmentFraction"`
-	CommitmentAmount      string  `yaml:"commitmentAmount"`
-	Fee                   string  `yaml:"fee"`
 
-	PosManagementSleepMilliseconds   int     `yaml:"posManagementSleepMilliseconds"`
-	MarketPriceSteeringRatePerSecond float64 `yaml:"marketPriceSteeringRatePerSecond"`
-	MinPriceSteerFraction            float64 `yaml:"minPriceSteerFraction"`
-	PriceSteerOrderScale             float64 `yaml:"priceSteerOrderScale"`
+	// StakeFraction (along with OrdersFraction) is used in rule-of-thumb heuristics to decide how
+	// the bot should deploy collateral.
+	StakeFraction float64 `yaml:"stakeFraction"`
 
-	LimitOrderDistributionParams LimitOrderDistParams `yaml:"limitOrderDistributionParams"`
-	TargetLNVol                  float64              `yaml:"targetLNVol"`
+	// OrdersFraction (along with StakeFraction) is used in rule-of-thumb heuristics to decide how
+	// the bot should deploy collateral.
+	OrdersFraction float64 `yaml:"ordersFraction"`
 
+	// ShorteningShape (which includes both sides of the book) specifies the shape used when the bot
+	// is trying to shorten its position.
 	ShorteningShape Shape `yaml:"shorteningShape"`
-	LongeningShape  Shape `yaml:"longeningShape"`
+
+	// LongeningShape (which includes both sides of the book) specifies the shape used when the bot
+	// is trying to lengthen its position. Note that the initial shape used by the bot is always the
+	// longening shape, because being long is a little cheaper in position margin than being short.
+	LongeningShape Shape `yaml:"longeningShape"`
+
+	// PosManagementSleepMilliseconds is the sleep time, in milliseconds, between position management
+	PosManagementSleepMilliseconds int `yaml:"posManagementSleepMilliseconds"`
+
+	// MarketPriceSteeringRatePerSecond ...
+	MarketPriceSteeringRatePerSecond float64 `yaml:"marketPriceSteeringRatePerSecond"`
+
+	// MinPriceSteerFraction is the minimum difference between external and current price that will
+	// allow a price steering order to be placed.
+	MinPriceSteerFraction float64 `yaml:"minPriceSteerFraction"`
+
+	// PriceSteerOrderScale is the scaling factor used when placing a steering order
+	PriceSteerOrderScale float64 `yaml:"priceSteerOrderScale"`
+
+	// LimitOrderDistributionParams ...
+	LimitOrderDistributionParams LimitOrderDistParams `yaml:"limitOrderDistributionParams"`
+
+	// TargetLNVol specifies the target log-normal volatility (e.g. 0.5 for 50%).
+	TargetLNVol float64 `yaml:"targetLNVol"`
 }
+
+func (s Strategy) String() string {
+	return fmt.Sprintf("normal.Strategy{ExpectedMarkPrice=%d, AuctionVolume=%d, MaxLong=%d, MaxShort=%d, PosManagementFraction=%f, StakeFraction=%f, OrdersFraction=%f, ShorteningShape=TBD(*ShapeConfig), LongeningShape=TBD(*ShapeConfig), PosManagementSleepMilliseconds=%d, MarketPriceSteeringRatePerSecond=%f, MinPriceSteerFraction=%f, PriceSteerOrderScale=%f, LimitOrderDistributionParams=TBD(*LODParamsConfig), TargetLNVol=%f}",
+		s.ExpectedMarkPrice,
+		s.AuctionVolume,
+		s.MaxLong,
+		s.MaxShort,
+		s.PosManagementFraction,
+		s.StakeFraction,
+		s.OrdersFraction,
+		// s.ShorteningShape,
+		// s.LongeningShape,
+		s.PosManagementSleepMilliseconds,
+		s.MarketPriceSteeringRatePerSecond,
+		s.MinPriceSteerFraction,
+		s.PriceSteerOrderScale,
+		// s.LimitOrderDistributionParams,
+		s.TargetLNVol,
+	)
+}
+
+/* TODO
+func validateStrategyConfig(details config.Strategy) (s *Strategy, err error) {
+	s = &Strategy{}
+	errInvalid := "invalid strategy config for %s: %w"
+
+	var errs *multierror.Error
+
+	s.ExpectedMarkPrice = details.ExpectedMarkPrice
+	s.AuctionVolume = details.AuctionVolume
+	s.MaxLong = details.MaxLong
+	s.MaxShort = details.MaxShort
+	s.PosManagementFraction = details.PosManagementFraction
+	s.StakeFraction = details.StakeFraction
+	s.OrdersFraction = details.OrdersFraction
+	s.CommitmentFraction = details.CommitmentFraction
+	s.CommitmentAmount = details.CommitmentAmount
+	s.Fee, _ = strconv.ParseFloat(details.Fee, 64)
+
+	shorteningShape := &ShapeConfig{
+		Sells: []*vega.LiquidityOrder{},
+		Buys:  []*vega.LiquidityOrder{},
+	}
+
+	longeningShape := &ShapeConfig{
+		Sells: []*vega.LiquidityOrder{},
+		Buys:  []*vega.LiquidityOrder{},
+	}
+
+	for _, buy := range details.ShorteningShape.Buys {
+		shorteningShape.Buys = append(shorteningShape.Buys, &vega.LiquidityOrder{
+			Reference:  refStringToEnum(buy.Reference),
+			Proportion: buy.Proportion,
+			Offset:     buy.Offset,
+		})
+	}
+	for _, sell := range details.ShorteningShape.Sells {
+		shorteningShape.Sells = append(shorteningShape.Sells, &vega.LiquidityOrder{
+			Reference:  refStringToEnum(sell.Reference),
+			Proportion: sell.Proportion,
+			Offset:     sell.Offset,
+		})
+	}
+	s.ShorteningShape = shorteningShape
+
+	for _, buy := range details.LongeningShape.Buys {
+		longeningShape.Buys = append(longeningShape.Buys, &vega.LiquidityOrder{
+			Reference:  refStringToEnum(buy.Reference),
+			Proportion: buy.Proportion,
+			Offset:     buy.Offset,
+		})
+	}
+	for _, sell := range details.LongeningShape.Sells {
+		longeningShape.Sells = append(longeningShape.Sells, &vega.LiquidityOrder{
+			Reference:  refStringToEnum(sell.Reference),
+			Proportion: sell.Proportion,
+			Offset:     sell.Offset,
+		})
+	}
+	s.LongeningShape = longeningShape
+
+	s.PosManagementSleepMilliseconds = uint64(details.PosManagementSleepMilliseconds)
+	if s.PosManagementSleepMilliseconds < 100 {
+		errs = multierror.Append(errs, fmt.Errorf(errInvalid, "PosManagementSleepMilliseconds", errors.New("must be >=100")))
+	}
+
+	s.MarketPriceSteeringRatePerSecond = details.MarketPriceSteeringRatePerSecond
+	if s.MarketPriceSteeringRatePerSecond <= 0.0 {
+		errs = multierror.Append(errs, fmt.Errorf(errInvalid, "MarketPriceSteeringRatePerSecond", errors.New("must be >0")))
+	} else if s.MarketPriceSteeringRatePerSecond > 10.0 {
+		errs = multierror.Append(errs, fmt.Errorf(errInvalid, "MarketPriceSteeringRatePerSecond", errors.New("must be <=10")))
+	}
+
+	s.PriceSteerOrderScale = details.PriceSteerOrderScale
+	s.MinPriceSteerFraction = details.MinPriceSteerFraction
+	s.LimitOrderDistributionParams = &LODParamsConfig{}
+	sm, err := stringToSteeringMethod(details.LimitOrderDistributionParams.Method)
+	if err != nil {
+		errs = multierror.Append(errs, err)
+	}
+	s.LimitOrderDistributionParams.Method = sm
+	s.LimitOrderDistributionParams.GttLength = details.LimitOrderDistributionParams.GttLength
+	s.LimitOrderDistributionParams.NumIdenticalBots = details.LimitOrderDistributionParams.NumIdenticalBots
+	s.LimitOrderDistributionParams.NumTicksFromMid = details.LimitOrderDistributionParams.NumTicksFromMid
+	s.LimitOrderDistributionParams.TgtTimeHorizonHours = details.LimitOrderDistributionParams.TgtTimeHorizonHours
+
+	s.TargetLNVol = details.TargetLNVol
+	err = errs.ErrorOrNil()
+	return s, err
+}
+*/
 
 // LimitOrderDistParams for configuring the way price steering orders are sent.
 type LimitOrderDistParams struct {
-	Method              string  `yaml:"method"`
-	GttLength           uint64  `yaml:"gttLengthSeconds"`
-	TgtTimeHorizonHours float64 `yaml:"tgtTimeHorizonHours"`
-	NumTicksFromMid     uint64  `yaml:"numTicksFromMid"`
-	NumIdenticalBots    int     `yaml:"numIdenticalBots"`
+	Method              SteeringMethod `yaml:"method"`
+	GttLength           uint64         `yaml:"gttLengthSeconds"`
+	TgtTimeHorizonHours float64        `yaml:"tgtTimeHorizonHours"`
+	NumTicksFromMid     uint64         `yaml:"numTicksFromMid"`
+	NumIdenticalBots    int            `yaml:"numIdenticalBots"`
 }
 
 // Shape describes the buy and sell sides of a Liquidity Provision instruction.
 type Shape struct {
-	Sells []LiquidityOrder `yaml:"sells"`
-	Buys  []LiquidityOrder `yaml:"buys"`
+	Sells LiquidityOrders `yaml:"sells"`
+	Buys  LiquidityOrders `yaml:"buys"`
+}
+
+func (s Shape) ToVegaShape() types.Shape {
+	return types.Shape{
+		Sells: s.Sells.ToVegaLiquidityOrders(),
+		Buys:  s.Buys.ToVegaLiquidityOrders(),
+	}
+}
+
+type LiquidityOrders []LiquidityOrder
+
+func (l LiquidityOrders) ToVegaLiquidityOrders() []*vega.LiquidityOrder {
+	vl := make([]*vega.LiquidityOrder, len(l))
+
+	for i := range l {
+		vl[i] = l[i].ToVegaLiquidityOrder()
+	}
+
+	return vl
 }
 
 // LiquidityOrder describes ...
@@ -104,11 +277,32 @@ type LiquidityOrder struct {
 	Offset     string `yaml:"offset"`
 }
 
+func (l LiquidityOrder) ToVegaLiquidityOrder() *vega.LiquidityOrder {
+	return &vega.LiquidityOrder{
+		Reference:  refStringToEnum(l.Reference),
+		Proportion: l.Proportion,
+		Offset:     l.Offset,
+	}
+}
+
+func refStringToEnum(reference string) vega.PeggedReference {
+	reference = strings.ToUpper(reference)
+	switch reference {
+	case "ASK":
+		return vega.PeggedReference_PEGGED_REFERENCE_BEST_ASK
+	case "BID":
+		return vega.PeggedReference_PEGGED_REFERENCE_BEST_BID
+	case "MID":
+		return vega.PeggedReference_PEGGED_REFERENCE_MID
+	default:
+		return vega.PeggedReference_PEGGED_REFERENCE_UNSPECIFIED
+	}
+}
+
 // WalletConfig describes the settings for running an internal wallet server.
 type WalletConfig struct {
-	URL             string `yaml:"url"`
-	TokenExpiry     int    `yaml:"tokenExpiry"`
-	EthereumAddress string `yaml:"ethereumAddress"`
+	URL         string `yaml:"url"`
+	TokenExpiry int    `yaml:"tokenExpiry"`
 }
 
 type SeedConfig struct {
@@ -133,49 +327,44 @@ type Config struct {
 	Bots []BotConfig `yaml:"bots"`
 }
 
-var (
-	// ErrNil indicates that a nil/null pointer was encountered.
-	ErrNil = errors.New("nil pointer")
-
-	// ErrMissingEmptyConfigSection indicates that a required config file section is missing (not present) or empty (zero-length).
-	ErrMissingEmptyConfigSection = errors.New("config file section is missing/empty")
-)
-
 // CheckConfig checks the config for valid structure and values.
-func CheckConfig(cfg *Config) error {
+func (cfg *Config) CheckConfig() error {
 	if cfg == nil {
-		return ErrNil
+		return errors.ErrNil
 	}
 
 	if cfg.Server == nil {
-		return fmt.Errorf("%s: %s", ErrMissingEmptyConfigSection.Error(), "server")
+		return fmt.Errorf("%s: %s", errors.ErrMissingEmptyConfigSection.Error(), "server")
 	}
+
 	if cfg.Pricing == nil {
-		return fmt.Errorf("%s: %s", ErrMissingEmptyConfigSection.Error(), "pricing")
+		return fmt.Errorf("%s: %s", errors.ErrMissingEmptyConfigSection.Error(), "pricing")
 	}
+
 	if cfg.Wallet == nil {
-		return fmt.Errorf("%s: %s", ErrMissingEmptyConfigSection.Error(), "wallet")
+		return fmt.Errorf("%s: %s", errors.ErrMissingEmptyConfigSection.Error(), "wallet")
 	}
+
 	if cfg.Bots == nil || len(cfg.Bots) == 0 {
-		return fmt.Errorf("%s: %s", ErrMissingEmptyConfigSection.Error(), "bots")
+		return fmt.Errorf("%s: %s", errors.ErrMissingEmptyConfigSection.Error(), "bots")
 	}
 
 	return nil
 }
 
 // ConfigureLogging configures logging.
-func ConfigureLogging(cfg *ServerConfig) error {
+func (cfg *Config) ConfigureLogging() error {
 	if cfg == nil {
-		return ErrNil
+		return errors.ErrNil
 	}
 
-	if cfg.Env != "prod" {
+	if cfg.Server.Env != "prod" {
 		// https://github.com/sirupsen/logrus#logging-method-name
 		// This slows down logging (by a factor of 2).
 		log.SetReportCaller(true)
 	}
 
-	switch cfg.LogFormat {
+	switch cfg.Server.LogFormat {
 	case "json":
 		log.SetFormatter(&log.JSONFormatter{
 			TimestampFormat: time.RFC3339Nano,
@@ -199,7 +388,7 @@ func ConfigureLogging(cfg *ServerConfig) error {
 		}) // with colour if TTY, without otherwise
 	}
 
-	if loglevel, err := log.ParseLevel(cfg.LogLevel); err == nil {
+	if loglevel, err := log.ParseLevel(cfg.Server.LogLevel); err == nil {
 		log.SetLevel(loglevel)
 	} else {
 		log.SetLevel(log.WarnLevel)

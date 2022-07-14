@@ -40,22 +40,20 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 
 	var cfg config.Config
-	err := configor.Load(&cfg, configName)
 	// https://github.com/jinzhu/configor/issues/40
-	if err != nil && !strings.Contains(err.Error(), "should be struct") {
+	if err := configor.Load(&cfg, configName); err != nil && !strings.Contains(err.Error(), "should be struct") {
 		log.WithFields(log.Fields{
 			"error": err.Error(),
 		}).Fatal("Failed to read config")
 	}
-	err = config.CheckConfig(&cfg)
-	if err != nil {
+
+	if err := cfg.CheckConfig(); err != nil {
 		log.WithFields(log.Fields{
 			"error": err.Error(),
 		}).Fatal("Config checks failed")
 	}
 
-	err = config.ConfigureLogging(cfg.Server)
-	if err != nil {
+	if err := cfg.ConfigureLogging(); err != nil {
 		log.WithFields(log.Fields{
 			"error": err.Error(),
 		}).Fatal("Failed to load config")
@@ -66,9 +64,7 @@ func main() {
 		"hash":    VersionHash,
 	}).Info("Version")
 
-	var s *service.Service
-
-	s, err = service.NewService(cfg, nil)
+	s, err := service.NewService(cfg)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"error": err.Error(),

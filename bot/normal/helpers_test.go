@@ -14,7 +14,7 @@ func TestDiscreteThreeLevel(t *testing.T) {
 	muHat := -5.703855806525211e-05
 	sigmaHat := 0.6408413361120014
 
-	p, err := DiscreteThreeLevelProbabilities(V, muHat, sigmaHat)
+	p, err := discreteThreeLevelProbabilities(V, muHat, sigmaHat)
 	if err != nil {
 		t.Error("Failed")
 	} else {
@@ -33,7 +33,7 @@ func TestDiscreteThreeLevel(t *testing.T) {
 	muHat = -0.000057
 	sigmaHat = 0.641
 
-	p, err = DiscreteThreeLevelProbabilities(V, muHat, sigmaHat)
+	p, err = discreteThreeLevelProbabilities(V, muHat, sigmaHat)
 	if err != nil {
 		t.Error(err)
 	} else {
@@ -74,7 +74,7 @@ func TestRandomChoice(t *testing.T) {
 }
 
 func TestThreeLevelPriceGen(t *testing.T) {
-	// GeneratePriceUsingDiscreteThreeLevel(M0, delta, sigma, tgtTimeHorizonYrFrac, N float64)
+	// generatePriceUsingDiscreteThreeLevel(M0, delta, sigma, tgtTimeHorizonYrFrac, N float64)
 	M0 := 39123.0                               // external price
 	delta := float64(10)                        // i.e. we want jumps of this size
 	sigma := 1.0                                // e.g. 5.0 = 500%
@@ -87,7 +87,7 @@ func TestThreeLevelPriceGen(t *testing.T) {
 	V[0] = float64(N) * math.Log((M0-delta)/M0)
 	V[1] = 0.0
 	V[2] = float64(N) * math.Log((M0+delta)/M0)
-	probabilities, err := DiscreteThreeLevelProbabilities(V, muHat, sigmaHat)
+	probabilities, err := discreteThreeLevelProbabilities(V, muHat, sigmaHat)
 	fmt.Printf("p: %0.4g\n", probabilities)
 
 	if err != nil {
@@ -98,7 +98,7 @@ func TestThreeLevelPriceGen(t *testing.T) {
 	priceLevels[0] = M0
 
 	for i := 0; i < len(priceLevels)-1; i++ {
-		price, err := GeneratePriceUsingDiscreteThreeLevel(priceLevels[i], delta, sigma, tgtTimeHorizonYrFrac, float64(N))
+		price, err := generatePriceUsingDiscreteThreeLevel(priceLevels[i], delta, sigma, tgtTimeHorizonYrFrac, float64(N))
 		if err != nil {
 			t.Error(err)
 		}

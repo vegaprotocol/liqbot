@@ -6,13 +6,12 @@ import (
 	"net/url"
 	"time"
 
-	e "code.vegaprotocol.io/liqbot/errors"
-	"code.vegaprotocol.io/liqbot/helpers"
-
 	dataapipb "code.vegaprotocol.io/protos/data-node/api/v1"
 	vegaapipb "code.vegaprotocol.io/protos/vega/api/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
+
+	e "code.vegaprotocol.io/liqbot/errors"
 )
 
 // DataNode stores state for a Vega Data node.
@@ -70,7 +69,7 @@ func (n *DataNode) SubmitTransaction(req *vegaapipb.SubmitTransactionRequest) (r
 
 	response, err = c.SubmitTransaction(ctx, req)
 	if err != nil {
-		err = fmt.Errorf(msg, helpers.ErrorDetail(err))
+		err = fmt.Errorf(msg, e.ErrorDetail(err))
 	}
 	return
 }
@@ -95,7 +94,7 @@ func (n *DataNode) LastBlockData() (*vegaapipb.LastBlockHeightResponse, error) {
 	var response *vegaapipb.LastBlockHeightResponse
 	response, err := c.LastBlockHeight(ctx, &vegaapipb.LastBlockHeightRequest{})
 	if err != nil {
-		err = fmt.Errorf(msg, helpers.ErrorDetail(err))
+		err = fmt.Errorf(msg, e.ErrorDetail(err))
 	}
 	return response, err
 }
@@ -118,7 +117,7 @@ func (n *DataNode) GetVegaTime() (t time.Time, err error) {
 	defer cancel()
 	response, err := c.GetVegaTime(ctx, &vegaapipb.GetVegaTimeRequest{})
 	if err != nil {
-		err = fmt.Errorf(msg, helpers.ErrorDetail(err))
+		err = fmt.Errorf(msg, e.ErrorDetail(err))
 		return
 	}
 	nsec := response.Timestamp
@@ -148,7 +147,7 @@ func (n *DataNode) ObserveEventBus() (client vegaapipb.CoreService_ObserveEventB
 	// no timeout on streams
 	client, err = c.ObserveEventBus(context.Background())
 	if err != nil {
-		err = fmt.Errorf(msg, helpers.ErrorDetail(err))
+		err = fmt.Errorf(msg, e.ErrorDetail(err))
 		return
 	}
 	// client.Send(req)
@@ -179,7 +178,7 @@ func (n *DataNode) PartyAccounts(req *dataapipb.PartyAccountsRequest) (response 
 
 	response, err = c.PartyAccounts(ctx, req)
 	if err != nil {
-		err = fmt.Errorf(msg, helpers.ErrorDetail(err))
+		err = fmt.Errorf(msg, e.ErrorDetail(err))
 	}
 	return
 }
@@ -207,7 +206,7 @@ func (n *DataNode) MarketDataByID(req *dataapipb.MarketDataByIDRequest) (respons
 
 	response, err = c.MarketDataByID(ctx, req)
 	if err != nil {
-		err = fmt.Errorf(msg, helpers.ErrorDetail(err))
+		err = fmt.Errorf(msg, e.ErrorDetail(err))
 	}
 	return
 }
@@ -235,7 +234,7 @@ func (n *DataNode) Markets(req *dataapipb.MarketsRequest) (response *dataapipb.M
 
 	response, err = c.Markets(ctx, req)
 	if err != nil {
-		err = fmt.Errorf(msg, helpers.ErrorDetail(err))
+		err = fmt.Errorf(msg, e.ErrorDetail(err))
 	}
 	return
 }
@@ -269,7 +268,7 @@ func (n *DataNode) PositionsByParty(req *dataapipb.PositionsByPartyRequest) (res
 
 	response, err = c.PositionsByParty(ctx, req)
 	if err != nil {
-		err = fmt.Errorf(msg, helpers.ErrorDetail(err))
+		err = fmt.Errorf(msg, e.ErrorDetail(err))
 	}
 	return
 }
@@ -322,7 +321,7 @@ func (n *DataNode) PositionsSubscribe(req *dataapipb.PositionsSubscribeRequest) 
 	// no timeout on streams
 	client, err = c.PositionsSubscribe(context.Background(), req)
 	if err != nil {
-		err = fmt.Errorf(msg, helpers.ErrorDetail(err))
+		err = fmt.Errorf(msg, e.ErrorDetail(err))
 		return
 	}
 	return
@@ -351,7 +350,7 @@ func (n *DataNode) AssetByID(req *dataapipb.AssetByIDRequest) (response *dataapi
 
 	response, err = c.AssetByID(ctx, req)
 	if err != nil {
-		err = fmt.Errorf(msg, helpers.ErrorDetail(err))
+		err = fmt.Errorf(msg, e.ErrorDetail(err))
 	}
 	return
 }

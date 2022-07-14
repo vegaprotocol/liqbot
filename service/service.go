@@ -52,25 +52,21 @@ type Service struct {
 	bots   map[string]Bot
 	botsMu sync.Mutex
 
-	pricingEngine PricingEngine
-	server        *http.Server
+	server *http.Server
 }
 
 // NewService creates a new service instance (with optional mocks for test purposes).
-func NewService(config config.Config, pe PricingEngine) (s *Service, err error) {
-	if pe == nil {
-		pe = pricing.NewEngine(*config.Pricing)
-	}
-
+func NewService(config config.Config) (s *Service, err error) {
 	s = &Service{
 		Router: httprouter.New(),
 
-		config:        config,
-		bots:          make(map[string]Bot),
-		pricingEngine: pe,
+		config: config,
+		bots:   make(map[string]Bot),
 	}
 
-	if err := s.initBots(); err != nil {
+	pe := pricing.NewEngine(*config.Pricing)
+
+	if err = s.initBots(pe); err != nil {
 		return nil, fmt.Errorf("failed to initialise bots: %s", err.Error())
 	}
 
@@ -123,14 +119,14 @@ func (s *Service) Stop() {
 	}
 }
 
-func (s *Service) initBots() error {
+func (s *Service) initBots(pricingEngine PricingEngine) error {
 	s.botsMu.Lock()
 	defer s.botsMu.Unlock()
 
 	for _, botcfg := range s.config.Bots {
 		wc := wallet.NewClient(s.config.Wallet.URL)
 
-		b, err := bot.New(botcfg, s.config.Seed, s.pricingEngine, wc)
+		b, err := bot.New(botcfg, s.config.Seed, pricingEngine, wc)
 		if err != nil {
 			return fmt.Errorf("failed to create bot %s: %w", botcfg.Name, err)
 		}
@@ -139,12 +135,9 @@ func (s *Service) initBots() error {
 		log.WithFields(log.Fields{
 			"name": botcfg.Name,
 		}).Info("Initialised bot")
-	}
 
-	for _, b := range s.bots {
-		err := b.Start()
-		if err != nil {
-			return err
+		if err = b.Start(); err != nil {
+			return fmt.Errorf("failed to start bot %s: %w", botcfg.Name, err)
 		}
 	}
 
