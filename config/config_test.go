@@ -11,13 +11,9 @@ import (
 )
 
 func TestCheckConfig(t *testing.T) {
-	var cfg *config.Config
+	cfg := new(config.Config)
+
 	err := cfg.CheckConfig()
-	assert.Equal(t, errors.ErrNil, err)
-
-	cfg = new(config.Config)
-
-	err = cfg.CheckConfig()
 	assert.True(t, strings.HasPrefix(err.Error(), errors.ErrMissingEmptyConfigSection.Error()))
 
 	cfg.Server = &config.ServerConfig{}
@@ -40,21 +36,25 @@ func TestCheckConfig(t *testing.T) {
 	err = cfg.CheckConfig()
 	assert.True(t, strings.HasPrefix(err.Error(), errors.ErrMissingEmptyConfigSection.Error()))
 
-	cfg.Bots = append(cfg.Bots, config.BotConfig{})
+	botConfig := config.BotConfig{
+		Name: "test",
+		StrategyDetails: config.Strategy{
+			PosManagementSleepMilliseconds:   101,
+			MarketPriceSteeringRatePerSecond: 1,
+			PriceSteerOrderScale:             12,
+		},
+	}
+	cfg.Bots = append(cfg.Bots, botConfig)
 	err = cfg.CheckConfig()
 	assert.NoError(t, err)
 }
 
 func TestConfigureLogging(t *testing.T) {
-	var cfg *config.Config
-	err := cfg.ConfigureLogging()
-	assert.Equal(t, errors.ErrNil, err)
-
-	cfg = new(config.Config)
+	cfg := new(config.Config)
 	cfg.Server = &config.ServerConfig{}
 
 	var servercfg config.ServerConfig
-	err = cfg.ConfigureLogging()
+	err := cfg.ConfigureLogging()
 	assert.NoError(t, err)
 
 	servercfg.LogLevel = "info"

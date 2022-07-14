@@ -90,8 +90,8 @@ func (s *data) setInitialData() error {
 	}
 
 	s.store.marketDataSet(&types.MarketData{
-		PriceStaticMid: currentPrice,
-		PriceMark:      &num.Uint{},
+		StaticMidPrice: currentPrice,
+		MarkPrice:      &num.Uint{},
 		TradingMode:    marketData.MarketTradingMode,
 	})
 
@@ -131,8 +131,8 @@ func (s *data) subscribeToMarketEvents() error {
 		}
 
 		s.store.marketDataSet(&types.MarketData{
-			PriceStaticMid: staticMidPrice,
-			PriceMark:      markPrice,
+			StaticMidPrice: staticMidPrice,
+			MarkPrice:      markPrice,
 			TradingMode:    marketData.MarketTradingMode,
 		})
 

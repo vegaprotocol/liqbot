@@ -18,6 +18,10 @@ func (b *bot) runPriceSteering(ctx context.Context) {
 	defer b.log.Warning("Price steering stopped")
 
 	if !b.canPlaceOrders() {
+		b.log.WithFields(log.Fields{
+			"PriceSteerOrderScale": b.config.StrategyDetails.PriceSteerOrderScale,
+		}).Debug("Price steering: Cannot place orders")
+
 		if err := b.seedOrders(ctx); err != nil {
 			b.log.WithFields(log.Fields{"error": err.Error()}).Error("failed to seed orders")
 			return
@@ -29,63 +33,55 @@ func (b *bot) runPriceSteering(ctx context.Context) {
 	for {
 		select {
 		case <-b.stopPriceSteer:
-			b.log.Debug("Stopping bot market price steering")
 			return
 		case <-ctx.Done():
 			b.log.Warning(ctx.Err())
 			return
 		default:
 			if err := doze(time.Duration(sleepTime)*time.Millisecond, b.stopPriceSteer); err != nil {
-				b.log.Debug("Stopping bot market price steering")
 				return
 			}
 
-			if err := b.steerPrice(ctx); err == nil {
-				sleepTime = 1000.0 / b.config.StrategyDetails.MarketPriceSteeringRatePerSecond
-			} else {
-				if sleepTime < 29000 {
-					sleepTime += 1000
-				}
+			err := b.steerPrice(ctx)
+			if err != nil {
 				b.log.WithFields(log.Fields{
 					"error":     err.Error(),
 					"sleepTime": sleepTime,
 				}).Warning("Error during price steering")
 			}
-		}
 
+			sleepTime = b.moveSteerSleepTime(sleepTime, err != nil)
+		}
 	}
 }
 
 func (b *bot) steerPrice(ctx context.Context) error {
-	externalPriceResponse, err := b.pricingEngine.GetPrice(ppconfig.PriceConfig{
-		Base:   b.config.InstrumentBase,
-		Quote:  b.config.InstrumentQuote,
-		Wander: true,
-	})
+	externalPrice, err := b.getExternalPrice()
 	if err != nil {
 		return fmt.Errorf("failed to get external price: %w", err)
 	}
 
-	decPlaces := num.NewUint(uint64(math.Pow10(b.decimalPlaces)))
-	externalPrice := num.NewUint(uint64(externalPriceResponse.Price))
-	externalPrice = num.UintChain(externalPrice).Mul(decPlaces).Get()
+	staticMidPrice := b.data.StaticMidPrice()
+	currentDiff, statIsGt := num.Zero().Delta(externalPrice, staticMidPrice)
+	currentDiffFraction := num.UintChain(currentDiff.Clone()).Mul(num.NewUint(100)).Div(externalPrice).Get()
+	minPriceSteerFraction := num.NewUint(uint64(100.0 * b.config.StrategyDetails.MinPriceSteerFraction))
 
-	marketData := b.data.MarketDataGet()
-	if marketData == nil {
-		return fmt.Errorf("no market data")
-	}
-
-	currentPrice := marketData.PriceStaticMid
-	currentDiff := b.getCurrentDiff(externalPrice, currentPrice)
-
-	if !currentDiff.GT(num.NewUint(uint64(100.0 * b.config.StrategyDetails.MinPriceSteerFraction))) {
+	if !currentDiffFraction.GT(minPriceSteerFraction) {
+		b.log.Debug("current difference is not higher than minimum price steering fraction")
 		return nil
 	}
 
 	side := vega.Side_SIDE_SELL
-	if externalPrice.GT(currentPrice) {
+	if !statIsGt {
 		side = vega.Side_SIDE_BUY
 	}
+
+	b.log.WithFields(log.Fields{
+		"currentPrice":  staticMidPrice,
+		"externalPrice": externalPrice,
+		"diff":          currentDiff,
+		"shouldMove":    map[vega.Side]string{vega.Side_SIDE_BUY: "UP", vega.Side_SIDE_SELL: "DN"}[side],
+	}).Debug("Steering info")
 
 	// find out what price and size of the order we should place
 	price, size, err := b.getRealisticOrderDetails(externalPrice)
@@ -101,27 +97,40 @@ func (b *bot) steerPrice(ctx context.Context) error {
 		"price": price,
 	}).Debug("Submitting order")
 
-	b.log.WithFields(log.Fields{
-		"currentPrice":  currentPrice,
-		"externalPrice": externalPrice,
-		"diff":          currentDiff,
-		"shouldMove":    map[vega.Side]string{vega.Side_SIDE_BUY: "UP", vega.Side_SIDE_SELL: "DN"}[side],
-	}).Debug("Steering info")
+	if err = b.submitOrder(
+		ctx,
+		size.Uint64(),
+		price,
+		side,
+		vega.Order_TIME_IN_FORCE_GTT,
+		vega.Order_TYPE_LIMIT,
+		"PriceSteeringOrder",
+		int64(b.config.StrategyDetails.LimitOrderDistributionParams.GttLength)); err != nil {
+		return fmt.Errorf("failed to submit order: %w", err)
+	}
 
-	secsFromNow := int64(b.config.StrategyDetails.LimitOrderDistributionParams.GttLength)
-	ref := "PriceSteeringOrder"
-
-	return b.submitOrder(ctx, size.Uint64(), price, side, vega.Order_TIME_IN_FORCE_GTT, vega.Order_TYPE_LIMIT, ref, secsFromNow)
+	return nil
 }
 
-func (b *bot) getCurrentDiff(externalPrice *num.Uint, currentPrice *num.Uint) *num.Uint {
-	// We only want to steer the price if the external and market price
-	// are greater than a certain percentage apart
-	currentDiff := num.Zero().Sub(externalPrice, currentPrice)
-	if currentPrice.GT(externalPrice) {
-		currentDiff = num.Zero().Sub(currentPrice, externalPrice)
+func (b *bot) getExternalPrice() (*num.Uint, error) {
+	externalPriceResponse, err := b.pricingEngine.GetPrice(ppconfig.PriceConfig{
+		Base:   b.config.InstrumentBase,
+		Quote:  b.config.InstrumentQuote,
+		Wander: true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get external price: %w", err)
 	}
-	return num.UintChain(currentDiff).Mul(num.NewUint(100)).Div(externalPrice).Get()
+
+	if externalPriceResponse.Price <= 0 {
+		return nil, fmt.Errorf("external price is zero")
+	}
+
+	decPlaces := num.NewUint(uint64(math.Pow10(b.decimalPlaces)))
+	externalPrice := num.NewUint(uint64(externalPriceResponse.Price))
+	externalPrice = num.Zero().Mul(externalPrice, decPlaces)
+
+	return externalPrice, nil
 }
 
 // getRealisticOrderDetails uses magic to return a realistic order price and size.
@@ -130,28 +139,43 @@ func (b *bot) getRealisticOrderDetails(externalPrice *num.Uint) (*num.Uint, *num
 
 	switch b.config.StrategyDetails.LimitOrderDistributionParams.Method {
 	case config.DiscreteThreeLevel:
-		// this converts something like BTCUSD 3912312345 (five decimal places)
-		// to 39123.12345 float.
-		decimalPlaces := float64(b.decimalPlaces)
-		m0 := num.Zero().Div(externalPrice, num.NewUint(uint64(math.Pow(10, decimalPlaces))))
-		tickSize := 1.0 / math.Pow(10, decimalPlaces)
-		delta := float64(b.config.StrategyDetails.LimitOrderDistributionParams.NumTicksFromMid) * tickSize
-		numOrdersPerSec := b.config.StrategyDetails.MarketPriceSteeringRatePerSecond
-		n := 3600 * numOrdersPerSec / b.config.StrategyDetails.LimitOrderDistributionParams.TgtTimeHorizonHours
-		tgtTimeHorizonYrFrac := b.config.StrategyDetails.LimitOrderDistributionParams.TgtTimeHorizonHours / 24.0 / 365.25
-
-		priceFloat, err := generatePriceUsingDiscreteThreeLevel(m0.Float64(), delta, b.config.StrategyDetails.TargetLNVol, tgtTimeHorizonYrFrac, n)
+		var err error
+		price, err = b.getDiscreteThreeLevelPrice(externalPrice)
 		if err != nil {
-			return nil, nil, fmt.Errorf("error generating price: %w", err)
+			return nil, nil, fmt.Errorf("failed to get discrete three level price: %w", err)
 		}
-		// we need to add back decimals
-		price = num.NewUint(uint64(math.Round(priceFloat * math.Pow(10, decimalPlaces))))
 	case config.CoinAndBinomial:
 		price = externalPrice
 	default:
 		return nil, nil, fmt.Errorf("method for generating price distributions not recognised")
 	}
 
-	// TODO: price?
+	// TODO: size?
 	return price, num.NewUint(1), nil
+}
+
+func (b *bot) getDiscreteThreeLevelPrice(externalPrice *num.Uint) (*num.Uint, error) {
+	// this converts something like BTCUSD 3912312345 (five decimal places)
+	// to 39123.12345 float.
+	decimalPlaces := float64(b.decimalPlaces)
+	m0 := num.Zero().Div(externalPrice, num.NewUint(uint64(math.Pow(10, decimalPlaces))))
+	tickSize := 1.0 / math.Pow(10, decimalPlaces)
+	delta := float64(b.config.StrategyDetails.LimitOrderDistributionParams.NumTicksFromMid) * tickSize
+	numOrdersPerSec := b.config.StrategyDetails.MarketPriceSteeringRatePerSecond
+	n := 3600 * numOrdersPerSec / b.config.StrategyDetails.LimitOrderDistributionParams.TgtTimeHorizonHours
+	tgtTimeHorizonYrFrac := b.config.StrategyDetails.LimitOrderDistributionParams.TgtTimeHorizonHours / 24.0 / 365.25
+
+	priceFloat, err := generatePriceUsingDiscreteThreeLevel(m0.Float64(), delta, b.config.StrategyDetails.TargetLNVol, tgtTimeHorizonYrFrac, n)
+	if err != nil {
+		return nil, fmt.Errorf("error generating price: %w", err)
+	}
+	// we need to add back decimals
+	return num.NewUint(uint64(math.Round(priceFloat * math.Pow(10, decimalPlaces)))), nil
+}
+
+func (b *bot) moveSteerSleepTime(sleepTime float64, up bool) float64 {
+	if up && sleepTime < 29000 {
+		return sleepTime + 1000
+	}
+	return 1000.0 / b.config.StrategyDetails.MarketPriceSteeringRatePerSecond
 }

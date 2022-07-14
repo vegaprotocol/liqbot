@@ -6,10 +6,12 @@ import (
 	ppconfig "code.vegaprotocol.io/priceproxy/config"
 	ppservice "code.vegaprotocol.io/priceproxy/service"
 	dataapipb "code.vegaprotocol.io/protos/data-node/api/v1"
+	"code.vegaprotocol.io/protos/vega"
 	v12 "code.vegaprotocol.io/protos/vega/commands/v1"
 	"code.vegaprotocol.io/protos/vega/wallet/v1"
 
 	"code.vegaprotocol.io/liqbot/types"
+	"code.vegaprotocol.io/liqbot/types/num"
 )
 
 // TradingDataService implements the gRPC service of the same name.
@@ -33,9 +35,11 @@ type WalletClient interface {
 }
 
 type dataStore interface {
-	BalanceGet() *types.Balance
-	MarketDataGet() *types.MarketData
-	OpenVolumeGet() int64
+	Balance() types.Balance
+	TradingMode() vega.Market_TradingMode
+	StaticMidPrice() *num.Uint
+	MarkPrice() *num.Uint
+	OpenVolume() int64
 }
 type marketStream interface {
 	Subscribe() error

@@ -3,7 +3,6 @@ package normal
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -42,12 +41,8 @@ type bot struct {
 }
 
 // New returns a new instance of bot.
-func New(botConf config.BotConfig, seedConf *config.SeedConfig, pe PricingEngine, wc WalletClient) (*bot, error) {
-	if botConf.StrategyDetails.PriceSteerOrderScale <= 0 {
-		return nil, errors.New("cannot place orders: PriceSteerOrderScale is 0")
-	}
-
-	b := &bot{
+func New(botConf config.BotConfig, seedConf *config.SeedConfig, pe PricingEngine, wc WalletClient) *bot {
+	return &bot{
 		config:     botConf,
 		seedConfig: seedConf,
 		log: log.WithFields(log.Fields{
@@ -59,12 +54,6 @@ func New(botConf config.BotConfig, seedConf *config.SeedConfig, pe PricingEngine
 		stopPosMgmt:    make(chan bool),
 		stopPriceSteer: make(chan bool),
 	}
-
-	b.log.WithFields(log.Fields{
-		"strategy": b.config.StrategyDetails.String(),
-	}).Debug("read strategy config")
-
-	return b, nil
 }
 
 // Start starts the liquidity bot goroutine(s).

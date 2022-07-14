@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"code.vegaprotocol.io/protos/vega"
+	"github.com/hashicorp/go-multierror"
 	log "github.com/sirupsen/logrus"
 
 	"code.vegaprotocol.io/liqbot/errors"
@@ -59,6 +60,10 @@ type BotConfig struct {
 	// StrategyDetails contains the parameters needed by the strategy algorithm.
 	StrategyDetails Strategy `yaml:"strategyDetails"`
 }
+
+const (
+	BotStrategyNormal = "normal"
+)
 
 // Strategy describes parameters for the bot's strategy.
 type Strategy struct {
@@ -126,7 +131,22 @@ type Strategy struct {
 }
 
 func (s Strategy) String() string {
-	return fmt.Sprintf("normal.Strategy{ExpectedMarkPrice=%d, AuctionVolume=%d, MaxLong=%d, MaxShort=%d, PosManagementFraction=%f, StakeFraction=%f, OrdersFraction=%f, ShorteningShape=TBD(*ShapeConfig), LongeningShape=TBD(*ShapeConfig), PosManagementSleepMilliseconds=%d, MarketPriceSteeringRatePerSecond=%f, MinPriceSteerFraction=%f, PriceSteerOrderScale=%f, LimitOrderDistributionParams=TBD(*LODParamsConfig), TargetLNVol=%f}",
+	return fmt.Sprintf(
+		`normal.Strategy{ExpectedMarkPrice=%d, 
+AuctionVolume=%d, 
+MaxLong=%d, 
+MaxShort=%d, 
+PosManagementFraction=%f, 
+StakeFraction=%f, 
+OrdersFraction=%f, 
+ShorteningShape=TBD(*ShapeConfig), 
+LongeningShape=TBD(*ShapeConfig), 
+PosManagementSleepMilliseconds=%d, 
+MarketPriceSteeringRatePerSecond=%f, 
+MinPriceSteerFraction=%f, 
+PriceSteerOrderScale=%f, 
+LimitOrderDistributionParams=TBD(*LODParamsConfig), 
+TargetLNVol=%f}`,
 		s.ExpectedMarkPrice,
 		s.AuctionVolume,
 		s.MaxLong,
@@ -145,96 +165,23 @@ func (s Strategy) String() string {
 	)
 }
 
-/* TODO
-func validateStrategyConfig(details config.Strategy) (s *Strategy, err error) {
-	s = &Strategy{}
-	errInvalid := "invalid strategy config for %s: %w"
-
+func (s Strategy) validateStrategyConfig() error {
 	var errs *multierror.Error
 
-	s.ExpectedMarkPrice = details.ExpectedMarkPrice
-	s.AuctionVolume = details.AuctionVolume
-	s.MaxLong = details.MaxLong
-	s.MaxShort = details.MaxShort
-	s.PosManagementFraction = details.PosManagementFraction
-	s.StakeFraction = details.StakeFraction
-	s.OrdersFraction = details.OrdersFraction
-	s.CommitmentFraction = details.CommitmentFraction
-	s.CommitmentAmount = details.CommitmentAmount
-	s.Fee, _ = strconv.ParseFloat(details.Fee, 64)
-
-	shorteningShape := &ShapeConfig{
-		Sells: []*vega.LiquidityOrder{},
-		Buys:  []*vega.LiquidityOrder{},
+	if s.PriceSteerOrderScale <= 0 {
+		errs = multierror.Append(errs, fmt.Errorf("invalid strategy config: PriceSteerOrderScale must be >0"))
 	}
 
-	longeningShape := &ShapeConfig{
-		Sells: []*vega.LiquidityOrder{},
-		Buys:  []*vega.LiquidityOrder{},
-	}
-
-	for _, buy := range details.ShorteningShape.Buys {
-		shorteningShape.Buys = append(shorteningShape.Buys, &vega.LiquidityOrder{
-			Reference:  refStringToEnum(buy.Reference),
-			Proportion: buy.Proportion,
-			Offset:     buy.Offset,
-		})
-	}
-	for _, sell := range details.ShorteningShape.Sells {
-		shorteningShape.Sells = append(shorteningShape.Sells, &vega.LiquidityOrder{
-			Reference:  refStringToEnum(sell.Reference),
-			Proportion: sell.Proportion,
-			Offset:     sell.Offset,
-		})
-	}
-	s.ShorteningShape = shorteningShape
-
-	for _, buy := range details.LongeningShape.Buys {
-		longeningShape.Buys = append(longeningShape.Buys, &vega.LiquidityOrder{
-			Reference:  refStringToEnum(buy.Reference),
-			Proportion: buy.Proportion,
-			Offset:     buy.Offset,
-		})
-	}
-	for _, sell := range details.LongeningShape.Sells {
-		longeningShape.Sells = append(longeningShape.Sells, &vega.LiquidityOrder{
-			Reference:  refStringToEnum(sell.Reference),
-			Proportion: sell.Proportion,
-			Offset:     sell.Offset,
-		})
-	}
-	s.LongeningShape = longeningShape
-
-	s.PosManagementSleepMilliseconds = uint64(details.PosManagementSleepMilliseconds)
 	if s.PosManagementSleepMilliseconds < 100 {
-		errs = multierror.Append(errs, fmt.Errorf(errInvalid, "PosManagementSleepMilliseconds", errors.New("must be >=100")))
+		errs = multierror.Append(errs, fmt.Errorf("invalid strategy config: PosManagementSleepMilliseconds must be >=100"))
 	}
 
-	s.MarketPriceSteeringRatePerSecond = details.MarketPriceSteeringRatePerSecond
-	if s.MarketPriceSteeringRatePerSecond <= 0.0 {
-		errs = multierror.Append(errs, fmt.Errorf(errInvalid, "MarketPriceSteeringRatePerSecond", errors.New("must be >0")))
-	} else if s.MarketPriceSteeringRatePerSecond > 10.0 {
-		errs = multierror.Append(errs, fmt.Errorf(errInvalid, "MarketPriceSteeringRatePerSecond", errors.New("must be <=10")))
+	if s.MarketPriceSteeringRatePerSecond <= 0.0 || s.MarketPriceSteeringRatePerSecond > 10.0 {
+		errs = multierror.Append(errs, fmt.Errorf("invalid strategy config: MarketPriceSteeringRatePerSecond must be >0 and <=10"))
 	}
 
-	s.PriceSteerOrderScale = details.PriceSteerOrderScale
-	s.MinPriceSteerFraction = details.MinPriceSteerFraction
-	s.LimitOrderDistributionParams = &LODParamsConfig{}
-	sm, err := stringToSteeringMethod(details.LimitOrderDistributionParams.Method)
-	if err != nil {
-		errs = multierror.Append(errs, err)
-	}
-	s.LimitOrderDistributionParams.Method = sm
-	s.LimitOrderDistributionParams.GttLength = details.LimitOrderDistributionParams.GttLength
-	s.LimitOrderDistributionParams.NumIdenticalBots = details.LimitOrderDistributionParams.NumIdenticalBots
-	s.LimitOrderDistributionParams.NumTicksFromMid = details.LimitOrderDistributionParams.NumTicksFromMid
-	s.LimitOrderDistributionParams.TgtTimeHorizonHours = details.LimitOrderDistributionParams.TgtTimeHorizonHours
-
-	s.TargetLNVol = details.TargetLNVol
-	err = errs.ErrorOrNil()
-	return s, err
+	return errs.ErrorOrNil()
 }
-*/
 
 // LimitOrderDistParams for configuring the way price steering orders are sent.
 type LimitOrderDistParams struct {
@@ -329,10 +276,6 @@ type Config struct {
 
 // CheckConfig checks the config for valid structure and values.
 func (cfg *Config) CheckConfig() error {
-	if cfg == nil {
-		return errors.ErrNil
-	}
-
 	if cfg.Server == nil {
 		return fmt.Errorf("%s: %s", errors.ErrMissingEmptyConfigSection.Error(), "server")
 	}
@@ -349,15 +292,17 @@ func (cfg *Config) CheckConfig() error {
 		return fmt.Errorf("%s: %s", errors.ErrMissingEmptyConfigSection.Error(), "bots")
 	}
 
+	for _, bot := range cfg.Bots {
+		if err := bot.StrategyDetails.validateStrategyConfig(); err != nil {
+			return fmt.Errorf("failed to validate strategy config for bot '%s': %s", bot.Name, err)
+		}
+	}
+
 	return nil
 }
 
 // ConfigureLogging configures logging.
 func (cfg *Config) ConfigureLogging() error {
-	if cfg == nil {
-		return errors.ErrNil
-	}
-
 	if cfg.Server.Env != "prod" {
 		// https://github.com/sirupsen/logrus#logging-method-name
 		// This slows down logging (by a factor of 2).

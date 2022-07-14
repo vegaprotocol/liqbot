@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -120,25 +121,36 @@ func (s *Service) Stop() {
 }
 
 func (s *Service) initBots(pricingEngine PricingEngine) error {
+	for _, botcfg := range s.config.Bots {
+		if err := s.initBot(pricingEngine, botcfg); err != nil {
+			return fmt.Errorf("failed to initialise bot '%s': %w", botcfg.Name, err)
+		}
+	}
+
+	return nil
+}
+
+func (s *Service) initBot(pricingEngine PricingEngine, botcfg config.BotConfig) error {
+	log.WithFields(log.Fields{"strategy": botcfg.StrategyDetails.String()}).Debug("read strategy config")
+
+	wc := wallet.NewClient(s.config.Wallet.URL)
+
+	b, err := bot.New(botcfg, s.config.Seed, pricingEngine, wc)
+	if err != nil {
+		return fmt.Errorf("failed to create bot %s: %w", botcfg.Name, err)
+	}
+
 	s.botsMu.Lock()
 	defer s.botsMu.Unlock()
 
-	for _, botcfg := range s.config.Bots {
-		wc := wallet.NewClient(s.config.Wallet.URL)
+	s.bots[botcfg.Name] = b
 
-		b, err := bot.New(botcfg, s.config.Seed, pricingEngine, wc)
-		if err != nil {
-			return fmt.Errorf("failed to create bot %s: %w", botcfg.Name, err)
-		}
+	log.WithFields(log.Fields{
+		"name": botcfg.Name,
+	}).Info("Initialised bot")
 
-		s.bots[botcfg.Name] = b
-		log.WithFields(log.Fields{
-			"name": botcfg.Name,
-		}).Info("Initialised bot")
-
-		if err = b.Start(); err != nil {
-			return fmt.Errorf("failed to start bot %s: %w", botcfg.Name, err)
-		}
+	if err = b.Start(); err != nil {
+		return fmt.Errorf("failed to start bot %s: %w", botcfg.Name, err)
 	}
 
 	return nil
@@ -147,6 +159,7 @@ func (s *Service) initBots(pricingEngine PricingEngine) error {
 // Status is an endpoint to show the service is up (always returns succeeded=true).
 func (s *Service) Status(w http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
 	var err error
+	// TODO: check if the service is up
 	if err != nil {
 		writeError(w, err, http.StatusBadRequest)
 	} else {
@@ -156,19 +169,18 @@ func (s *Service) Status(w http.ResponseWriter, _ *http.Request, _ httprouter.Pa
 
 // TradersSettlement is an endpoint to show details of all active traders.
 func (s *Service) TradersSettlement(w http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
+	details := s.getBotsTraderDetails()
+	writeString(w, details, http.StatusOK)
+}
+
+func (s *Service) getBotsTraderDetails() string {
+	var details []string
 	// Go through all the bots and ask for details
-	msg := "["
-	count := 0
 	for _, b := range s.bots {
-		if count > 0 {
-			msg += ","
-		}
-		ts := b.GetTraderDetails()
-		msg += ts
-		count++
+		details = append(details, b.GetTraderDetails())
 	}
-	msg += "]"
-	writeString(w, msg, http.StatusOK)
+
+	return fmt.Sprintf("[%s]", strings.Join(details, ","))
 }
 
 func writeSuccess(w http.ResponseWriter, data interface{}, status int) {

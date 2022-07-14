@@ -7,8 +7,8 @@ import (
 )
 
 type MarketData struct {
-	PriceStaticMid *num.Uint
-	PriceMark      *num.Uint
+	StaticMidPrice *num.Uint
+	MarkPrice      *num.Uint
 	TradingMode    vega.Market_TradingMode
 }
 
@@ -16,4 +16,8 @@ type Balance struct {
 	General *num.Uint
 	Margin  *num.Uint
 	Bond    *num.Uint
+}
+
+func (b Balance) Total() *num.Uint {
+	return num.Sum(b.General, b.Margin, b.Bond)
 }

@@ -28,38 +28,36 @@ func (b *bot) setupMarket() error {
 	var market *vega.Market
 
 	if len(marketsResponse.Markets) == 0 {
-		if err = b.marketStream.Subscribe(); err != nil {
-			return fmt.Errorf("failed to subscribe to market stream: %w", err)
-		}
-
-		marketsResponse, err = b.createMarket(context.Background())
+		market, err = b.createMarket(context.Background())
 		if err != nil {
 			return fmt.Errorf("failed to create market: %w", err)
 		}
-
-		if len(marketsResponse.Markets) > 0 {
-			market = marketsResponse.Markets[0]
-		} else {
-			return errors.New("no markets created")
-		}
+		marketsResponse.Markets = append(marketsResponse.Markets, market)
 	}
 
-	market, err = b.findMarket(marketsResponse, market)
+	market, err = b.findMarket(marketsResponse.Markets)
 	if err != nil {
 		return fmt.Errorf("failed to find market: %w", err)
 	}
 
 	b.marketID = market.Id
 	b.decimalPlaces = int(market.DecimalPlaces)
+	b.settlementAssetID = market.TradableInstrument.Instrument.GetFuture().SettlementAsset
+
 	b.log = b.log.WithFields(log.Fields{"marketID": b.marketID})
 
 	return nil
 }
 
-func (b *bot) findMarket(marketsResponse *dataapipb.MarketsResponse, market *vega.Market) (*vega.Market, error) {
-	for _, mkt := range marketsResponse.Markets {
+func (b *bot) findMarket(markets []*vega.Market) (*vega.Market, error) {
+	for _, mkt := range markets {
 		instrument := mkt.TradableInstrument.GetInstrument()
 		if instrument == nil {
+			continue
+		}
+
+		future := instrument.GetFuture()
+		if future == nil {
 			continue
 		}
 
@@ -83,26 +81,18 @@ func (b *bot) findMarket(marketsResponse *dataapipb.MarketsResponse, market *veg
 			continue
 		}
 
-		future := mkt.TradableInstrument.Instrument.GetFuture()
-		if future == nil {
-			continue
-		}
-
-		b.settlementAssetID = future.SettlementAsset
-		market = mkt
-		break
+		return mkt, nil
 	}
 
-	if market == nil {
-		return nil, fmt.Errorf("failed to find futures markets: base/ticker=%s, quote=%s", b.config.InstrumentBase, b.config.InstrumentQuote)
-	}
-
-	return market, nil
+	return nil, fmt.Errorf("failed to find futures markets: base/ticker=%s, quote=%s", b.config.InstrumentBase, b.config.InstrumentQuote)
 }
 
-func (b *bot) createMarket(ctx context.Context) (*dataapipb.MarketsResponse, error) {
-	b.log.Debug("minting and staking tokens")
+func (b *bot) createMarket(ctx context.Context) (*vega.Market, error) {
+	if err := b.marketStream.Subscribe(); err != nil {
+		return nil, fmt.Errorf("failed to subscribe to market stream: %w", err)
+	}
 
+	b.log.Debug("minting and staking tokens")
 	seedSvc, err := seed.NewService(b.seedConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create seed service: %w", err)
@@ -152,7 +142,11 @@ func (b *bot) createMarket(ctx context.Context) (*dataapipb.MarketsResponse, err
 		return nil, fmt.Errorf("failed to get markets: %w", err)
 	}
 
-	return marketsResponse, nil
+	if len(marketsResponse.Markets) == 0 {
+		return nil, errors.New("no markets created")
+	}
+
+	return marketsResponse.Markets[0], nil
 }
 
 func (b *bot) sendNewMarketProposal(ctx context.Context) error {
@@ -312,8 +306,7 @@ func (b *bot) seedOrders(ctx context.Context) error {
 }
 
 func (b *bot) canPlaceOrders() bool {
-	marketData := b.data.MarketDataGet()
-	return marketData != nil && marketData.TradingMode == vega.Market_TRADING_MODE_CONTINUOUS
+	return b.data.TradingMode() == vega.Market_TRADING_MODE_CONTINUOUS
 }
 
 func (b *bot) getExampleMarketProposal() *v1.ProposalSubmission {
@@ -327,33 +320,37 @@ func (b *bot) getExampleMarketProposal() *v1.ProposalSubmission {
 			ClosingTimestamp:    secondsFromNowInSecs(10),
 			EnactmentTimestamp:  secondsFromNowInSecs(15),
 			Change: &vega.ProposalTerms_NewMarket{
-				NewMarket: &vega.NewMarket{
-					Changes: &vega.NewMarketConfiguration{
-						Instrument: &vega.InstrumentConfiguration{
-							Code:    fmt.Sprintf("CRYPTO:%s%s/NOV22", b.config.InstrumentBase, b.config.InstrumentQuote),
-							Name:    fmt.Sprintf("NOV 2022 %s vs %s future", b.config.InstrumentBase, b.config.InstrumentQuote),
-							Product: b.getExampleProduct(),
-						},
-						DecimalPlaces: 5,
-						Metadata:      []string{"base:" + b.config.InstrumentBase, "quote:" + b.config.InstrumentQuote, "class:fx/crypto", "monthly", "sector:crypto"},
-						RiskParameters: &vega.NewMarketConfiguration_Simple{
-							Simple: &vega.SimpleModelParams{
-								FactorLong:           0.15,
-								FactorShort:          0.25,
-								MaxMoveUp:            10,
-								MinMoveDown:          -5,
-								ProbabilityOfTrading: 0.1,
-							},
-						},
-					},
-					LiquidityCommitment: &vega.NewMarketCommitment{
-						Fee:              fmt.Sprint(b.config.StrategyDetails.Fee),
-						CommitmentAmount: b.config.StrategyDetails.CommitmentAmount,
-						Buys:             b.config.StrategyDetails.ShorteningShape.Buys.ToVegaLiquidityOrders(),
-						Sells:            b.config.StrategyDetails.LongeningShape.Sells.ToVegaLiquidityOrders(),
-					},
+				NewMarket: b.getExampleMarket(),
+			},
+		},
+	}
+}
+
+func (b *bot) getExampleMarket() *vega.NewMarket {
+	return &vega.NewMarket{
+		Changes: &vega.NewMarketConfiguration{
+			Instrument: &vega.InstrumentConfiguration{
+				Code:    fmt.Sprintf("CRYPTO:%s%s/NOV22", b.config.InstrumentBase, b.config.InstrumentQuote),
+				Name:    fmt.Sprintf("NOV 2022 %s vs %s future", b.config.InstrumentBase, b.config.InstrumentQuote),
+				Product: b.getExampleProduct(),
+			},
+			DecimalPlaces: 5,
+			Metadata:      []string{"base:" + b.config.InstrumentBase, "quote:" + b.config.InstrumentQuote, "class:fx/crypto", "monthly", "sector:crypto"},
+			RiskParameters: &vega.NewMarketConfiguration_Simple{
+				Simple: &vega.SimpleModelParams{
+					FactorLong:           0.15,
+					FactorShort:          0.25,
+					MaxMoveUp:            10,
+					MinMoveDown:          -5,
+					ProbabilityOfTrading: 0.1,
 				},
 			},
+		},
+		LiquidityCommitment: &vega.NewMarketCommitment{
+			Fee:              fmt.Sprint(b.config.StrategyDetails.Fee),
+			CommitmentAmount: b.config.StrategyDetails.CommitmentAmount,
+			Buys:             b.config.StrategyDetails.ShorteningShape.Buys.ToVegaLiquidityOrders(),
+			Sells:            b.config.StrategyDetails.LongeningShape.Sells.ToVegaLiquidityOrders(),
 		},
 	}
 }

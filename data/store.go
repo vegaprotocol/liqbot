@@ -54,9 +54,43 @@ type openVolumeSetReq struct {
 	openVolume int64
 }
 
-func (s *store) BalanceGet() *types.Balance {
+func (s *store) Balance() types.Balance {
 	resp := make(chan *types.Balance)
 	s.balanceGetCh <- balanceGetReq{resp}
+	balance := <-resp
+	if balance == nil {
+		return types.Balance{}
+	}
+	return *balance
+}
+
+func (s *store) TradingMode() vega.Market_TradingMode {
+	md := s.marketDataGet()
+	if md == nil {
+		return vega.Market_TRADING_MODE_UNSPECIFIED
+	}
+	return md.TradingMode
+}
+
+func (s *store) StaticMidPrice() *num.Uint {
+	md := s.marketDataGet()
+	if md == nil {
+		return num.Zero()
+	}
+	return md.StaticMidPrice
+}
+
+func (s *store) MarkPrice() *num.Uint {
+	md := s.marketDataGet()
+	if md == nil {
+		return num.Zero()
+	}
+	return md.MarkPrice
+}
+
+func (s *store) OpenVolume() int64 {
+	resp := make(chan int64)
+	s.openVolumeGetCh <- openVolumeGetReq{resp}
 	return <-resp
 }
 
@@ -64,7 +98,7 @@ func (s *store) balanceSet(typ vega.AccountType, bal *num.Uint) {
 	s.balanceSetCh <- balanceSetReq{typ: typ, balance: bal.Clone()}
 }
 
-func (s *store) MarketDataGet() *types.MarketData {
+func (s *store) marketDataGet() *types.MarketData {
 	resp := make(chan *types.MarketData)
 	s.marketDataGetCh <- marketDataGetReq{resp}
 	return <-resp
@@ -72,12 +106,6 @@ func (s *store) MarketDataGet() *types.MarketData {
 
 func (s *store) marketDataSet(marketData *types.MarketData) {
 	s.marketDataSetCh <- marketDataSetReq{marketData}
-}
-
-func (s *store) OpenVolumeGet() int64 {
-	resp := make(chan int64)
-	s.openVolumeGetCh <- openVolumeGetReq{resp}
-	return <-resp
 }
 
 func (s *store) openVolumeSet(openVolume int64) {
