@@ -40,7 +40,7 @@ bots:
       posManagementFraction: 0.25
       stakeFraction: 0.1
       ordersFraction: 0.25
-      commitmentAmount: 500000000
+      commitmentAmount: 50000000000000
       commitmentFraction: 0.10
       fee: 0.01
 
@@ -68,8 +68,8 @@ bots:
           - {reference: Bid, proportion: 10, offset: 8}
       posManagementSleepMilliseconds: 5050
       marketPriceSteeringRatePerSecond: 0.25
-      minPriceSteerFraction: 0.00001
-      priceSteerOrderScale: 20.5
+      minPriceSteerFraction: 0.00005
+      priceSteerOrderScale: 10.5
       limitOrderDistributionParams:
         method: "discreteThreeLevel"
         gttLengthSeconds: 60

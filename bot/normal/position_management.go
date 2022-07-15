@@ -32,45 +32,76 @@ func (b *bot) runPositionManagement(ctx context.Context) {
 		case <-b.stopPosMgmt:
 			return
 		case <-ctx.Done():
-			b.log.Warning(ctx.Err())
+			b.log.WithFields(log.Fields{
+				"error": ctx.Err(),
+			}).Warning("Stopped by Price steering")
 			return
 		default:
-			if err := doze(sleepTime, b.stopPosMgmt); err != nil {
+			err := doze(sleepTime, b.stopPosMgmt)
+			if err != nil {
 				return
 			}
 
-			previousOpenVolume = b.managePosition(ctx, previousOpenVolume)
+			// Only update liquidity and position if we are not in auction
+			if !b.canPlaceOrders() { // TODO: which price?
+				if err = b.placeAuctionOrders(ctx); err != nil {
+					b.log.WithFields(log.Fields{"error": err.Error()}).Warning("Failed to place auction orders")
+				}
+				continue
+			}
+
+			previousOpenVolume, err = b.manageDirection(ctx, previousOpenVolume)
+			if err != nil {
+				b.log.WithFields(log.Fields{"error": err.Error()}).Warning("Failed to change LP direction")
+			}
+
+			if err = b.managePosition(ctx); err != nil {
+				b.log.WithFields(log.Fields{"error": err.Error()}).Warning("Failed to manage position")
+			}
 		}
 	}
 }
 
-func (b *bot) managePosition(ctx context.Context, previousOpenVolume int64) int64 {
+func (b *bot) manageDirection(ctx context.Context, previousOpenVolume int64) (int64, error) {
 	openVolume := b.data.OpenVolume()
-	// We always cache off with longening shapes
 	buyShape, sellShape, shape := b.getShape()
-	// If we flipped then send the new LP order
-	if b.shouldAmend(previousOpenVolume) {
-		b.log.WithFields(log.Fields{"shape": shape}).Debug("Flipping LP direction")
 
-		if err := b.sendLiquidityProvisionAmendment(ctx, buyShape, sellShape); err != nil {
-			b.log.WithFields(log.Fields{"error": err.Error()}).Warning("Failed to send liquidity provision")
-		} else {
-			previousOpenVolume = openVolume
-		}
+	b.log.WithFields(log.Fields{
+		"openVolume":         b.data.OpenVolume(),
+		"previousOpenVolume": previousOpenVolume,
+		"shape":              shape,
+	}).Debug("Checking for direction change")
+
+	// If we flipped then send the new LP order
+	if !b.shouldAmend(previousOpenVolume) {
+		return openVolume, nil
+	}
+
+	b.log.WithFields(log.Fields{"shape": shape}).Debug("Flipping LP direction")
+
+	if err := b.sendLiquidityProvisionAmendment(ctx, buyShape, sellShape); err != nil {
+		return openVolume, fmt.Errorf("failed to send liquidity provision amendment: %w", err)
+	}
+
+	return openVolume, nil
+}
+
+func (b *bot) shouldAmend(previousOpenVolume int64) bool {
+	return (b.data.OpenVolume() > 0 && previousOpenVolume <= 0) || (b.data.OpenVolume() < 0 && previousOpenVolume >= 0)
+}
+
+func (b *bot) managePosition(ctx context.Context) error {
+	size, side, shouldPlace := b.checkPosition()
+	if !shouldPlace {
+		return nil
 	}
 
 	b.log.WithFields(log.Fields{
-		"currentPrice":   b.data.MarkPrice(), // TODO: ?
+		"currentPrice":   b.data.MarkPrice(),
 		"balanceGeneral": b.data.Balance().General,
 		"balanceMargin":  b.data.Balance().Margin,
 		"openVolume":     b.data.OpenVolume(),
-		"shape":          shape,
 	}).Debug("Position management info")
-
-	size, side, shouldPlace := b.checkPositionManagement()
-	if !shouldPlace {
-		return previousOpenVolume
-	}
 
 	if err := b.submitOrder(
 		ctx,
@@ -82,22 +113,15 @@ func (b *bot) managePosition(ctx context.Context, previousOpenVolume int64) int6
 		"PosManagement",
 		0,
 	); err != nil {
-		b.log.WithFields(log.Fields{"error": err, "side": side, "size": size}).Warning("Failed to place a position management order")
+		return fmt.Errorf("failed to place order: %w", err)
 	}
 
-	return previousOpenVolume
+	return nil
 }
 
-func (b *bot) shouldAmend(previousOpenVolume int64) bool {
-	return (b.data.OpenVolume() > 0 && previousOpenVolume <= 0) || (b.data.OpenVolume() < 0 && previousOpenVolume >= 0)
-}
-
-func (b *bot) checkPositionManagement() (uint64, vega.Side, bool) {
-	var (
-		size uint64
-		side vega.Side
-	)
-
+func (b *bot) checkPosition() (uint64, vega.Side, bool) {
+	size := uint64(0)
+	side := vega.Side_SIDE_UNSPECIFIED
 	shouldPlace := true
 	openVolume := b.data.OpenVolume()
 
@@ -126,31 +150,17 @@ func (b *bot) prePositionManagement(ctx context.Context) error {
 	if err := b.sendLiquidityProvision(ctx, buyShape, sellShape); err != nil {
 		return fmt.Errorf("failed to send liquidity provision order: %w", err)
 	}
-	// Only update liquidity and position if we are not in auction
-	// Check if we can already place orders or if we have a currentPrice we can use
-	if b.canPlaceOrders() || b.data.MarkPrice().IsZero() { // TODO: which price?
-		return nil
-	}
-
-	if err := b.placeAuctionOrders(ctx); err != nil {
-		return fmt.Errorf("failed to place auction orders: %v", err)
-	}
 
 	return nil
 }
 
 func (b *bot) getShape() ([]*vega.LiquidityOrder, []*vega.LiquidityOrder, string) {
-	var (
-		shape     string
-		buyShape  []*vega.LiquidityOrder
-		sellShape []*vega.LiquidityOrder
-	)
+	// We always cache off with longening shapes
+	shape := "longening"
+	buyShape := b.config.StrategyDetails.LongeningShape.Buys.ToVegaLiquidityOrders()
+	sellShape := b.config.StrategyDetails.LongeningShape.Sells.ToVegaLiquidityOrders()
 
-	if b.data.OpenVolume() <= 0 {
-		shape = "longening"
-		buyShape = b.config.StrategyDetails.LongeningShape.Buys.ToVegaLiquidityOrders()
-		sellShape = b.config.StrategyDetails.LongeningShape.Sells.ToVegaLiquidityOrders()
-	} else {
+	if b.data.OpenVolume() > 0 {
 		shape = "shortening"
 		buyShape = b.config.StrategyDetails.ShorteningShape.Buys.ToVegaLiquidityOrders()
 		sellShape = b.config.StrategyDetails.ShorteningShape.Sells.ToVegaLiquidityOrders()
@@ -159,9 +169,51 @@ func (b *bot) getShape() ([]*vega.LiquidityOrder, []*vega.LiquidityOrder, string
 	return buyShape, sellShape, shape
 }
 
+func (b *bot) checkInitialMargin(buyShape, sellShape []*vega.LiquidityOrder) error {
+	// Turn the shapes into a set of orders scaled by commitment
+	obligation := b.getCommitment()
+	buyOrders := b.calculateOrderSizes(obligation, buyShape)
+	sellOrders := b.calculateOrderSizes(obligation, sellShape)
+
+	buyRisk := 0.01
+	sellRisk := 0.01
+
+	buyCost := b.calculateMarginCost(buyRisk, buyOrders)
+	sellCost := b.calculateMarginCost(sellRisk, sellOrders)
+
+	shapeMarginCost := num.Max(buyCost, sellCost)
+	avail := mulFrac(b.data.Balance().General, b.config.StrategyDetails.OrdersFraction, 15)
+
+	if !avail.LT(shapeMarginCost) {
+		return nil
+	}
+
+	missingPercent := "Inf"
+
+	if !avail.IsZero() {
+		x := num.UintChain(shapeMarginCost).Sub(avail).Mul(num.NewUint(100)).Div(avail).Get()
+		missingPercent = fmt.Sprintf("%v%%", x)
+	}
+
+	b.log.WithFields(log.Fields{
+		"available":      avail,
+		"cost":           shapeMarginCost,
+		"missing":        num.Zero().Sub(avail, shapeMarginCost),
+		"missingPercent": missingPercent,
+	}).Error("Not enough collateral to safely keep orders up given current price, risk parameters and supplied default shapes.")
+
+	return errors.New("not enough collateral")
+}
+
 // Divide the auction amount into 10 orders and place them randomly
 // around the current price at upto 50+/- from it.
 func (b *bot) placeAuctionOrders(ctx context.Context) error {
+	// Check if we have a currentPrice we can use
+	if b.data.MarkPrice().IsZero() {
+		b.log.Debug("No current price to place auction orders")
+		return nil
+	}
+
 	b.log.WithFields(log.Fields{"currentPrice": b.data.MarkPrice()}).Debug("Placing auction orders")
 
 	// Place the random orders split into
@@ -170,6 +222,8 @@ func (b *bot) placeAuctionOrders(ctx context.Context) error {
 	rand.Seed(time.Now().UnixNano())
 
 	for totalVolume.LT(b.config.StrategyDetails.AuctionVolume.Get()) {
+		time.Sleep(time.Second * 2)
+
 		remaining := num.Zero().Sub(b.config.StrategyDetails.AuctionVolume.Get(), totalVolume)
 		size := num.Min(num.UintChain(b.config.StrategyDetails.AuctionVolume.Get()).Div(num.NewUint(10)).Add(num.NewUint(1)).Get(), remaining)
 		// #nosec G404
@@ -195,46 +249,6 @@ func (b *bot) placeAuctionOrders(ctx context.Context) error {
 	b.log.WithFields(log.Fields{"totalVolume": totalVolume}).Debug("Placed auction orders")
 
 	return nil
-}
-
-func (b *bot) checkInitialMargin(buyShape, sellShape []*vega.LiquidityOrder) error {
-	// Turn the shapes into a set of orders scaled by commitment
-	obligation := b.getCommitment()
-	buyOrders := b.calculateOrderSizes(obligation, buyShape)
-	sellOrders := b.calculateOrderSizes(obligation, sellShape)
-
-	buyRisk := 0.01
-	sellRisk := 0.01
-
-	buyCost := b.calculateMarginCost(buyRisk, buyOrders)
-	sellCost := b.calculateMarginCost(sellRisk, sellOrders)
-
-	shapeMarginCost := num.Max(buyCost, sellCost)
-	avail := mulFrac(b.data.Balance().General, b.config.StrategyDetails.OrdersFraction, 15)
-
-	if avail.LT(shapeMarginCost) {
-		var missingPercent string
-		if avail.EQUint64(0) {
-			missingPercent = "Inf"
-		} else {
-			x := num.UintChain(shapeMarginCost).Sub(avail).Mul(num.NewUint(100)).Div(avail).Get()
-			missingPercent = fmt.Sprintf("%v%%", x)
-		}
-		b.log.WithFields(log.Fields{
-			"available":      avail,
-			"cost":           shapeMarginCost,
-			"missing":        num.Zero().Sub(avail, shapeMarginCost),
-			"missingPercent": missingPercent,
-		}).Error("Not enough collateral to safely keep orders up given current price, risk parameters and supplied default shapes.")
-		return errors.New("not enough collateral")
-	}
-
-	return nil
-}
-
-func (b *bot) getCommitment() *num.Uint {
-	// CommitmentAmount is the fractional commitment value * total collateral
-	return mulFrac(b.data.Balance().Total(), b.config.StrategyDetails.CommitmentFraction, 15)
 }
 
 // calculateOrderSizes calculates the size of the orders using the total commitment, price, distance from mid and chance
@@ -297,11 +311,11 @@ func (b *bot) sendLiquidityProvision(ctx context.Context, buys, sells []*vega.Li
 		PubKey: b.walletPubKey,
 		Command: &walletpb.SubmitTransactionRequest_LiquidityProvisionSubmission{
 			LiquidityProvisionSubmission: &commandspb.LiquidityProvisionSubmission{
-				Fee:              b.config.StrategyDetails.Fee,
 				MarketId:         b.marketID,
 				CommitmentAmount: commitment.String(),
-				Buys:             buys,
+				Fee:              b.config.StrategyDetails.Fee,
 				Sells:            sells,
+				Buys:             buys,
 			},
 		},
 	}
@@ -351,16 +365,19 @@ func (b *bot) sendLiquidityProvisionAmendment(ctx context.Context, buys, sells [
 	return nil
 }
 
-func (b *bot) sendLiquidityProvisionCancellation(ctx context.Context) error {
-	cmd := &walletpb.SubmitTransactionRequest_LiquidityProvisionCancellation{
-		LiquidityProvisionCancellation: &commandspb.LiquidityProvisionCancellation{
-			MarketId: b.marketID,
-		},
-	}
+func (b *bot) getCommitment() *num.Uint {
+	// CommitmentAmount is the fractional commitment value * total collateral
+	return mulFrac(b.data.Balance().Total(), b.config.StrategyDetails.CommitmentFraction, 15)
+}
 
+func (b *bot) sendLiquidityProvisionCancellation(ctx context.Context) error {
 	submitTxReq := &walletpb.SubmitTransactionRequest{
-		PubKey:  b.walletPubKey,
-		Command: cmd,
+		PubKey: b.walletPubKey,
+		Command: &walletpb.SubmitTransactionRequest_LiquidityProvisionCancellation{
+			LiquidityProvisionCancellation: &commandspb.LiquidityProvisionCancellation{
+				MarketId: b.marketID,
+			},
+		},
 	}
 
 	if _, err := b.walletClient.SignTx(ctx, submitTxReq); err != nil {

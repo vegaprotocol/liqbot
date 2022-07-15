@@ -35,7 +35,9 @@ func (b *bot) runPriceSteering(ctx context.Context) {
 		case <-b.stopPriceSteer:
 			return
 		case <-ctx.Done():
-			b.log.Warning(ctx.Err())
+			b.log.WithFields(log.Fields{
+				"error": ctx.Err(),
+			}).Warning("Stopped by Position management")
 			return
 		default:
 			if err := doze(time.Duration(sleepTime)*time.Millisecond, b.stopPriceSteer); err != nil {
@@ -63,39 +65,33 @@ func (b *bot) steerPrice(ctx context.Context) error {
 
 	staticMidPrice := b.data.StaticMidPrice()
 	currentDiff, statIsGt := num.Zero().Delta(externalPrice, staticMidPrice)
-	currentDiffFraction := num.UintChain(currentDiff.Clone()).Mul(num.NewUint(100)).Div(externalPrice).Get()
-	minPriceSteerFraction := num.NewUint(uint64(100.0 * b.config.StrategyDetails.MinPriceSteerFraction))
+	currentDiffFraction := num.DecimalFromUint(currentDiff).Div(num.DecimalFromUint(externalPrice))
+	minPriceSteerFraction := num.DecimalFromInt64(int64(100)).Mul(num.DecimalFromFloat(b.config.StrategyDetails.MinPriceSteerFraction))
 
-	if !currentDiffFraction.GT(minPriceSteerFraction) {
-		b.log.Debug("current difference is not higher than minimum price steering fraction")
-		return nil
-	}
-
-	side := vega.Side_SIDE_SELL
-	if !statIsGt {
-		side = vega.Side_SIDE_BUY
+	side := vega.Side_SIDE_BUY
+	if statIsGt {
+		side = vega.Side_SIDE_SELL
 	}
 
 	b.log.WithFields(log.Fields{
-		"currentPrice":  staticMidPrice,
-		"externalPrice": externalPrice,
-		"diff":          currentDiff,
-		"shouldMove":    map[vega.Side]string{vega.Side_SIDE_BUY: "UP", vega.Side_SIDE_SELL: "DN"}[side],
+		"currentPrice":          staticMidPrice,
+		"externalPrice":         externalPrice,
+		"diff":                  currentDiff,
+		"currentDiffFraction":   currentDiffFraction,
+		"minPriceSteerFraction": minPriceSteerFraction,
+		"shouldMove":            map[vega.Side]string{vega.Side_SIDE_BUY: "UP", vega.Side_SIDE_SELL: "DN"}[side],
 	}).Debug("Steering info")
+
+	if !currentDiffFraction.GreaterThan(minPriceSteerFraction) {
+		b.log.Debug("Current difference is not higher than minimum price steering fraction")
+		return nil
+	}
 
 	// find out what price and size of the order we should place
 	price, size, err := b.getRealisticOrderDetails(externalPrice)
 	if err != nil {
 		b.log.WithFields(log.Fields{"error": err.Error()}).Fatal("Unable to get realistic order details for price steering")
 	}
-
-	size = mulFrac(size, b.config.StrategyDetails.PriceSteerOrderScale, 15)
-
-	b.log.WithFields(log.Fields{
-		"size":  size,
-		"side":  side,
-		"price": price,
-	}).Debug("Submitting order")
 
 	if err = b.submitOrder(
 		ctx,
@@ -126,11 +122,9 @@ func (b *bot) getExternalPrice() (*num.Uint, error) {
 		return nil, fmt.Errorf("external price is zero")
 	}
 
-	decPlaces := num.NewUint(uint64(math.Pow10(b.decimalPlaces)))
-	externalPrice := num.NewUint(uint64(externalPriceResponse.Price))
-	externalPrice = num.Zero().Mul(externalPrice, decPlaces)
-
-	return externalPrice, nil
+	externalPrice := externalPriceResponse.Price * math.Pow(10, float64(b.decimalPlaces))
+	externalPriceNum := num.NewUint(uint64(externalPrice))
+	return externalPriceNum, nil
 }
 
 // getRealisticOrderDetails uses magic to return a realistic order price and size.
@@ -149,9 +143,10 @@ func (b *bot) getRealisticOrderDetails(externalPrice *num.Uint) (*num.Uint, *num
 	default:
 		return nil, nil, fmt.Errorf("method for generating price distributions not recognised")
 	}
-
 	// TODO: size?
-	return price, num.NewUint(1), nil
+	size := mulFrac(num.NewUint(1), b.config.StrategyDetails.PriceSteerOrderScale, 15)
+
+	return price, size, nil
 }
 
 func (b *bot) getDiscreteThreeLevelPrice(externalPrice *num.Uint) (*num.Uint, error) {

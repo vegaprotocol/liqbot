@@ -43,7 +43,6 @@ func (b *bot) setupMarket() error {
 	b.marketID = market.Id
 	b.decimalPlaces = int(market.DecimalPlaces)
 	b.settlementAssetID = market.TradableInstrument.Instrument.GetFuture().SettlementAsset
-
 	b.log = b.log.WithFields(log.Fields{"marketID": b.marketID})
 
 	return nil
@@ -102,40 +101,40 @@ func (b *bot) createMarket(ctx context.Context) (*vega.Market, error) {
 		return nil, fmt.Errorf("failed to seed stake tokens: %w", err)
 	}
 
-	b.log.Debug("waiting for stake to propagate...")
+	b.log.Debug("Waiting for stake to propagate...")
 
 	if err = b.marketStream.WaitForStakeLinking(); err != nil {
 		return nil, fmt.Errorf("failed stake linking: %w", err)
 	}
 
-	b.log.Debug("successfully linked stake")
-	b.log.Debug("sending new market proposal")
+	b.log.Debug("Successfully linked stake")
+	b.log.Debug("Sending new market proposal")
 
 	if err = b.sendNewMarketProposal(ctx); err != nil {
 		return nil, fmt.Errorf("failed to send new market proposal: %w", err)
 	}
 
-	b.log.Debug("waiting for proposal ID...")
+	b.log.Debug("Waiting for proposal ID...")
 
 	proposalID, err := b.marketStream.WaitForProposalID()
 	if err != nil {
 		return nil, fmt.Errorf("failed to wait for proposal ID: %w", err)
 	}
 
-	b.log.Debug("successfully sent new market proposal")
-	b.log.Debug("sending votes for market proposal")
+	b.log.Debug("Successfully sent new market proposal")
+	b.log.Debug("Sending votes for market proposal")
 
 	if err = b.sendVote(ctx, proposalID, true); err != nil {
 		return nil, fmt.Errorf("failed to send vote: %w", err)
 	}
 
-	b.log.Debug("waiting for proposal to be enacted...")
+	b.log.Debug("Waiting for proposal to be enacted...")
 
 	if err = b.marketStream.WaitForProposalEnacted(proposalID); err != nil {
 		return nil, fmt.Errorf("failed to wait for proposal to be enacted: %w", err)
 	}
 
-	b.log.Debug("market proposal successfully enacted")
+	b.log.Debug("Market proposal successfully enacted")
 
 	marketsResponse, err := b.node.Markets(&dataapipb.MarketsRequest{})
 	if err != nil {
@@ -217,10 +216,11 @@ func (b *bot) submitOrder(
 	}
 
 	b.log.WithFields(log.Fields{
-		"size":  size,
-		"side":  side,
-		"price": price,
-		"tif":   tif.String(),
+		"reference": reference,
+		"size":      size,
+		"side":      side,
+		"price":     price,
+		"tif":       tif.String(),
 	}).Debug("Submitting order")
 
 	if tif == vega.Order_TIME_IN_FORCE_GTT {
@@ -243,65 +243,47 @@ func (b *bot) submitOrder(
 	return nil
 }
 
+// TODO: get prices from `PricingEngine` or from config
 func (b *bot) seedOrders(ctx context.Context) error {
-	b.log.Debug("seeding orders")
-	// GTC SELL 400@1000
-	secFromNow := int64(b.config.StrategyDetails.PosManagementFraction)
-
-	if err := b.submitOrder(ctx,
-		400, num.NewUint(1000),
-		vega.Side_SIDE_SELL,
-		vega.Order_TIME_IN_FORCE_GTC,
-		vega.Order_TYPE_LIMIT,
-		"MarketCreation",
-		secFromNow,
-	); err != nil {
-		return fmt.Errorf("failed to create seed order: %w", err)
-	}
-
-	time.Sleep(time.Second * 2)
-
-	// GTC BUY 400@250
-	if err := b.submitOrder(ctx,
-		400,
-		num.NewUint(250),
-		vega.Side_SIDE_BUY,
-		vega.Order_TIME_IN_FORCE_GTC,
-		vega.Order_TYPE_LIMIT,
-		"MarketCreation",
-		secFromNow,
-	); err != nil {
-		return fmt.Errorf("failed to create seed order: %w", err)
-	}
-
-	time.Sleep(time.Second * 2)
+	b.log.Debug("Seeding orders")
 
 	for i := 0; !b.canPlaceOrders(); i++ {
+		price := num.NewUint(2055000000)
+		tif := vega.Order_TIME_IN_FORCE_GFA
+
 		side := vega.Side_SIDE_BUY
 		if i%2 == 0 {
 			side = vega.Side_SIDE_SELL
 		}
 
+		if i == 0 {
+			price = num.NewUint(2100000000)
+			tif = vega.Order_TIME_IN_FORCE_GTC
+		} else if i == 1 {
+			price = num.NewUint(1900000000)
+			tif = vega.Order_TIME_IN_FORCE_GTC
+		}
+
 		if err := b.submitOrder(ctx,
 			400,
-			num.NewUint(500),
+			price,
 			side,
-			vega.Order_TIME_IN_FORCE_GFA,
+			tif,
 			vega.Order_TYPE_LIMIT,
 			"MarketCreation",
-			secFromNow,
+			int64(b.config.StrategyDetails.PosManagementFraction),
 		); err != nil {
 			return fmt.Errorf("failed to create seed order: %w", err)
 		}
 
 		time.Sleep(time.Second * 2)
 
-		if i == 20 { // TODO: make this configurable
+		if i == 100 { // TODO: make this configurable
 			return fmt.Errorf("seeding orders did not end the auction")
 		}
 	}
 
-	b.log.Debug("seeding orders finished")
+	b.log.Debug("Seeding orders finished")
 	return nil
 }
 
