@@ -43,7 +43,7 @@ func (b *bot) runPositionManagement(ctx context.Context) {
 			}
 
 			// Only update liquidity and position if we are not in auction
-			if !b.canPlaceOrders() { // TODO: which price?
+			if !b.canPlaceOrders() {
 				if err = b.placeAuctionOrders(ctx); err != nil {
 					b.log.WithFields(log.Fields{"error": err.Error()}).Warning("Failed to place auction orders")
 				}

@@ -243,12 +243,16 @@ func (b *bot) submitOrder(
 	return nil
 }
 
-// TODO: get prices from `PricingEngine` or from config
 func (b *bot) seedOrders(ctx context.Context) error {
 	b.log.Debug("Seeding orders")
 
+	externalPrice, err := b.getExternalPrice()
+	if err != nil {
+		return fmt.Errorf("failed to get external price: %w", err)
+	}
+
 	for i := 0; !b.canPlaceOrders(); i++ {
-		price := num.NewUint(2055000000)
+		price := externalPrice.Clone()
 		tif := vega.Order_TIME_IN_FORCE_GFA
 
 		side := vega.Side_SIDE_BUY
@@ -257,10 +261,10 @@ func (b *bot) seedOrders(ctx context.Context) error {
 		}
 
 		if i == 0 {
-			price = num.NewUint(2100000000)
+			price = num.UintChain(price).Mul(num.NewUint(105)).Div(num.NewUint(100)).Get()
 			tif = vega.Order_TIME_IN_FORCE_GTC
 		} else if i == 1 {
-			price = num.NewUint(1900000000)
+			price = num.UintChain(price).Mul(num.NewUint(95)).Div(num.NewUint(100)).Get()
 			tif = vega.Order_TIME_IN_FORCE_GTC
 		}
 
