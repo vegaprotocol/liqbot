@@ -8,44 +8,60 @@ import (
 
 	dataapipb "code.vegaprotocol.io/protos/data-node/api/v1"
 	vegaapipb "code.vegaprotocol.io/protos/vega/api/v1"
+	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/credentials/insecure"
 
 	e "code.vegaprotocol.io/liqbot/errors"
 )
 
 // DataNode stores state for a Vega Data node.
 type DataNode struct {
-	address     url.URL // format: host:port
-	callTimeout time.Duration
-
-	conn *grpc.ClientConn
+	address        url.URL // format: host:port
+	callTimeout    time.Duration
+	connectTimeout time.Duration
+	conn           *grpc.ClientConn
+	log            *log.Entry
 }
 
 // NewDataNode returns a new node.
-func NewDataNode(addr url.URL, connectTimeout time.Duration, callTimeout time.Duration) (*DataNode, error) {
+func NewDataNode(addr url.URL, connectTimeout time.Duration, callTimeout time.Duration) *DataNode {
 	node := DataNode{
-		address:     addr,
-		callTimeout: callTimeout,
+		address:        addr,
+		callTimeout:    callTimeout,
+		connectTimeout: connectTimeout,
+		log:            log.WithFields(log.Fields{"service": "DataNode", "host": addr.Hostname()}),
 	}
 
-	hostPort := fmt.Sprintf("%s:%s", addr.Hostname(), addr.Port())
-	ctx, cancel := context.WithTimeout(context.Background(), connectTimeout)
-	defer cancel()
-	conn, err := grpc.DialContext(ctx, hostPort, grpc.WithInsecure(), grpc.WithBlock())
-	if err != nil {
-		return nil, fmt.Errorf("failed to dial gRPC node %s: %w", hostPort, err)
-	}
-	node.conn = conn
-	return &node, nil
+	return &node
 }
 
-// GetAddress gets the address of the node.
-func (n *DataNode) GetAddress() (url.URL, error) {
+func (n *DataNode) DialConnection() error {
+	msg := "gRPC call failed: DialConnection: %w"
 	if n == nil {
-		return url.URL{}, fmt.Errorf("failed to get node address: %w", e.ErrNil)
+		return fmt.Errorf(msg, e.ErrNil)
 	}
-	return n.address, nil
+
+	n.log.WithFields(
+		log.Fields{
+			"address": n.hostPort(),
+		}).Info("Dialing connection to DataNode...")
+	var err error
+	n.conn, err = grpc.Dial(n.hostPort(), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+	if err != nil {
+		return err
+	}
+
+	if n.conn.GetState() != connectivity.Ready {
+		return e.ErrConnectionNotReady
+	}
+
+	return nil
+}
+
+func (n *DataNode) hostPort() string {
+	return fmt.Sprintf("%s:%s", n.address.Hostname(), n.address.Port())
 }
 
 // === CoreService ===
@@ -353,6 +369,10 @@ func (n *DataNode) AssetByID(req *dataapipb.AssetByIDRequest) (response *dataapi
 		err = fmt.Errorf(msg, e.ErrorDetail(err))
 	}
 	return
+}
+
+func (n *DataNode) WaitForStateChange(ctx context.Context, state connectivity.State) bool {
+	return n.conn.WaitForStateChange(ctx, state)
 }
 
 // rpc Assets(AssetsRequest) returns (AssetsResponse);

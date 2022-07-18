@@ -159,7 +159,7 @@ func (b *bot) sendNewMarketProposal(ctx context.Context) error {
 		Command:   cmd,
 	}
 
-	if _, err := b.walletClient.SignTx(ctx, submitTxReq); err != nil {
+	if err := b.walletClient.SignTx(ctx, submitTxReq); err != nil {
 		return fmt.Errorf("failed to sign transaction: %v", err)
 	}
 
@@ -184,7 +184,7 @@ func (b *bot) sendVote(ctx context.Context, proposalId string, vote bool) error 
 		Command: cmd,
 	}
 
-	if _, err := b.walletClient.SignTx(ctx, submitTxReq); err != nil {
+	if err := b.walletClient.SignTx(ctx, submitTxReq); err != nil {
 		return fmt.Errorf("failed to submit Vote Submission: %w", err)
 	}
 
@@ -236,7 +236,7 @@ func (b *bot) submitOrder(
 		Command: cmd,
 	}
 
-	if _, err := b.walletClient.SignTx(ctx, submitTxReq); err != nil {
+	if err := b.walletClient.SignTx(ctx, submitTxReq); err != nil {
 		return fmt.Errorf("failed to submit OrderSubmission: %w", err)
 	}
 

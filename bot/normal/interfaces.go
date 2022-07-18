@@ -7,7 +7,6 @@ import (
 	ppservice "code.vegaprotocol.io/priceproxy/service"
 	dataapipb "code.vegaprotocol.io/protos/data-node/api/v1"
 	"code.vegaprotocol.io/protos/vega"
-	v12 "code.vegaprotocol.io/protos/vega/commands/v1"
 	"code.vegaprotocol.io/protos/vega/wallet/v1"
 
 	"code.vegaprotocol.io/liqbot/types"
@@ -31,7 +30,7 @@ type WalletClient interface {
 	LoginWallet(ctx context.Context, name, passphrase string) error
 	ListPublicKeys(ctx context.Context) ([]string, error)
 	GenerateKeyPair(ctx context.Context, passphrase string, meta []types.Meta) (*types.Key, error)
-	SignTx(ctx context.Context, req *v1.SubmitTransactionRequest) (*v12.Transaction, error)
+	SignTx(ctx context.Context, req *v1.SubmitTransactionRequest) error
 }
 
 type dataStore interface {

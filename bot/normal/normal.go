@@ -30,8 +30,10 @@ type bot struct {
 	seedConfig *config.SeedConfig
 	log        *log.Entry
 
-	stopPosMgmt    chan bool
-	stopPriceSteer chan bool
+	stopPosMgmt     chan bool
+	stopPriceSteer  chan bool
+	pausePosMgmt    chan struct{}
+	pausePriceSteer chan struct{}
 
 	walletPubKey           string // "58595a" ...
 	marketID               string
@@ -49,25 +51,24 @@ func New(botConf config.BotConfig, seedConf *config.SeedConfig, pe PricingEngine
 			"bot":  botConf.Name,
 			"node": botConf.Location,
 		}),
-		pricingEngine:  pe,
-		walletClient:   wc,
-		stopPosMgmt:    make(chan bool),
-		stopPriceSteer: make(chan bool),
+		pricingEngine:   pe,
+		walletClient:    wc,
+		stopPosMgmt:     make(chan bool),
+		stopPriceSteer:  make(chan bool),
+		pausePosMgmt:    make(chan struct{}),
+		pausePriceSteer: make(chan struct{}),
 	}
 }
 
 // Start starts the liquidity bot goroutine(s).
 func (b *bot) Start() error {
-	if err := b.setupWallet(); err != nil {
-		return fmt.Errorf("failed to setup wallet: %w", err)
-	}
-
-	dataNode, err := node.NewDataNode(
+	dataNode := node.NewDataNode(
 		url.URL{Host: b.config.Location},
 		time.Duration(b.config.ConnectTimeout)*time.Millisecond,
 		time.Duration(b.config.CallTimeout)*time.Millisecond,
 	)
-	if err != nil {
+
+	if err := dataNode.DialConnection(); err != nil {
 		return fmt.Errorf("failed to connect to Vega gRPC node: %w", err)
 	}
 
@@ -78,7 +79,11 @@ func (b *bot) Start() error {
 		"address": b.config.Location,
 	}).Debug("Connected to Vega gRPC node")
 
-	if err = b.setupMarket(); err != nil {
+	if err := b.setupWallet(); err != nil {
+		return fmt.Errorf("failed to setup wallet: %w", err)
+	}
+
+	if err := b.setupMarket(); err != nil {
 		return fmt.Errorf("failed to setup market: %w", err)
 	}
 
@@ -101,8 +106,8 @@ func (b *bot) Start() error {
 	}
 
 	store := data.NewStore()
-	stream := data.NewStream(dataNode, store)
 	b.data = store
+	stream := data.NewStream(dataNode, store, b.pauseChannel())
 
 	if err = stream.InitForData(b.marketID, b.walletPubKey, b.settlementAssetID); err != nil {
 		return fmt.Errorf("failed to initialise data: %w", err)
@@ -121,6 +126,26 @@ func (b *bot) Start() error {
 	}()
 
 	return nil
+}
+
+func (b *bot) pauseChannel() chan struct{} {
+	in := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-in:
+				select {
+				default:
+					b.pausePosMgmt <- struct{}{}
+				}
+				select {
+				default:
+					b.pausePriceSteer <- struct{}{}
+				}
+			}
+		}
+	}()
+	return in
 }
 
 // Stop stops the liquidity bot goroutine(s).

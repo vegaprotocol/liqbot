@@ -248,8 +248,7 @@ func refStringToEnum(reference string) vega.PeggedReference {
 
 // WalletConfig describes the settings for running an internal wallet server.
 type WalletConfig struct {
-	URL         string `yaml:"url"`
-	TokenExpiry int    `yaml:"tokenExpiry"`
+	URL string `yaml:"url"`
 }
 
 type SeedConfig struct {

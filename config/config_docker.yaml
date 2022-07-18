@@ -12,7 +12,6 @@ pricing:
     path: /prices
 wallet:
   url: http://host.docker.internal:1789
-  tokenExpiry: 31536000  # seconds
 seed:
   ethereumAddress:      https://host.docker.internal:8545
   erc20BridgeAddress:   0x9708FF7510D4A7B9541e1699d15b53Ecb1AFDc54

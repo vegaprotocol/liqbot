@@ -29,12 +29,16 @@ func (b *bot) runPositionManagement(ctx context.Context) {
 
 	for {
 		select {
+		case <-b.pausePosMgmt:
+			b.log.Warning("Position management paused")
+			<-b.pausePosMgmt
+			b.log.Info("Position management resumed")
 		case <-b.stopPosMgmt:
 			return
 		case <-ctx.Done():
 			b.log.WithFields(log.Fields{
 				"error": ctx.Err(),
-			}).Warning("Stopped by Price steering")
+			}).Warning("Stopped by context")
 			return
 		default:
 			err := doze(sleepTime, b.stopPosMgmt)
@@ -320,7 +324,7 @@ func (b *bot) sendLiquidityProvision(ctx context.Context, buys, sells []*vega.Li
 		},
 	}
 
-	if _, err := b.walletClient.SignTx(ctx, submitTxReq); err != nil {
+	if err := b.walletClient.SignTx(ctx, submitTxReq); err != nil {
 		return fmt.Errorf("failed to submit LiquidityProvisionSubmission: %w", err)
 	}
 
@@ -352,7 +356,7 @@ func (b *bot) sendLiquidityProvisionAmendment(ctx context.Context, buys, sells [
 		},
 	}
 
-	if _, err := b.walletClient.SignTx(ctx, submitTxReq); err != nil {
+	if err := b.walletClient.SignTx(ctx, submitTxReq); err != nil {
 		return fmt.Errorf("failed to submit LiquidityProvisionAmendment: %w", err)
 	}
 
@@ -380,7 +384,7 @@ func (b *bot) sendLiquidityProvisionCancellation(ctx context.Context) error {
 		},
 	}
 
-	if _, err := b.walletClient.SignTx(ctx, submitTxReq); err != nil {
+	if err := b.walletClient.SignTx(ctx, submitTxReq); err != nil {
 		return fmt.Errorf("failed to submit LiquidityProvisionCancellation: %w", err)
 	}
 

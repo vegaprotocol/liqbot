@@ -1,9 +1,14 @@
 package data
 
 import (
+	"errors"
 	"fmt"
-	"io"
+	"sync"
+	"time"
 
+	v1 "code.vegaprotocol.io/protos/vega/api/v1"
+
+	e "code.vegaprotocol.io/liqbot/errors"
 	"code.vegaprotocol.io/liqbot/types"
 	"code.vegaprotocol.io/liqbot/types/num"
 
@@ -20,13 +25,17 @@ type data struct {
 	marketID          string
 	settlementAssetID string
 	store             dataStore
+	pause             chan struct{}
+	botPaused         bool
+	mu                sync.Mutex
 }
 
-func NewStream(node DataNode, store dataStore) *data {
+func NewStream(node DataNode, store dataStore, pause chan struct{}) *data {
 	return &data{
 		node:  node,
 		log:   log.WithField("module", "DataStreamer"),
 		store: store,
+		pause: pause,
 	}
 }
 
@@ -183,59 +192,60 @@ func (s *data) subscribeToAccountEvents() error {
 }
 
 func (s *data) subscribePositions() error {
-	stream, err := s.node.PositionsSubscribe(&dataapipb.PositionsSubscribeRequest{
-		MarketId: s.marketID,
-		PartyId:  s.walletPubKey,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to subscribe to positions: %w", err)
+	getStream := func() (dataapipb.TradingDataService_PositionsSubscribeClient, error) {
+		return s.node.PositionsSubscribe(&dataapipb.PositionsSubscribeRequest{
+			MarketId: s.marketID,
+			PartyId:  s.walletPubKey,
+		})
 	}
+	stream := mustConnectStream[dataapipb.TradingDataService_PositionsSubscribeClient](s.log, s.node, getStream)
 
 	go func() {
 		for {
 			o, err := stream.Recv()
-			if err == io.EOF {
-				log.Debugln("positions: stream closed by server err:", err)
-				break
-			}
 			if err != nil {
-				log.Debugln("positions: stream closed err:", err)
-				break
+				s.log.WithFields(log.Fields{
+					"error": err,
+				}).Warning("positions: stream closed, resubscribing")
+
+				s.pauseBot(true)
+
+				stream = mustConnectStream[dataapipb.TradingDataService_PositionsSubscribeClient](s.log, s.node, getStream)
+				s.pauseBot(false)
+				continue
 			}
 
 			s.store.openVolumeSet(o.GetPosition().OpenVolume)
 		}
-		// Let the app know we have stopped receiving position updates
-		// s.positionStreamLive = false TODO
 	}()
 
 	return nil
 }
 
 func (s *data) processEvents(request *dataapipb.ObserveEventBusRequest, cb func(event *eventspb.BusEvent) bool) error {
-	// First we have to create the stream
-	stream, err := s.node.ObserveEventBus()
+	stream, err := s.getBusStream(request)
 	if err != nil {
-		return fmt.Errorf("failed to subscribe to event bus data: %w", err)
-	}
-
-	// Then we subscribe to the data
-	if err = stream.SendMsg(request); err != nil {
-		return fmt.Errorf("unable to send event bus request on the stream: %w", err)
+		return err
 	}
 
 	go func() {
 		for {
 			eb, err := stream.Recv()
-			if err == io.EOF {
-				s.log.Warning("event bus data: stream closed by server (EOF)")
-				break
-			}
 			if err != nil {
 				s.log.WithFields(log.Fields{
 					"error": err,
-				}).Warning("event bus data: stream closed")
-				break
+				}).Warning("event bus data: stream closed, resubscribing")
+
+				s.pauseBot(true)
+
+				if stream, err = s.getBusStream(request); err != nil {
+					s.log.WithFields(log.Fields{
+						"error": err,
+					}).Warning("unable to send event bus request on the stream: %w")
+					continue
+				}
+				s.pauseBot(false)
+				continue
 			}
 
 			for _, event := range eb.Events {
@@ -247,4 +257,73 @@ func (s *data) processEvents(request *dataapipb.ObserveEventBusRequest, cb func(
 	}()
 
 	return nil
+}
+
+func (s *data) pauseBot(p bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if p && !s.botPaused {
+		s.log.Info("Pausing bot")
+		s.botPaused = true
+	} else if !p && s.botPaused {
+		s.log.Info("Resuming bot")
+		s.botPaused = false
+	} else {
+		return
+	}
+	go func() {
+		s.pause <- struct{}{}
+	}()
+}
+
+func (s *data) getBusStream(request *dataapipb.ObserveEventBusRequest) (v1.CoreService_ObserveEventBusClient, error) {
+	getStream := func() (v1.CoreService_ObserveEventBusClient, error) {
+		stream, err := s.node.ObserveEventBus()
+		if err != nil {
+			return nil, err
+		}
+		// Then we subscribe to the data
+		if err := stream.SendMsg(request); err != nil {
+			s.log.WithFields(log.Fields{
+				"error": err,
+			}).Errorf("unable to send event bus request on the stream")
+			return nil, err
+		}
+		return stream, nil
+	}
+	//always get a new stream
+	return mustConnectStream[v1.CoreService_ObserveEventBusClient](s.log, s.node, getStream), nil
+}
+
+func mustConnectStream[stream any](l *log.Entry, n DataNode, getStream func() (stream, error)) stream {
+	var (
+		s   stream
+		err error
+	)
+
+	attempt := 0
+	sleepTime := time.Second * 3
+
+	for s, err = getStream(); err != nil; s, err = getStream() {
+		attempt++
+
+		l.WithFields(log.Fields{
+			"error":   err,
+			"attempt": attempt,
+		}).Errorf("event bus data: failed to subscribe to stream, retrying in %s...", sleepTime)
+
+		if errors.Unwrap(err).Error() == e.ErrConnectionNotReady.Error() {
+			l.Debug("attempting to reconnect to gRPC server")
+			if err = n.DialConnection(); err != nil {
+				l.WithFields(log.Fields{
+					"error": err,
+				}).Error("event bus data: failed to dial connection")
+			}
+		}
+
+		time.Sleep(sleepTime)
+	}
+
+	return s
 }
