@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"strings"
 	"time"
 
@@ -22,6 +21,7 @@ import (
 type bot struct {
 	pricingEngine PricingEngine
 	node          tradingDataService
+	locations     []string
 	data          dataStore
 	marketStream  marketStream
 	walletClient  WalletClient
@@ -43,14 +43,15 @@ type bot struct {
 }
 
 // New returns a new instance of bot.
-func New(botConf config.BotConfig, seedConf *config.SeedConfig, pe PricingEngine, wc WalletClient) *bot {
+func New(botConf config.BotConfig, locations []string, seedConf *config.SeedConfig, pe PricingEngine, wc WalletClient) *bot {
 	return &bot{
 		config:     botConf,
 		seedConfig: seedConf,
 		log: log.WithFields(log.Fields{
 			"bot":  botConf.Name,
-			"node": botConf.Location,
+			"node": locations,
 		}),
+		locations:       locations,
 		pricingEngine:   pe,
 		walletClient:    wc,
 		stopPosMgmt:     make(chan bool),
@@ -62,10 +63,13 @@ func New(botConf config.BotConfig, seedConf *config.SeedConfig, pe PricingEngine
 
 // Start starts the liquidity bot goroutine(s).
 func (b *bot) Start() error {
+	connTimeout := time.Duration(b.config.ConnectTimeout) * time.Millisecond
+	callTimeout := time.Duration(b.config.CallTimeout) * time.Millisecond
+
 	dataNode := node.NewDataNode(
-		url.URL{Host: b.config.Location},
-		time.Duration(b.config.ConnectTimeout)*time.Millisecond,
-		time.Duration(b.config.CallTimeout)*time.Millisecond,
+		b.locations,
+		connTimeout,
+		callTimeout,
 	)
 
 	if err := dataNode.DialConnection(); err != nil {
@@ -75,9 +79,7 @@ func (b *bot) Start() error {
 	b.node = dataNode
 	b.marketStream = data.NewMarket(dataNode, b.walletPubKey)
 
-	b.log.WithFields(log.Fields{
-		"address": b.config.Location,
-	}).Debug("Connected to Vega gRPC node")
+	b.log.WithFields(log.Fields{}).Debug("Connected to Vega gRPC node")
 
 	if err := b.setupWallet(); err != nil {
 		return fmt.Errorf("failed to setup wallet: %w", err)

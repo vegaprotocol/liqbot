@@ -133,6 +133,7 @@ func (m *Market) WaitForProposalEnacted(pID string) error {
 
 	return nil
 }
+
 func (m *Market) processEvents(request *dataapipb.ObserveEventBusRequest, cb func(event *eventspb.BusEvent) bool) error {
 	// First we have to create the stream
 	stream, err := m.node.ObserveEventBus()

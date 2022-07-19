@@ -13,18 +13,21 @@ pricing:
 wallet:
   url: http://127.0.0.1:1789
 seed:
-  ethereumAddress:      https://127.0.0.1:8545
+  ethereumAPIAddress:   https://127.0.0.1:8545
   erc20BridgeAddress:   0x9708FF7510D4A7B9541e1699d15b53Ecb1AFDc54
   stakingBridgeAddress: 0x9135f5afd6F055e731bca2348429482eE614CFfA
-  tUSDCTokenAddress:    0x1b8a1B6CBE5c93609b46D1829Cc7f3Cb8eeE23a0
+  erc20TokenAddress:    0x1b8a1B6CBE5c93609b46D1829Cc7f3Cb8eeE23a0
   vegaTokenAddress:     0x67175Da1D5e966e40D11c4B2519392B2058373de
   contractOwnerAddress: 0xEe7D375bcB50C26d52E1A4a472D8822A2A22d94F
   contractOwnerPrivateKey: a37f4c2a678aefb5037bf415a826df1540b330b7e471aa54184877ba901b9ef0
   amount: 1000000000000000000
+locations:
+  - localhost:3007
+  - localhost:3017
+  - localhost:3027
 bots:
   - name: w00
-    location: localhost:3027
-    connectTimeout: 30000  # milliseconds
+    connectTimeout: 3000  # milliseconds
     callTimeout: 10000  # milliseconds
     marketID: b07e975907e117d7b82f767771f1983ba2023f7d2a61a88f3206d8a7c43b69d5  # BTC/USD
     instrumentBase: BTC
@@ -45,26 +48,26 @@ bots:
 
       shorteningShape:
         sells:
-          - {reference: Ask, proportion: 10, offset: 8}
-          - {reference: Ask, proportion: 20, offset: 4}
-          - {reference: Ask, proportion: 30, offset: 2}
-          - {reference: Ask, proportion: 40, offset: 1}
+          - {reference: Ask, proportion: 10, offset: 80000}
+          - {reference: Ask, proportion: 20, offset: 40000}
+          - {reference: Ask, proportion: 30, offset: 20000}
+          - {reference: Ask, proportion: 40, offset: 10000}
         buys:
-          - {reference: Bid, proportion: 40, offset: 2}
-          - {reference: Bid, proportion: 30, offset: 4}
-          - {reference: Bid, proportion: 20, offset: 8}
-          - {reference: Bid, proportion: 10, offset: 16}
+          - {reference: Bid, proportion: 40, offset: 20000}
+          - {reference: Bid, proportion: 30, offset: 40000}
+          - {reference: Bid, proportion: 20, offset: 80000}
+          - {reference: Bid, proportion: 10, offset: 160000}
       longeningShape:
         sells:
-          - {reference: Ask, proportion: 10, offset: 16}
-          - {reference: Ask, proportion: 20, offset: 8}
-          - {reference: Ask, proportion: 30, offset: 4}
-          - {reference: Ask, proportion: 40, offset: 2}
+          - {reference: Ask, proportion: 10, offset: 160000}
+          - {reference: Ask, proportion: 20, offset: 80000}
+          - {reference: Ask, proportion: 30, offset: 40000}
+          - {reference: Ask, proportion: 40, offset: 20000}
         buys:
-          - {reference: Bid, proportion: 40, offset: 1}
-          - {reference: Bid, proportion: 30, offset: 2}
-          - {reference: Bid, proportion: 20, offset: 4}
-          - {reference: Bid, proportion: 10, offset: 8}
+          - {reference: Bid, proportion: 40, offset: 10000}
+          - {reference: Bid, proportion: 30, offset: 20000}
+          - {reference: Bid, proportion: 20, offset: 40000}
+          - {reference: Bid, proportion: 10, offset: 80000}
       posManagementSleepMilliseconds: 5050
       marketPriceSteeringRatePerSecond: 0.25
       minPriceSteerFraction: 0.00005

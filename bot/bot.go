@@ -25,10 +25,10 @@ type PricingEngine interface {
 }
 
 // New returns a new Bot instance.
-func New(botConf config.BotConfig, seedConf *config.SeedConfig, pe PricingEngine, wc normal.WalletClient) (Bot, error) {
+func New(botConf config.BotConfig, locations []string, seedConf *config.SeedConfig, pe PricingEngine, wc normal.WalletClient) (Bot, error) {
 	switch botConf.Strategy {
 	case config.BotStrategyNormal:
-		return normal.New(botConf, seedConf, pe, wc), nil
+		return normal.New(botConf, locations, seedConf, pe, wc), nil
 	default:
 		return nil, errors.New("unrecognised bot strategy")
 	}

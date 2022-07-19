@@ -3,7 +3,6 @@ package node
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"time"
 
 	dataapipb "code.vegaprotocol.io/protos/data-node/api/v1"
@@ -18,23 +17,21 @@ import (
 
 // DataNode stores state for a Vega Data node.
 type DataNode struct {
-	address        url.URL // format: host:port
-	callTimeout    time.Duration
-	connectTimeout time.Duration
-	conn           *grpc.ClientConn
-	log            *log.Entry
+	hosts       []string // format: host:port
+	callTimeout time.Duration
+	connTimeout time.Duration
+	conn        *grpc.ClientConn
+	log         *log.Entry
 }
 
 // NewDataNode returns a new node.
-func NewDataNode(addr url.URL, connectTimeout time.Duration, callTimeout time.Duration) *DataNode {
-	node := DataNode{
-		address:        addr,
-		callTimeout:    callTimeout,
-		connectTimeout: connectTimeout,
-		log:            log.WithFields(log.Fields{"service": "DataNode", "host": addr.Hostname()}),
+func NewDataNode(hosts []string, connectTimeout time.Duration, callTimeout time.Duration) *DataNode {
+	return &DataNode{
+		hosts:       hosts,
+		callTimeout: callTimeout,
+		connTimeout: connectTimeout,
+		log:         log.WithFields(log.Fields{"service": "DataNode"}),
 	}
-
-	return &node
 }
 
 func (n *DataNode) DialConnection() error {
@@ -43,12 +40,46 @@ func (n *DataNode) DialConnection() error {
 		return fmt.Errorf(msg, e.ErrNil)
 	}
 
+	attempt := 0
+
+	for {
+		hostIdx := attempt % len(n.hosts)
+		host := n.hosts[hostIdx]
+		if err := n.dialNode(host); err != nil {
+			n.log.WithFields(
+				log.Fields{
+					"host":  host,
+					"error": err,
+				}).Warning("Failed to connect to data node")
+			attempt++
+			n.log.WithFields(
+				log.Fields{
+					"attempt": attempt,
+				}).Info("Attempting to connect to another node")
+			continue
+		}
+
+		n.log.WithFields(
+			log.Fields{
+				"host":  host,
+				"state": n.conn.GetState(),
+			}).Info("Connected to data node")
+		return nil
+	}
+}
+
+func (n *DataNode) dialNode(host string) error {
 	n.log.WithFields(
 		log.Fields{
-			"address": n.hostPort(),
+			"host":        host,
+			"connTimeout": n.connTimeout,
 		}).Info("Dialing connection to DataNode...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), n.connTimeout)
+	defer cancel()
+
 	var err error
-	n.conn, err = grpc.Dial(n.hostPort(), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+	n.conn, err = grpc.DialContext(ctx, host, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {
 		return err
 	}
@@ -58,10 +89,6 @@ func (n *DataNode) DialConnection() error {
 	}
 
 	return nil
-}
-
-func (n *DataNode) hostPort() string {
-	return fmt.Sprintf("%s:%s", n.address.Hostname(), n.address.Port())
 }
 
 // === CoreService ===
@@ -89,9 +116,6 @@ func (n *DataNode) SubmitTransaction(req *vegaapipb.SubmitTransactionRequest) (r
 	}
 	return
 }
-
-// rpc PropagateChainEvent(PropagateChainEventRequest) returns (PropagateChainEventResponse);
-// rpc Statistics(StatisticsRequest) returns (StatisticsResponse);
 
 // LastBlockData gets the latest blockchain data, height, hash and pow parameters.
 func (n *DataNode) LastBlockData() (*vegaapipb.LastBlockHeightResponse, error) {
@@ -166,14 +190,10 @@ func (n *DataNode) ObserveEventBus() (client vegaapipb.CoreService_ObserveEventB
 		err = fmt.Errorf(msg, e.ErrorDetail(err))
 		return
 	}
-	// client.Send(req)
-	// client.CloseSend()
 	return
 }
 
 // === TradingDataService ===
-
-// rpc MarketAccounts(MarketAccountsRequest) returns (MarketAccountsResponse);
 
 // PartyAccounts returns accounts for the given party.
 func (n *DataNode) PartyAccounts(req *dataapipb.PartyAccountsRequest) (response *dataapipb.PartyAccountsResponse, err error) {
@@ -199,10 +219,6 @@ func (n *DataNode) PartyAccounts(req *dataapipb.PartyAccountsRequest) (response 
 	return
 }
 
-// rpc FeeInfrastructureAccounts(FeeInfrastructureAccountsRequest) returns (FeeInfrastructureAccountsResponse);
-// rpc GlobalRewardPoolAccounts(GlobalRewardPoolAccountsRequest) returns (GlobalRewardPoolAccountsResponse);
-// rpc Candles(CandlesRequest) returns (CandlesResponse);
-
 // MarketDataByID returns market data for the specified market.
 func (n *DataNode) MarketDataByID(req *dataapipb.MarketDataByIDRequest) (response *dataapipb.MarketDataByIDResponse, err error) {
 	msg := "gRPC call failed (data-node): MarketDataByID: %w"
@@ -226,10 +242,6 @@ func (n *DataNode) MarketDataByID(req *dataapipb.MarketDataByIDRequest) (respons
 	}
 	return
 }
-
-// rpc MarketsData(MarketsDataRequest) returns (MarketsDataResponse);
-// rpc MarketByID(MarketByIDRequest) returns (MarketByIDResponse);
-// rpc MarketDepth(MarketDepthRequest) returns (MarketDepthResponse);
 
 // Markets returns all markets.
 func (n *DataNode) Markets(req *dataapipb.MarketsRequest) (response *dataapipb.MarketsResponse, err error) {
@@ -255,16 +267,6 @@ func (n *DataNode) Markets(req *dataapipb.MarketsRequest) (response *dataapipb.M
 	return
 }
 
-// rpc OrderByMarketAndID(OrderByMarketAndIDRequest) returns (OrderByMarketAndIDResponse);
-// rpc OrderByReference(OrderByReferenceRequest) returns (OrderByReferenceResponse);
-// rpc OrdersByMarket(OrdersByMarketRequest) returns (OrdersByMarketResponse);
-// rpc OrdersByParty(OrdersByPartyRequest) returns (OrdersByPartyResponse);
-// rpc OrderByID(OrderByIDRequest) returns (OrderByIDResponse);
-// rpc OrderVersionsByID(OrderVersionsByIDRequest) returns (OrderVersionsByIDResponse);
-// rpc MarginLevels(MarginLevelsRequest) returns (MarginLevelsResponse);
-// rpc Parties(PartiesRequest) returns (PartiesResponse);
-// rpc PartyByID(PartyByIDRequest) returns (PartyByIDResponse);
-
 // PositionsByParty returns positions for the given party.
 func (n *DataNode) PositionsByParty(req *dataapipb.PositionsByPartyRequest) (response *dataapipb.PositionsByPartyResponse, err error) {
 	msg := "gRPC call failed (data-node): PositionsByParty: %w"
@@ -289,37 +291,6 @@ func (n *DataNode) PositionsByParty(req *dataapipb.PositionsByPartyRequest) (res
 	return
 }
 
-// rpc LastTrade(LastTradeRequest) returns (LastTradeResponse);
-// rpc TradesByMarket(TradesByMarketRequest) returns (TradesByMarketResponse);
-// rpc TradesByOrder(TradesByOrderRequest) returns (TradesByOrderResponse);
-// rpc TradesByParty(TradesByPartyRequest) returns (TradesByPartyResponse);
-// rpc GetProposals(GetProposalsRequest) returns (GetProposalsResponse);
-// rpc GetProposalsByParty(GetProposalsByPartyRequest) returns (GetProposalsByPartyResponse);
-// rpc GetVotesByParty(GetVotesByPartyRequest) returns (GetVotesByPartyResponse);
-// rpc GetNewMarketProposals(GetNewMarketProposalsRequest) returns (GetNewMarketProposalsResponse);
-// rpc GetUpdateMarketProposals(GetUpdateMarketProposalsRequest) returns (GetUpdateMarketProposalsResponse);
-// rpc GetNetworkParametersProposals(GetNetworkParametersProposalsRequest) returns (GetNetworkParametersProposalsResponse);
-// rpc GetNewAssetProposals(GetNewAssetProposalsRequest) returns (GetNewAssetProposalsResponse);
-// rpc GetProposalByID(GetProposalByIDRequest) returns (GetProposalByIDResponse);
-// rpc GetProposalByReference(GetProposalByReferenceRequest) returns (GetProposalByReferenceResponse);
-// rpc ObserveGovernance(ObserveGovernanceRequest) returns (stream ObserveGovernanceResponse);
-// rpc ObservePartyProposals(ObservePartyProposalsRequest) returns (stream ObservePartyProposalsResponse);
-// rpc ObservePartyVotes(ObservePartyVotesRequest) returns (stream ObservePartyVotesResponse);
-// rpc ObserveProposalVotes(ObserveProposalVotesRequest) returns (stream ObserveProposalVotesResponse);
-// rpc ObserveEventBus(stream ObserveEventBusRequest) returns (stream ObserveEventBusResponse);
-// rpc GetNodeData(GetNodeDataRequest) returns (GetNodeDataResponse);
-// rpc GetNodes(GetNodesRequest) returns (GetNodesResponse);
-// rpc GetNodeByID(GetNodeByIDRequest) returns (GetNodeByIDResponse);
-// rpc GetEpoch(GetEpochRequest) returns (GetEpochResponse);
-// rpc GetVegaTime(GetVegaTimeRequest) returns (GetVegaTimeResponse);
-// rpc AccountsSubscribe(AccountsSubscribeRequest) returns (stream AccountsSubscribeResponse);
-// rpc CandlesSubscribe(CandlesSubscribeRequest) returns (stream CandlesSubscribeResponse);
-// rpc MarginLevelsSubscribe(MarginLevelsSubscribeRequest) returns (stream MarginLevelsSubscribeResponse);
-// rpc MarketDepthSubscribe(MarketDepthSubscribeRequest) returns (stream MarketDepthSubscribeResponse);
-// rpc MarketDepthUpdatesSubscribe(MarketDepthUpdatesSubscribeRequest) returns (stream MarketDepthUpdatesSubscribeResponse);
-// rpc MarketsDataSubscribe(MarketsDataSubscribeRequest) returns (stream MarketsDataSubscribeResponse);
-// rpc OrdersSubscribe(OrdersSubscribeRequest) returns (stream OrdersSubscribeResponse);
-
 // PositionsSubscribe opens a stream.
 func (n *DataNode) PositionsSubscribe(req *dataapipb.PositionsSubscribeRequest) (client dataapipb.TradingDataService_PositionsSubscribeClient, err error) {
 	msg := "gRPC call failed: PositionsSubscribe: %w"
@@ -342,10 +313,6 @@ func (n *DataNode) PositionsSubscribe(req *dataapipb.PositionsSubscribeRequest) 
 	}
 	return
 }
-
-// rpc TradesSubscribe(TradesSubscribeRequest) returns (stream TradesSubscribeResponse);
-// rpc TransferResponsesSubscribe(TransferResponsesSubscribeRequest) returns (stream TransferResponsesSubscribeResponse);
-// rpc GetNodeSignaturesAggregate(GetNodeSignaturesAggregateRequest) returns (GetNodeSignaturesAggregateResponse);
 
 // AssetByID returns the specified asset.
 func (n *DataNode) AssetByID(req *dataapipb.AssetByIDRequest) (response *dataapipb.AssetByIDResponse, err error) {
@@ -374,21 +341,3 @@ func (n *DataNode) AssetByID(req *dataapipb.AssetByIDRequest) (response *dataapi
 func (n *DataNode) WaitForStateChange(ctx context.Context, state connectivity.State) bool {
 	return n.conn.WaitForStateChange(ctx, state)
 }
-
-// rpc Assets(AssetsRequest) returns (AssetsResponse);
-// rpc EstimateFee(EstimateFeeRequest) returns (EstimateFeeResponse);
-// rpc EstimateMargin(EstimateMarginRequest) returns (EstimateMarginResponse);
-// rpc ERC20WithdrawalApproval(ERC20WithdrawalApprovalRequest) returns (ERC20WithdrawalApprovalResponse);
-// rpc Withdrawal(WithdrawalRequest) returns (WithdrawalResponse);
-// rpc Withdrawals(WithdrawalsRequest) returns (WithdrawalsResponse);
-// rpc Deposit(DepositRequest) returns (DepositResponse);
-// rpc Deposits(DepositsRequest) returns (DepositsResponse);
-// rpc NetworkParameters(NetworkParametersRequest) returns (NetworkParametersResponse);
-// rpc LiquidityProvisions(LiquidityProvisionsRequest) returns (LiquidityProvisionsResponse);
-// rpc OracleSpec(OracleSpecRequest) returns (OracleSpecResponse);
-// rpc OracleSpecs(OracleSpecsRequest) returns (OracleSpecsResponse);
-// rpc OracleDataBySpec(OracleDataBySpecRequest) returns (OracleDataBySpecResponse);
-// rpc GetRewardDetails(GetRewardDetailsRequest) returns (GetRewardDetailsResponse);
-// rpc Checkpoints(CheckpointsRequest) returns (CheckpointsResponse);
-// rpc Delegations(DelegationsRequest) returns (DelegationsResponse);
-// rpc PartyStake(PartyStakeRequest) returns (PartyStakeResponse);

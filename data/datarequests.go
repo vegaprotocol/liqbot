@@ -30,12 +30,13 @@ func (s *data) getOpenVolume() (int64, error) {
 	return openVolume, nil
 }
 
-func convertUint256(valueStr string) (value *num.Uint, err error) {
+func convertUint256(valueStr string) (*num.Uint, error) {
 	value, overflowed := num.UintFromString(valueStr, 10)
 	if overflowed {
-		err = errors.New("invalid uint256, needs to be base 10")
+		return nil, errors.New("invalid uint256, needs to be base 10")
 	}
-	return
+
+	return value, nil
 }
 
 func (s *data) getAccount(typ vega.AccountType) (*num.Uint, error) {

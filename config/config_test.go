@@ -32,6 +32,10 @@ func TestCheckConfig(t *testing.T) {
 	err = cfg.CheckConfig()
 	assert.True(t, strings.HasPrefix(err.Error(), errors.ErrMissingEmptyConfigSection.Error()))
 
+	cfg.Locations = []string{""}
+	err = cfg.CheckConfig()
+	assert.True(t, strings.HasPrefix(err.Error(), errors.ErrMissingEmptyConfigSection.Error()))
+
 	cfg.Bots = []config.BotConfig{}
 	err = cfg.CheckConfig()
 	assert.True(t, strings.HasPrefix(err.Error(), errors.ErrMissingEmptyConfigSection.Error()))

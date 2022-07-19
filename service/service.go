@@ -135,7 +135,7 @@ func (s *Service) initBot(pricingEngine PricingEngine, botcfg config.BotConfig) 
 
 	wc := wallet.NewClient(s.config.Wallet.URL)
 
-	b, err := bot.New(botcfg, s.config.Seed, pricingEngine, wc)
+	b, err := bot.New(botcfg, s.config.Locations, s.config.Seed, pricingEngine, wc)
 	if err != nil {
 		return fmt.Errorf("failed to create bot %s: %w", botcfg.Name, err)
 	}

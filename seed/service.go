@@ -15,10 +15,10 @@ import (
 )
 
 type Service struct {
-	ethereumAddress         string
+	ethereumAPIAddress      string
 	erc20BridgeAddress      common.Address
 	stakingBridgeAddress    common.Address
-	tUSDCTokenAddress       common.Address
+	erc20TokenAddress       common.Address
 	vegaTokenAddress        common.Address
 	contractOwnerAddress    common.Address
 	contractOwnerPrivateKey string
@@ -32,10 +32,10 @@ func NewService(conf *config.SeedConfig) (Service, error) {
 	}
 
 	return Service{
-		ethereumAddress:         conf.EthereumAddress,
+		ethereumAPIAddress:      conf.EthereumAPIAddress,
 		erc20BridgeAddress:      common.HexToAddress(conf.Erc20BridgeAddress),
 		stakingBridgeAddress:    common.HexToAddress(conf.StakingBridgeAddress),
-		tUSDCTokenAddress:       common.HexToAddress(conf.TUSDCTokenAddress),
+		erc20TokenAddress:       common.HexToAddress(conf.ERC20TokenAddress),
 		vegaTokenAddress:        common.HexToAddress(conf.VegaTokenAddress),
 		contractOwnerAddress:    common.HexToAddress(conf.ContractOwnerAddress),
 		contractOwnerPrivateKey: conf.ContractOwnerPrivateKey,
@@ -45,7 +45,7 @@ func NewService(conf *config.SeedConfig) (Service, error) {
 }
 
 func (s Service) SeedStakeDeposit(ctx context.Context, vegaPubKey string) error {
-	client, err := vgethereum.NewClient(ctx, s.ethereumAddress, 1440)
+	client, err := vgethereum.NewClient(ctx, s.ethereumAPIAddress, 1440)
 	if err != nil {
 		return fmt.Errorf("failed to create Ethereum client: %w", err)
 	}
@@ -60,9 +60,9 @@ func (s Service) SeedStakeDeposit(ctx context.Context, vegaPubKey string) error 
 		return fmt.Errorf("failed to create staking bridge: %w", err)
 	}
 
-	tUSDCToken, err := client.NewBaseTokenSession(ctx, s.contractOwnerPrivateKey, s.tUSDCTokenAddress, nil)
+	erc20Token, err := client.NewBaseTokenSession(ctx, s.contractOwnerPrivateKey, s.erc20TokenAddress, nil)
 	if err != nil {
-		return fmt.Errorf("failed to create tUSDC token: %w", err)
+		return fmt.Errorf("failed to create ERC20 token: %w", err)
 	}
 
 	vegaToken, err := client.NewBaseTokenSession(ctx, s.contractOwnerPrivateKey, s.vegaTokenAddress, nil)
@@ -70,15 +70,15 @@ func (s Service) SeedStakeDeposit(ctx context.Context, vegaPubKey string) error 
 		return fmt.Errorf("failed to create vega token: %w", err)
 	}
 
-	if err := s.mintToken(tUSDCToken, s.contractOwnerAddress, s.amount); err != nil {
-		return fmt.Errorf("failed to mint and show balances for tUSDCToken: %w", err)
+	if err := s.mintToken(erc20Token, s.contractOwnerAddress, s.amount); err != nil {
+		return fmt.Errorf("failed to mint and show balances for erc20Token: %w", err)
 	}
 
 	if err := s.mintToken(vegaToken, s.contractOwnerAddress, s.amount); err != nil {
 		return fmt.Errorf("failed to mint and show balances for vegaToken: %w", err)
 	}
 
-	if err := s.approveAndDepositToken(tUSDCToken, erc20bridge, s.amount, vegaPubKey); err != nil {
+	if err := s.approveAndDepositToken(erc20Token, erc20bridge, s.amount, vegaPubKey); err != nil {
 		return fmt.Errorf("failed to approve and deposit token on erc20 bridge: %w", err)
 	}
 
@@ -92,7 +92,6 @@ func (s Service) SeedStakeDeposit(ctx context.Context, vegaPubKey string) error 
 }
 
 type token interface {
-	Mint(to common.Address, amount *big.Int) (*types.Transaction, error)
 	MintSync(to common.Address, amount *big.Int) (*types.Transaction, error)
 	BalanceOf(account common.Address) (*big.Int, error)
 	ApproveSync(spender common.Address, value *big.Int) (*types.Transaction, error)
