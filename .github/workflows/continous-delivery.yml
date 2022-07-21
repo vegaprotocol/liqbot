@@ -2,8 +2,10 @@
 name: "Continous Delivery Workflow"
 "on":
   push:
+  
     tags:
       - v*
+  
 
 env:
   GO_VERSION: "1.18.0"
@@ -57,6 +59,7 @@ jobs:
           tags: ${{ github.repository }}:latest,${{ github.repository }}:${{ github.sha }},${{ github.repository }}:${{ github.ref_name }}
 
   release-binary:
+    
     needs: integration
     name: Release on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -81,7 +84,9 @@ jobs:
 
       - name: Build
         env:
+          
           RELEASE_VERSION: ${{ github.ref_name }}
+          
         run: make release-${{ matrix.os }}
 
       - name: Release
