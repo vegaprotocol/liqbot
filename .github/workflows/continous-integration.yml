@@ -5,12 +5,15 @@ name: "Continous Integration Workflow"
   pull_request:
   push:
     branches:
-      - main
+    
+    - main
+    
 jobs:
   integration:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+
       - name: Setup Go
         uses: actions/setup-go@v3
         with:
@@ -19,11 +22,15 @@ jobs:
       - name: build
         run: make build
 
+      
       - name: test
         run: make test
+      
 
+      
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v3
         with:
           version: v1.45
           args: --config .golangci.toml
+      
