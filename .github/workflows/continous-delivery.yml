@@ -11,9 +11,10 @@ env:
   GO_VERSION: "1.18.0"
 
 jobs:
+  
   integration:
     uses: ./.github/workflows/continous-integration.yml
-
+  
   release-docker:
     needs: integration
     runs-on: ubuntu-latest
