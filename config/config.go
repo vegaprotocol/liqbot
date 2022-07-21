@@ -114,12 +114,6 @@ type BotConfig struct {
 	// Name is the name of the bot. It is also used as the wallet name.
 	// It is *not* a public key seen by Vega.
 	Name string `yaml:"name"`
-	/*
-		// Location points to a Vega node gRPC endpoint (host:port).
-		Location string `yaml:"location"`*/
-
-	// ConnectTimeout is the timeout (in milliseconds) for connecting to the Vega node gRPC endpoint.
-	ConnectTimeout int `yaml:"connectTimeout"`
 
 	// CallTimeout is the per-call timeout (in milliseconds) for communicating with the Vega node gRPC endpoint.
 	CallTimeout int `yaml:"callTimeout"`

@@ -15,14 +15,15 @@ import (
 
 // TradingDataService implements the gRPC service of the same name.
 type tradingDataService interface {
-	Markets(req *dataapipb.MarketsRequest) (response *dataapipb.MarketsResponse, err error)       // BOT
-	AssetByID(req *dataapipb.AssetByIDRequest) (response *dataapipb.AssetByIDResponse, err error) // BOT
+	Target() string
+	Markets(req *dataapipb.MarketsRequest) (*dataapipb.MarketsResponse, error)       // BOT
+	AssetByID(req *dataapipb.AssetByIDRequest) (*dataapipb.AssetByIDResponse, error) // BOT
 }
 
 // PricingEngine is the source of price information from the price proxy.
 //go:generate go run github.com/golang/mock/mockgen -destination mocks/pricingengine_mock.go -package mocks code.vegaprotocol.io/liqbot/bot/normal PricingEngine
 type PricingEngine interface {
-	GetPrice(pricecfg ppconfig.PriceConfig) (pi ppservice.PriceResponse, err error)
+	GetPrice(pricecfg ppconfig.PriceConfig) (ppservice.PriceResponse, error)
 }
 
 type WalletClient interface {
@@ -41,7 +42,7 @@ type dataStore interface {
 	OpenVolume() int64
 }
 type marketStream interface {
-	Subscribe() error
+	Subscribe()
 	WaitForStakeLinking() error
 	WaitForProposalID() (string, error)
 	WaitForProposalEnacted(pID string) error

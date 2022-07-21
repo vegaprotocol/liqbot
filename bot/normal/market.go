@@ -87,9 +87,7 @@ func (b *bot) findMarket(markets []*vega.Market) (*vega.Market, error) {
 }
 
 func (b *bot) createMarket(ctx context.Context) (*vega.Market, error) {
-	if err := b.marketStream.Subscribe(); err != nil {
-		return nil, fmt.Errorf("failed to subscribe to market stream: %w", err)
-	}
+	b.marketStream.Subscribe()
 
 	b.log.Debug("minting and staking tokens")
 	seedSvc, err := seed.NewService(b.seedConfig)
@@ -191,6 +189,7 @@ func (b *bot) sendVote(ctx context.Context, proposalId string, vote bool) error 
 	return nil
 }
 
+// TODO: make retryable
 func (b *bot) submitOrder(
 	ctx context.Context,
 	size uint64,

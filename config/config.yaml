@@ -29,7 +29,6 @@ bots:
   - name: w00
     connectTimeout: 3000  # milliseconds
     callTimeout: 10000  # milliseconds
-    marketID: b07e975907e117d7b82f767771f1983ba2023f7d2a61a88f3206d8a7c43b69d5  # BTC/USD
     instrumentBase: BTC
     instrumentQuote: USD
     strategy: normal

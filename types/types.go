@@ -21,3 +21,8 @@ type Balance struct {
 func (b Balance) Total() *num.Uint {
 	return num.Sum(b.General, b.Margin, b.Bond)
 }
+
+type PauseSignal struct {
+	From  string
+	Pause bool
+}

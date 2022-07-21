@@ -17,7 +17,7 @@ type DataNode interface {
 	MarketDataByID(req *dataapipb.MarketDataByIDRequest) (response *dataapipb.MarketDataByIDResponse, err error)
 	PositionsByParty(req *dataapipb.PositionsByPartyRequest) (response *dataapipb.PositionsByPartyResponse, err error)
 	PositionsSubscribe(req *dataapipb.PositionsSubscribeRequest) (client dataapipb.TradingDataService_PositionsSubscribeClient, err error)
-	DialConnection() error
+	DialConnection() chan struct{}
 }
 
 type dataStore interface {

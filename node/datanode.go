@@ -3,6 +3,7 @@ package node
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	dataapipb "code.vegaprotocol.io/protos/data-node/api/v1"
@@ -19,76 +20,96 @@ import (
 type DataNode struct {
 	hosts       []string // format: host:port
 	callTimeout time.Duration
-	connTimeout time.Duration
 	conn        *grpc.ClientConn
+	connecting  bool
+	mu          sync.RWMutex
 	log         *log.Entry
 }
 
 // NewDataNode returns a new node.
-func NewDataNode(hosts []string, connectTimeout time.Duration, callTimeout time.Duration) *DataNode {
+func NewDataNode(hosts []string, callTimeout time.Duration) *DataNode {
 	return &DataNode{
 		hosts:       hosts,
 		callTimeout: callTimeout,
-		connTimeout: connectTimeout,
 		log:         log.WithFields(log.Fields{"service": "DataNode"}),
 	}
 }
 
-func (n *DataNode) DialConnection() error {
-	msg := "gRPC call failed: DialConnection: %w"
-	if n == nil {
-		return fmt.Errorf(msg, e.ErrNil)
-	}
-
-	attempt := 0
-
-	for {
-		hostIdx := attempt % len(n.hosts)
-		host := n.hosts[hostIdx]
-		if err := n.dialNode(host); err != nil {
-			n.log.WithFields(
-				log.Fields{
-					"host":  host,
-					"error": err,
-				}).Warning("Failed to connect to data node")
-			attempt++
-			n.log.WithFields(
-				log.Fields{
-					"attempt": attempt,
-				}).Info("Attempting to connect to another node")
-			continue
-		}
-
-		n.log.WithFields(
-			log.Fields{
-				"host":  host,
-				"state": n.conn.GetState(),
-			}).Info("Connected to data node")
-		return nil
-	}
-}
-
-func (n *DataNode) dialNode(host string) error {
-	n.log.WithFields(
-		log.Fields{
-			"host":        host,
-			"connTimeout": n.connTimeout,
-		}).Info("Dialing connection to DataNode...")
-
-	ctx, cancel := context.WithTimeout(context.Background(), n.connTimeout)
+func (n *DataNode) DialConnection() chan struct{} {
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	var err error
-	n.conn, err = grpc.DialContext(ctx, host, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+	wg := &sync.WaitGroup{}
+	wg.Add(len(n.hosts))
+	waitCh := make(chan struct{})
+
+	n.mu.Lock()
+	if n.connecting {
+		n.mu.Unlock()
+		return waitCh
+	}
+
+	n.log.WithFields(
+		log.Fields{
+			"hosts": n.hosts,
+		}).Debug("Attempting to connect to DataNode...")
+
+	n.connecting = true
+	n.mu.Unlock()
+
+	for _, h := range n.hosts {
+		go func(host string) {
+			defer func() {
+				cancel()
+				wg.Done()
+			}()
+			n.dialNode(ctx, host)
+		}(h)
+	}
+
+	wg.Wait()
+	n.mu.Lock()
+	n.connecting = false
+	n.mu.Unlock()
+	close(waitCh)
+	return waitCh
+}
+
+func (n *DataNode) dialNode(ctx context.Context, host string) {
+	conn, err := grpc.DialContext(
+		ctx,
+		host,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+	)
 	if err != nil {
-		return err
+		n.mu.RLock()
+		defer n.mu.RUnlock()
+		// another goroutine has already established a connection
+		if n.conn == nil {
+			n.log.WithFields(
+				log.Fields{
+					"error": err,
+					"host":  host,
+				}).Error("Failed to connect to data node")
+		}
+		return
 	}
 
-	if n.conn.GetState() != connectivity.Ready {
-		return e.ErrConnectionNotReady
-	}
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.conn = conn
 
-	return nil
+	n.log.WithFields(
+		log.Fields{
+			"host":  host,
+			"state": n.conn.GetState(),
+		}).Info("Connected to data node")
+	return
+}
+
+func (n *DataNode) Target() string {
+	return n.conn.Target()
 }
 
 // === CoreService ===
