@@ -61,6 +61,7 @@ jobs:
           push: true
           tags: ${{ github.repository }}:latest,${{ github.repository }}:${{ github.sha }},${{ github.repository }}:${{ github.ref_name }}
 
+  
   release-binary:
     
     
@@ -100,3 +101,4 @@ jobs:
           files: build/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  
