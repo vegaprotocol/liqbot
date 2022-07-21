@@ -3,7 +3,7 @@ module code.vegaprotocol.io/liqbot
 go 1.16
 
 require (
-	code.vegaprotocol.io/priceproxy v0.0.2
+	code.vegaprotocol.io/priceproxy v0.1.0
 	code.vegaprotocol.io/protos v0.53.0
 	code.vegaprotocol.io/shared v0.0.0-20220614080106-5c97205b0d92
 	code.vegaprotocol.io/vegawallet v0.16.1
