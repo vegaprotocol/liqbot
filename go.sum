@@ -35,12 +35,17 @@ code.vegaprotocol.io/priceproxy v0.0.2 h1:yeaX4nAuZCxbODsF5/YOosIXCyNtY91M8FQzgv
 code.vegaprotocol.io/priceproxy v0.0.2/go.mod h1:lj5Y3+LPxiGKUhAxz0RQ11wjQ3gtTqIHHqSQDCgndKI=
 code.vegaprotocol.io/protos v0.49.3 h1:hKFrfsMaoRHJNeOjJ1cTkyltmkZGc17m9F2r+84d3jE=
 code.vegaprotocol.io/protos v0.49.3/go.mod h1:K6FWDdxWzEgZjz2G1f8gmrSPMey720ryHnzNRn1pW7w=
+code.vegaprotocol.io/protos v0.52.0/go.mod h1:4BqwDw6jhc/mnwbXq8ZFUtYBFCnk8tBW6zuPsBt8OrQ=
 code.vegaprotocol.io/protos v0.53.0 h1:3Xl/2o+IWd3dxe1kHnLCbF5DqKq5AoiaI8rVIdpjcng=
 code.vegaprotocol.io/protos v0.53.0/go.mod h1:4BqwDw6jhc/mnwbXq8ZFUtYBFCnk8tBW6zuPsBt8OrQ=
 code.vegaprotocol.io/shared v0.0.0-20220321185018-3b5684b00533 h1:IxTWvyF0i0AgUAS+FTgQKIpbsS6Ki/Y9Ug0GSlgChJw=
 code.vegaprotocol.io/shared v0.0.0-20220321185018-3b5684b00533/go.mod h1:pNHKwqRDkotUN0s6jErl7Eb2EpZa2HAf03lyPMTCUT0=
+code.vegaprotocol.io/shared v0.0.0-20220614080106-5c97205b0d92 h1:BjS0uyoTUFgbBNY3clzSj0fDA1rAPLsV5dNMwfpvSNg=
+code.vegaprotocol.io/shared v0.0.0-20220614080106-5c97205b0d92/go.mod h1:pNHKwqRDkotUN0s6jErl7Eb2EpZa2HAf03lyPMTCUT0=
 code.vegaprotocol.io/vegawallet v0.13.2 h1:bslUXYtYCexBW4zRHpEEHuNA+aBiWI5pYxFjBsAPmVI=
 code.vegaprotocol.io/vegawallet v0.13.2/go.mod h1:5FW9zisuN2NU655g+glPhTadhsroT5sl5JLD6S5kAqQ=
+code.vegaprotocol.io/vegawallet v0.16.1 h1:BRRxCKMa6vaIVHBBzwlG8Sbm1+m2xh9h6QyRt2JwVJQ=
+code.vegaprotocol.io/vegawallet v0.16.1/go.mod h1:rb0GMAaAFmWkjqsCpclYIPrTympq13Ciy6S9xwIfB2U=
 dmitri.shuralyov.com/gpu/mtl v0.0.0-20190408044501-666a987793e9/go.mod h1:H6x//7gZCb22OMCxBHrMx7a5I7Hp++hsVxbQ4BYO7hU=
 gioui.org v0.0.0-20210308172011-57750fc8a0a6/go.mod h1:RSH6KIUZ0p2xy5zHDxgAM4zumjgTw83q2ge/PI+yyw8=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
@@ -617,6 +622,7 @@ golang.org/x/exp v0.0.0-20191129062945-2f5052295587/go.mod h1:2RIsYlXP63K8oxa1u0
 golang.org/x/exp v0.0.0-20191227195350-da58074b4299/go.mod h1:2RIsYlXP63K8oxa1u096TMicItID8zy7Y6sNkU49FU4=
 golang.org/x/exp v0.0.0-20200119233911-0405dc783f0a/go.mod h1:2RIsYlXP63K8oxa1u096TMicItID8zy7Y6sNkU49FU4=
 golang.org/x/exp v0.0.0-20200207192155-f17229e696bd/go.mod h1:J/WKrq2StrnmMY6+EHIKF9dgMWnmCNThgcyBT1FY9mM=
+golang.org/x/exp v0.0.0-20200224162631-6cc2880d07d6 h1:QE6XYQK6naiK1EPAe1g/ILLxN5RBoH5xkJk3CqlMI/Y=
 golang.org/x/exp v0.0.0-20200224162631-6cc2880d07d6/go.mod h1:3jZMyOhIsHpP37uCMkUooju7aAi5cS1Q23tOzKc+0MU=
 golang.org/x/exp v0.0.0-20200331195152-e8c3332aa8e5 h1:FR+oGxGfbQu1d+jglI3rCkjAjUnhRSZcUxr+DqlDLNo=
 golang.org/x/exp v0.0.0-20200331195152-e8c3332aa8e5/go.mod h1:4M0jN8W1tt0AVLNr8HDosyJCDCDuyL9N9+3m7wDWgKw=
