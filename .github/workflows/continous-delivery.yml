@@ -16,7 +16,9 @@ jobs:
     uses: ./.github/workflows/continous-integration.yml
   
   release-docker:
+    
     needs: integration
+    
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
