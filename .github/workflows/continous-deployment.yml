@@ -29,11 +29,13 @@ jobs:
           git config --global user.name 'vega-ci-bot'
           git config --global user.email 'dev@vega.xyz'
           git clone git@github.com:vegaprotocol/k8s.git
-          cd k8s
                     if [ "$(git rev-parse --abbrev-ref HEAD)" = "main" ]; then
-            echo -n "$version" > charts/apps/liqbot/devnet/VERSION
+            echo -n "$version" > k8s/charts/apps/liqbot/devnet/VERSION
           fi
-                    git add -A
-          git commit -m "Automated version update for liqbot: $version, from repository: $GITHUB_REPOSITORY"
-          git pull --rebase
-          git push
+                    (
+            cd k8s
+            git add -A
+            git commit -m "Automated version update for liqbot: $version, from repository: $GITHUB_REPOSITORY"
+            git pull --rebase
+            git push
+          )
