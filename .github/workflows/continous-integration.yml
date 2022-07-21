@@ -3,11 +3,13 @@ name: "Continous Integration Workflow"
 "on":
   workflow_call:
   pull_request:
+  
   push:
     branches:
     
     - main
     
+  
 jobs:
   integration:
     runs-on: ubuntu-latest
