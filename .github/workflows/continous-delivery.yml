@@ -1,8 +1,8 @@
 # FILE IS AUTOMATICALLY MANAGED BY github.com/vegaprotocol/terraform//github
 name: "Continous Delivery Workflow"
 "on":
-  push:
   
+  push:
     tags:
       - v*
   
