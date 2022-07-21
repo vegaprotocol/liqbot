@@ -15,7 +15,7 @@ require (
 	github.com/kr/text v0.2.0 // indirect
 	github.com/shopspring/decimal v1.3.1
 	github.com/sirupsen/logrus v1.8.1
-	github.com/stretchr/testify v1.7.1
+	github.com/stretchr/testify v1.8.0
 	gonum.org/v1/gonum v0.9.1
 	google.golang.org/genproto v0.0.0-20220720214146-176da50484ac
 	google.golang.org/grpc v1.48.0
