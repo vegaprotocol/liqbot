@@ -8,6 +8,7 @@ name: "Continous Deployment Workflow"
 jobs:
   
   update-manifest-repo:
+    
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
