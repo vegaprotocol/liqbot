@@ -2,13 +2,18 @@
 name: "Continous Deployment Workflow"
 "on":
   
-  release:
-    types: [published]
+  push:
+    tags:
+      - v*
   
 jobs:
-  
+  integration:
+    uses: ./.github/workflows/continous-integration.yml
+  delivery:
+    needs: integration
+    uses: ./.github/workflows/continous-delivery.yml
   update-manifest-repo:
-    
+    needs: delivery
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
