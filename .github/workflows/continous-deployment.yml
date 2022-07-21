@@ -1,9 +1,12 @@
 # FILE IS AUTOMATICALLY MANAGED BY github.com/vegaprotocol/terraform//github
 name: "Continous Deployment Workflow"
 "on":
+  
   release:
     types: [published]
+  
 jobs:
+  
   update-manifest-repo:
     runs-on: ubuntu-latest
     steps:
@@ -14,12 +17,16 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.VEGA_CI_SSH_KEY }}
       - run: |
+          
           version=$(git describe --tags --abbrev=0)
+          
           git config --global user.name 'vega-ci-bot'
           git config --global user.email 'dev@vega.xyz'
           git clone git@github.com:vegaprotocol/k8s.git
           cd k8s
-                    echo -n "$version" > charts/apps/liqbot/devnet/VERSION
+                    if [ "$(git rev-parse --abbrev-ref HEAD)" = "main" ]; then
+            echo -n "$version" > charts/apps/liqbot/devnet/VERSION
+          fi
                     git add -A
           git commit -m "Automated version update for liqbot: $version, from repository: $GITHUB_REPOSITORY"
           git pull --rebase
