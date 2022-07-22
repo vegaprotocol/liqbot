@@ -18,7 +18,6 @@ When the bot is started it performs the following steps:
  b. Position Management
 
 
-
 ## Price Steering
 The test markets we are running aim to be close in price to the real markets of the World. The bot attempts to do this by monitoring the mark price of the Vega market and the price of an established market. If the prices are more than a specified amount apart it will start to place orders onto the Vega market to move the price towards the external price. If the external price is higher it will send buy orders to the market in an attempt to increase the best bid/ask price. If the external price is lower we will do the opposite by placing sell orders to attempt to reduce the best bid/ask price. The size of the order is controlled by a configuration option.
 
