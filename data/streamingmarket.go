@@ -8,6 +8,7 @@ import (
 	dataapipb "code.vegaprotocol.io/protos/data-node/api/v1"
 	"code.vegaprotocol.io/protos/vega"
 	eventspb "code.vegaprotocol.io/protos/vega/events/v1"
+
 	log "github.com/sirupsen/logrus"
 )
 
@@ -133,6 +134,7 @@ func (m *Market) WaitForProposalEnacted(pID string) error {
 
 	return nil
 }
+
 func (m *Market) processEvents(request *dataapipb.ObserveEventBusRequest, cb func(event *eventspb.BusEvent) bool) error {
 	// First we have to create the stream
 	stream, err := m.node.ObserveEventBus()

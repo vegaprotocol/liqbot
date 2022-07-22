@@ -173,6 +173,7 @@ func (s *Service) TradersSettlement(w http.ResponseWriter, _ *http.Request, _ ht
 	writeString(w, details, http.StatusOK)
 }
 
+//nolint:prealloc
 func (s *Service) getBotsTraderDetails() string {
 	var details []string
 	// Go through all the bots and ask for details
