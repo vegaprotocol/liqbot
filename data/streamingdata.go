@@ -146,7 +146,7 @@ func (s *data) subscribeToMarketEvents() error {
 	return nil
 }
 
-// Party related events
+// Party related events.
 func (s *data) subscribeToAccountEvents() error {
 	req := &dataapipb.ObserveEventBusRequest{
 		Type: []eventspb.BusEventType{
