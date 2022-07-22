@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -52,25 +53,21 @@ type Service struct {
 	bots   map[string]Bot
 	botsMu sync.Mutex
 
-	pricingEngine PricingEngine
-	server        *http.Server
+	server *http.Server
 }
 
 // NewService creates a new service instance (with optional mocks for test purposes).
-func NewService(config config.Config, pe PricingEngine) (s *Service, err error) {
-	if pe == nil {
-		pe = pricing.NewEngine(*config.Pricing)
-	}
-
+func NewService(config config.Config) (s *Service, err error) {
 	s = &Service{
 		Router: httprouter.New(),
 
-		config:        config,
-		bots:          make(map[string]Bot),
-		pricingEngine: pe,
+		config: config,
+		bots:   make(map[string]Bot),
 	}
 
-	if err := s.initBots(); err != nil {
+	pe := pricing.NewEngine(*config.Pricing)
+
+	if err = s.initBots(pe); err != nil {
 		return nil, fmt.Errorf("failed to initialise bots: %s", err.Error())
 	}
 
@@ -123,29 +120,37 @@ func (s *Service) Stop() {
 	}
 }
 
-func (s *Service) initBots() error {
+func (s *Service) initBots(pricingEngine PricingEngine) error {
+	for _, botcfg := range s.config.Bots {
+		if err := s.initBot(pricingEngine, botcfg); err != nil {
+			return fmt.Errorf("failed to initialise bot '%s': %w", botcfg.Name, err)
+		}
+	}
+
+	return nil
+}
+
+func (s *Service) initBot(pricingEngine PricingEngine, botcfg config.BotConfig) error {
+	log.WithFields(log.Fields{"strategy": botcfg.StrategyDetails.String()}).Debug("read strategy config")
+
+	wc := wallet.NewClient(s.config.Wallet.URL)
+
+	b, err := bot.New(botcfg, s.config.Seed, pricingEngine, wc)
+	if err != nil {
+		return fmt.Errorf("failed to create bot %s: %w", botcfg.Name, err)
+	}
+
 	s.botsMu.Lock()
 	defer s.botsMu.Unlock()
 
-	for _, botcfg := range s.config.Bots {
-		wc := wallet.NewClient(s.config.Wallet.URL)
+	s.bots[botcfg.Name] = b
 
-		b, err := bot.New(botcfg, s.config.Seed, s.pricingEngine, wc)
-		if err != nil {
-			return fmt.Errorf("failed to create bot %s: %w", botcfg.Name, err)
-		}
+	log.WithFields(log.Fields{
+		"name": botcfg.Name,
+	}).Info("Initialised bot")
 
-		s.bots[botcfg.Name] = b
-		log.WithFields(log.Fields{
-			"name": botcfg.Name,
-		}).Info("Initialised bot")
-	}
-
-	for _, b := range s.bots {
-		err := b.Start()
-		if err != nil {
-			return err
-		}
+	if err = b.Start(); err != nil {
+		return fmt.Errorf("failed to start bot %s: %w", botcfg.Name, err)
 	}
 
 	return nil
@@ -154,6 +159,7 @@ func (s *Service) initBots() error {
 // Status is an endpoint to show the service is up (always returns succeeded=true).
 func (s *Service) Status(w http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
 	var err error
+	// TODO: check if the service is up
 	if err != nil {
 		writeError(w, err, http.StatusBadRequest)
 	} else {
@@ -163,19 +169,19 @@ func (s *Service) Status(w http.ResponseWriter, _ *http.Request, _ httprouter.Pa
 
 // TradersSettlement is an endpoint to show details of all active traders.
 func (s *Service) TradersSettlement(w http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
+	details := s.getBotsTraderDetails()
+	writeString(w, details, http.StatusOK)
+}
+
+//nolint:prealloc
+func (s *Service) getBotsTraderDetails() string {
+	var details []string
 	// Go through all the bots and ask for details
-	msg := "["
-	count := 0
 	for _, b := range s.bots {
-		if count > 0 {
-			msg += ","
-		}
-		ts := b.GetTraderDetails()
-		msg += ts
-		count++
+		details = append(details, b.GetTraderDetails())
 	}
-	msg += "]"
-	writeString(w, msg, http.StatusOK)
+
+	return fmt.Sprintf("[%s]", strings.Join(details, ","))
 }
 
 func writeSuccess(w http.ResponseWriter, data interface{}, status int) {

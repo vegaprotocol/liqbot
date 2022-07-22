@@ -2,7 +2,6 @@ package bot
 
 import (
 	"errors"
-	"fmt"
 
 	ppconfig "code.vegaprotocol.io/priceproxy/config"
 	ppservice "code.vegaprotocol.io/priceproxy/service"
@@ -26,15 +25,11 @@ type PricingEngine interface {
 }
 
 // New returns a new Bot instance.
-func New(botConf config.BotConfig, seedConf *config.SeedConfig, pe PricingEngine, wc normal.WalletClient) (b Bot, err error) {
+func New(botConf config.BotConfig, seedConf *config.SeedConfig, pe PricingEngine, wc normal.WalletClient) (Bot, error) {
 	switch botConf.Strategy {
-	case "normal":
-		b, err = normal.New(botConf, seedConf, pe, wc)
+	case config.BotStrategyNormal:
+		return normal.New(botConf, seedConf, pe, wc), nil
 	default:
-		err = errors.New("unrecognised bot strategy")
+		return nil, errors.New("unrecognised bot strategy")
 	}
-	if err != nil {
-		err = fmt.Errorf("failed to create new bot with strategy %s: %w", botConf.Strategy, err)
-	}
-	return
 }

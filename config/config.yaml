@@ -22,6 +22,7 @@ seed:
   contractOwnerAddress: 0xEe7D375bcB50C26d52E1A4a472D8822A2A22d94F
   contractOwnerPrivateKey: a37f4c2a678aefb5037bf415a826df1540b330b7e471aa54184877ba901b9ef0
   amount: 1000000000000000000
+  orderSize: 400
 bots:
   - name: w00
     location: localhost:3027
@@ -68,8 +69,8 @@ bots:
           - {reference: Bid, proportion: 10, offset: 80000}
       posManagementSleepMilliseconds: 5050
       marketPriceSteeringRatePerSecond: 0.25
-      minPriceSteerFraction: 0.00001
-      priceSteerOrderScale: 20.5
+      minPriceSteerFraction: 0.00005
+      priceSteerOrderScale: 10.5
       limitOrderDistributionParams:
         method: "discreteThreeLevel"
         gttLengthSeconds: 60

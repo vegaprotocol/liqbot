@@ -238,6 +238,9 @@ type SignTxRequest struct {
 
 func (c *Client) SignTx(ctx context.Context, request *walletpb.SubmitTransactionRequest) (*commandspb.Transaction, error) {
 	m := jsonpb.Marshaler{Indent: "    "}
+
+	request.Propagate = true
+
 	data, err := m.MarshalToString(request)
 	if err != nil {
 		return nil, fmt.Errorf("couldn't marshal input data: %w", err)

@@ -1,10 +1,8 @@
-package helpers_test
+package errors
 
 import (
 	"errors"
 	"testing"
-
-	"code.vegaprotocol.io/liqbot/helpers"
 
 	"github.com/stretchr/testify/require"
 	gstatus "google.golang.org/genproto/googleapis/rpc/status"
@@ -15,14 +13,14 @@ import (
 
 func TestErrorDetail_Unknown(t *testing.T) {
 	e := errors.New("bzzt")
-	e2 := helpers.ErrorDetail(e)
+	e2 := ErrorDetail(e)
 	require.NotNil(t, e2)
 	require.Equal(t, "gRPCError{code=Unknown message='bzzt'}", e2.Error())
 }
 
 func TestErrorDetail_Simple(t *testing.T) {
 	e := status.Error(codes.InvalidArgument, "x should be y")
-	e2 := helpers.ErrorDetail(e)
+	e2 := ErrorDetail(e)
 	require.NotNil(t, e2)
 	require.Equal(t, "gRPCError{code=InvalidArgument message='x should be y'}", e2.Error())
 }
@@ -40,7 +38,7 @@ func TestErrorDetail_WithDetails(t *testing.T) {
 		},
 	}
 	e := status.ErrorProto(&e1)
-	e2 := helpers.ErrorDetail(e)
+	e2 := ErrorDetail(e)
 	require.NotNil(t, e2)
 	// require.Equal(t, "gRPCError{code=PermissionDenied message='missing token' details=[proto: not found]}", e2.Error())
 	require.Equal(t, "gRPCError{code=PermissionDenied message='missing token'}", e2.Error())
