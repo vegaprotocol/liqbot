@@ -9,11 +9,11 @@ An external market price source
 
 When the bot is started it performs the following steps:
 
-1. The LB will look for a market with matching details to what is given in the configuration file, if it finds one it will use that for all trading. Otherwise it will create a new market to trade on.
-2. The bot will check that the configured user has enough assets to trade. If not it will create some and deposit them into the user's account.
-3. A liquidity provision command is sent into the market to establish a liquidity shape and commitment amount.
-4. If the market is in auction it will attempt to send LIMIT orders until the market is moved out of auction
-5. Once the market is in continuous trading it will monitor the market and will perform two tasks<br>
+1. The bot will check that the configured user has enough assets to trade and enough tokens to raise a proposal. If not it will create some and deposit them into the users accounts.
+1. The LB will look for a market with matching details to what is given in the configuration file. If it finds one it will use that for all trading. Otherwise it will create a new market to trade on. Creating a new market requires a proposal to be sent and then other users must vote to get the proposal passed. After a period of time defined in the proposal the votes are counted and if they reach or pass the threshold required, the market will be enacted and will be placed into an opening auction ready for trading.
+1. A liquidity provision command is sent into the market to establish a liquidity shape and commitment amount.
+1. If the market is in auction it will attempt to send LIMIT orders until the market is moved out of auction
+1. Once the market is in continuous trading it will monitor the market and will perform two tasks<br>
  a. Price Steering<br>
  b. Position Management
 
