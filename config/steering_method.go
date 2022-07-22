@@ -34,7 +34,7 @@ func (s *SteeringMethod) Get() string {
 	return s.String()
 }
 
-// Get returns the underlying string
+// Get returns the underlying string.
 func (s SteeringMethod) String() string {
 	switch s {
 	case DiscreteThreeLevel:
