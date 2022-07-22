@@ -7,6 +7,7 @@ import (
 	"code.vegaprotocol.io/protos/vega"
 	coreapipb "code.vegaprotocol.io/protos/vega/api/v1"
 	eventspb "code.vegaprotocol.io/protos/vega/events/v1"
+
 	log "github.com/sirupsen/logrus"
 
 	"code.vegaprotocol.io/liqbot/types"

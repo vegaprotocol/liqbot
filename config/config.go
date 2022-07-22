@@ -148,4 +148,5 @@ type SeedConfig struct {
 	ContractOwnerAddress    string `yaml:"contractOwnerAddress"`
 	ContractOwnerPrivateKey string `yaml:"contractOwnerPrivateKey"`
 	Amount                  int64  `yaml:"amount"`
+	OrderSize               uint64 `yaml:"orderSize"`
 }

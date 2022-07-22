@@ -336,7 +336,7 @@ func (b *bot) sendLiquidityProvision(ctx context.Context, buys, sells []*vega.Li
 	return nil
 }
 
-// call this if the position flips
+// call this if the position flips.
 func (b *bot) sendLiquidityProvisionAmendment(ctx context.Context, buys, sells []*vega.LiquidityOrder) error {
 	commitment := b.getCommitment()
 	if commitment == num.Zero() {

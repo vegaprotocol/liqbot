@@ -268,7 +268,7 @@ func (b *bot) seedOrders(ctx context.Context) error {
 		}
 
 		if err := b.submitOrder(ctx,
-			400,
+			b.seedConfig.OrderSize,
 			price,
 			side,
 			tif,

@@ -163,6 +163,7 @@ func (s *data) subscribeToAccountEvents() {
 		}
 		return nil
 	}
+
 	req := &coreapipb.ObserveEventBusRequest{
 		Type: []eventspb.BusEventType{
 			eventspb.BusEventType_BUS_EVENT_TYPE_ACCOUNT,
