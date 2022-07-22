@@ -29,7 +29,7 @@ func stringToSteeringMethod(method string) (SteeringMethod, error) {
 	return NotSet, fmt.Errorf("steering method unknown:%s", method)
 }
 
-// Get returns the underlying string
+// Get returns the underlying string.
 func (s *SteeringMethod) Get() string {
 	return s.String()
 }
