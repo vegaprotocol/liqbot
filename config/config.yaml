@@ -46,26 +46,26 @@ bots:
 
       shorteningShape:
         sells:
-          - {reference: Ask, proportion: 10, offset: 8}
-          - {reference: Ask, proportion: 20, offset: 4}
-          - {reference: Ask, proportion: 30, offset: 2}
-          - {reference: Ask, proportion: 40, offset: 1}
+          - {reference: Ask, proportion: 10, offset: 80000}
+          - {reference: Ask, proportion: 20, offset: 40000}
+          - {reference: Ask, proportion: 30, offset: 20000}
+          - {reference: Ask, proportion: 40, offset: 10000}
         buys:
-          - {reference: Bid, proportion: 40, offset: 2}
-          - {reference: Bid, proportion: 30, offset: 4}
-          - {reference: Bid, proportion: 20, offset: 8}
-          - {reference: Bid, proportion: 10, offset: 16}
+          - {reference: Bid, proportion: 40, offset: 20000}
+          - {reference: Bid, proportion: 30, offset: 40000}
+          - {reference: Bid, proportion: 20, offset: 80000}
+          - {reference: Bid, proportion: 10, offset: 160000}
       longeningShape:
         sells:
-          - {reference: Ask, proportion: 10, offset: 16}
-          - {reference: Ask, proportion: 20, offset: 8}
-          - {reference: Ask, proportion: 30, offset: 4}
-          - {reference: Ask, proportion: 40, offset: 2}
+          - {reference: Ask, proportion: 10, offset: 160000}
+          - {reference: Ask, proportion: 20, offset: 80000}
+          - {reference: Ask, proportion: 30, offset: 40000}
+          - {reference: Ask, proportion: 40, offset: 20000}
         buys:
-          - {reference: Bid, proportion: 40, offset: 1}
-          - {reference: Bid, proportion: 30, offset: 2}
-          - {reference: Bid, proportion: 20, offset: 4}
-          - {reference: Bid, proportion: 10, offset: 8}
+          - {reference: Bid, proportion: 40, offset: 10000}
+          - {reference: Bid, proportion: 30, offset: 20000}
+          - {reference: Bid, proportion: 20, offset: 40000}
+          - {reference: Bid, proportion: 10, offset: 80000}
       posManagementSleepMilliseconds: 5050
       marketPriceSteeringRatePerSecond: 0.25
       minPriceSteerFraction: 0.00005
