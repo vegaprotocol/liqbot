@@ -261,6 +261,7 @@ type SeedConfig struct {
 	ContractOwnerAddress    string `yaml:"contractOwnerAddress"`
 	ContractOwnerPrivateKey string `yaml:"contractOwnerPrivateKey"`
 	Amount                  int64  `yaml:"amount"`
+	OrderSize               uint64 `yaml:"orderSize"`
 }
 
 // Config describes the top level config file format.

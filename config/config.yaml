@@ -22,6 +22,7 @@ seed:
   contractOwnerAddress: 0xEe7D375bcB50C26d52E1A4a472D8822A2A22d94F
   contractOwnerPrivateKey: a37f4c2a678aefb5037bf415a826df1540b330b7e471aa54184877ba901b9ef0
   amount: 1000000000000000000
+  orderSize: 400
 bots:
   - name: w00
     location: localhost:3027
