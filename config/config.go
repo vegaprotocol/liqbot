@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"strconv"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -50,6 +49,9 @@ type BotConfig struct {
 	// Strategy specifies which algorithm the bot is to use.
 	Strategy string `yaml:"strategy"`
 
+	// SettlementAsset is the asset used for settlement.
+	SettlementAsset string `yaml:"settlementAsset"`
+
 	// StrategyDetails contains the parameters needed by the strategy algorithm.
 	StrategyDetails Strategy `yaml:"strategyDetails"`
 }
@@ -65,6 +67,7 @@ type Strategy struct {
 	StakeFraction         float64 `yaml:"stakeFraction"`
 	OrdersFraction        float64 `yaml:"ordersFraction"`
 	CommitmentFraction    float64 `yaml:"commitmentFraction"`
+	CommitmentAmount      string  `yaml:"commitmentAmount"`
 	Fee                   string  `yaml:"fee"`
 
 	PosManagementSleepMilliseconds   int     `yaml:"posManagementSleepMilliseconds"`
@@ -103,8 +106,20 @@ type LiquidityOrder struct {
 
 // WalletConfig describes the settings for running an internal wallet server.
 type WalletConfig struct {
-	RootPath    string `yaml:"rootPath"`
-	TokenExpiry int    `yaml:"tokenExpiry"`
+	URL             string `yaml:"url"`
+	TokenExpiry     int    `yaml:"tokenExpiry"`
+	EthereumAddress string `yaml:"ethereumAddress"`
+}
+
+type SeedConfig struct {
+	EthereumAddress         string `yaml:"ethereumAddress"`
+	Erc20BridgeAddress      string `yaml:"erc20BridgeAddress"`
+	StakingBridgeAddress    string `yaml:"stakingBridgeAddress"`
+	TUSDCTokenAddress       string `yaml:"tUSDCTokenAddress"`
+	VegaTokenAddress        string `yaml:"vegaTokenAddress"`
+	ContractOwnerAddress    string `yaml:"contractOwnerAddress"`
+	ContractOwnerPrivateKey string `yaml:"contractOwnerPrivateKey"`
+	Amount                  int64  `yaml:"amount"`
 }
 
 // Config describes the top level config file format.
@@ -113,6 +128,7 @@ type Config struct {
 
 	Pricing *PricingConfig `yaml:"pricing"`
 	Wallet  *WalletConfig  `yaml:"wallet"`
+	Seed    *SeedConfig    `yaml:"seed"`
 
 	Bots []BotConfig `yaml:"bots"`
 }
@@ -123,9 +139,6 @@ var (
 
 	// ErrMissingEmptyConfigSection indicates that a required config file section is missing (not present) or empty (zero-length).
 	ErrMissingEmptyConfigSection = errors.New("config file section is missing/empty")
-
-	// ErrInvalidValue indicates that a value was invalid.
-	ErrInvalidValue = errors.New("invalid value")
 )
 
 // CheckConfig checks the config for valid structure and values.
@@ -192,24 +205,4 @@ func ConfigureLogging(cfg *ServerConfig) error {
 		log.SetLevel(log.WarnLevel)
 	}
 	return nil
-}
-
-// ReadFloat64 extracts a float64 from a strategy config map.
-func ReadFloat64(details map[string]string, key string) (v float64, err error) {
-	value, found := details[key]
-	if !found {
-		err = errors.New("missing config")
-		return
-	}
-	return strconv.ParseFloat(value, 64)
-}
-
-// ReadUint64 extracts a uint64 from a strategy config map.
-func ReadUint64(details map[string]string, key string) (v uint64, err error) {
-	value, found := details[key]
-	if !found {
-		err = errors.New("missing config")
-		return
-	}
-	return strconv.ParseUint(value, 0, 64)
 }

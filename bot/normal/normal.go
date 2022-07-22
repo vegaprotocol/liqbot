@@ -1,6 +1,7 @@
 package normal
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -11,147 +12,24 @@ import (
 
 	"code.vegaprotocol.io/liqbot/config"
 	"code.vegaprotocol.io/liqbot/node"
+	"code.vegaprotocol.io/liqbot/types"
 	"code.vegaprotocol.io/liqbot/types/num"
 
 	ppconfig "code.vegaprotocol.io/priceproxy/config"
 	ppservice "code.vegaprotocol.io/priceproxy/service"
 	dataapipb "code.vegaprotocol.io/protos/data-node/api/v1"
 	"code.vegaprotocol.io/protos/vega"
-	vegaapipb "code.vegaprotocol.io/protos/vega/api/v1"
 	commandspb "code.vegaprotocol.io/protos/vega/commands/v1"
 	walletpb "code.vegaprotocol.io/protos/vega/wallet/v1"
-	vgcrypto "code.vegaprotocol.io/shared/libs/crypto"
-	"code.vegaprotocol.io/vegawallet/wallet"
 	"code.vegaprotocol.io/vegawallet/wallets"
 	log "github.com/sirupsen/logrus"
 )
 
-// CoreService implements the gRPC service of the same name.
-type CoreService interface {
-	SubmitTransaction(req *vegaapipb.SubmitTransactionRequest) (response *vegaapipb.SubmitTransactionResponse, err error)
-	// rpc PropagateChainEvent(PropagateChainEventRequest) returns (PropagateChainEventResponse);
-	// rpc Statistics(StatisticsRequest) returns (StatisticsResponse);
-	LastBlockData() (*vegaapipb.LastBlockHeightResponse, error)
-	GetVegaTime() (t time.Time, err error)
-	ObserveEventBus() (client vegaapipb.CoreService_ObserveEventBusClient, err error)
-}
-
-// CoreStateService implements the gRPC service of the same name.
-type CoreStateService interface { // Avoid using this. Use something from DataNode instead
-	// rpc ListAccounts(ListAccountsRequest) returns (ListAccountsResponse);
-	// ListAssets(req *vegaapipb.ListAssetsRequest) (response *vegaapipb.ListAssetsResponse, err error)
-	// rpc ListNetworkParameters(ListNetworkParametersRequest) returns (ListNetworkParametersResponse);
-	// rpc ListParties(ListPartiesRequest) returns (ListPartiesResponse);
-	// rpc ListValidators(ListValidatorsRequest) returns (ListValidatorsResponse);
-	// ListMarkets(req *vegaapipb.ListMarketsRequest) (response *vegaapipb.ListMarketsResponse, err error)
-	// rpc ListProposals(ListProposalsRequest) returns (ListProposalsResponse);
-	// rpc ListMarketsData(ListMarketsDataRequest) returns (ListMarketsDataResponse);
-	// rpc ListVotes(ListVotesRequest) returns (ListVotesResponse);
-	// rpc ListPartiesStake(ListPartiesStakeRequest) returns (ListPartiesStakeResponse);
-	// rpc ListDelegations(ListDelegationsRequest) returns (ListDelegationsResponse);
-}
-
-// TradingDataService implements the gRPC service of the same name.
-type TradingDataService interface {
-	// rpc MarketAccounts(MarketAccountsRequest) returns (MarketAccountsResponse);
-	// rpc PartyAccounts(PartyAccountsRequest) returns (PartyAccountsResponse);
-	PartyAccounts(req *dataapipb.PartyAccountsRequest) (response *dataapipb.PartyAccountsResponse, err error)
-	// rpc FeeInfrastructureAccounts(FeeInfrastructureAccountsRequest) returns (FeeInfrastructureAccountsResponse);
-	// rpc GlobalRewardPoolAccounts(GlobalRewardPoolAccountsRequest) returns (GlobalRewardPoolAccountsResponse);
-	// rpc Candles(CandlesRequest) returns (CandlesResponse);
-	MarketDataByID(req *dataapipb.MarketDataByIDRequest) (response *dataapipb.MarketDataByIDResponse, err error)
-	// rpc MarketsData(MarketsDataRequest) returns (MarketsDataResponse);
-	// rpc MarketByID(MarketByIDRequest) returns (MarketByIDResponse);
-	// rpc MarketDepth(MarketDepthRequest) returns (MarketDepthResponse);
-	Markets(req *dataapipb.MarketsRequest) (response *dataapipb.MarketsResponse, err error)
-	// rpc OrderByMarketAndID(OrderByMarketAndIDRequest) returns (OrderByMarketAndIDResponse);
-	// rpc OrderByReference(OrderByReferenceRequest) returns (OrderByReferenceResponse);
-	// rpc OrdersByMarket(OrdersByMarketRequest) returns (OrdersByMarketResponse);
-	// rpc OrdersByParty(OrdersByPartyRequest) returns (OrdersByPartyResponse);
-	// rpc OrderByID(OrderByIDRequest) returns (OrderByIDResponse);
-	// rpc OrderVersionsByID(OrderVersionsByIDRequest) returns (OrderVersionsByIDResponse);
-	// rpc MarginLevels(MarginLevelsRequest) returns (MarginLevelsResponse);
-	// rpc Parties(PartiesRequest) returns (PartiesResponse);
-	// rpc PartyByID(PartyByIDRequest) returns (PartyByIDResponse);
-	PositionsByParty(req *dataapipb.PositionsByPartyRequest) (response *dataapipb.PositionsByPartyResponse, err error)
-	// rpc LastTrade(LastTradeRequest) returns (LastTradeResponse);
-	// rpc TradesByMarket(TradesByMarketRequest) returns (TradesByMarketResponse);
-	// rpc TradesByOrder(TradesByOrderRequest) returns (TradesByOrderResponse);
-	// rpc TradesByParty(TradesByPartyRequest) returns (TradesByPartyResponse);
-	// rpc GetProposals(GetProposalsRequest) returns (GetProposalsResponse);
-	// rpc GetProposalsByParty(GetProposalsByPartyRequest) returns (GetProposalsByPartyResponse);
-	// rpc GetVotesByParty(GetVotesByPartyRequest) returns (GetVotesByPartyResponse);
-	// rpc GetNewMarketProposals(GetNewMarketProposalsRequest) returns (GetNewMarketProposalsResponse);
-	// rpc GetUpdateMarketProposals(GetUpdateMarketProposalsRequest) returns (GetUpdateMarketProposalsResponse);
-	// rpc GetNetworkParametersProposals(GetNetworkParametersProposalsRequest) returns (GetNetworkParametersProposalsResponse);
-	// rpc GetNewAssetProposals(GetNewAssetProposalsRequest) returns (GetNewAssetProposalsResponse);
-	// rpc GetProposalByID(GetProposalByIDRequest) returns (GetProposalByIDResponse);
-	// rpc GetProposalByReference(GetProposalByReferenceRequest) returns (GetProposalByReferenceResponse);
-	// rpc ObserveGovernance(ObserveGovernanceRequest) returns (stream ObserveGovernanceResponse);
-	// rpc ObservePartyProposals(ObservePartyProposalsRequest) returns (stream ObservePartyProposalsResponse);
-	// rpc ObservePartyVotes(ObservePartyVotesRequest) returns (stream ObservePartyVotesResponse);
-	// rpc ObserveProposalVotes(ObserveProposalVotesRequest) returns (stream ObserveProposalVotesResponse);
-	// rpc ObserveEventBus(stream ObserveEventBusRequest) returns (stream ObserveEventBusResponse);
-	// rpc GetNodeData(GetNodeDataRequest) returns (GetNodeDataResponse);
-	// rpc GetNodes(GetNodesRequest) returns (GetNodesResponse);
-	// rpc GetNodeByID(GetNodeByIDRequest) returns (GetNodeByIDResponse);
-	// rpc GetEpoch(GetEpochRequest) returns (GetEpochResponse);
-	// rpc GetVegaTime(GetVegaTimeRequest) returns (GetVegaTimeResponse);
-	// rpc AccountsSubscribe(AccountsSubscribeRequest) returns (stream AccountsSubscribeResponse);
-	// rpc CandlesSubscribe(CandlesSubscribeRequest) returns (stream CandlesSubscribeResponse);
-	// rpc MarginLevelsSubscribe(MarginLevelsSubscribeRequest) returns (stream MarginLevelsSubscribeResponse);
-	// rpc MarketDepthSubscribe(MarketDepthSubscribeRequest) returns (stream MarketDepthSubscribeResponse);
-	// rpc MarketDepthUpdatesSubscribe(MarketDepthUpdatesSubscribeRequest) returns (stream MarketDepthUpdatesSubscribeResponse);
-	// rpc MarketsDataSubscribe(MarketsDataSubscribeRequest) returns (stream MarketsDataSubscribeResponse);
-	// rpc OrdersSubscribe(OrdersSubscribeRequest) returns (stream OrdersSubscribeResponse);
-	PositionsSubscribe(req *dataapipb.PositionsSubscribeRequest) (client dataapipb.TradingDataService_PositionsSubscribeClient, err error)
-	// rpc TradesSubscribe(TradesSubscribeRequest) returns (stream TradesSubscribeResponse);
-	// rpc TransferResponsesSubscribe(TransferResponsesSubscribeRequest) returns (stream TransferResponsesSubscribeResponse);
-	// rpc GetNodeSignaturesAggregate(GetNodeSignaturesAggregateRequest) returns (GetNodeSignaturesAggregateResponse);
-	AssetByID(req *dataapipb.AssetByIDRequest) (response *dataapipb.AssetByIDResponse, err error)
-	// rpc Assets(AssetsRequest) returns (AssetsResponse);
-	// rpc EstimateFee(EstimateFeeRequest) returns (EstimateFeeResponse);
-	// rpc EstimateMargin(EstimateMarginRequest) returns (EstimateMarginResponse);
-	// rpc ERC20WithdrawalApproval(ERC20WithdrawalApprovalRequest) returns (ERC20WithdrawalApprovalResponse);
-	// rpc Withdrawal(WithdrawalRequest) returns (WithdrawalResponse);
-	// rpc Withdrawals(WithdrawalsRequest) returns (WithdrawalsResponse);
-	// rpc Deposit(DepositRequest) returns (DepositResponse);
-	// rpc Deposits(DepositsRequest) returns (DepositsResponse);
-	// rpc NetworkParameters(NetworkParametersRequest) returns (NetworkParametersResponse);
-	// rpc LiquidityProvisions(LiquidityProvisionsRequest) returns (LiquidityProvisionsResponse);
-	// rpc OracleSpec(OracleSpecRequest) returns (OracleSpecResponse);
-	// rpc OracleSpecs(OracleSpecsRequest) returns (OracleSpecsResponse);
-	// rpc OracleDataBySpec(OracleDataBySpecRequest) returns (OracleDataBySpecResponse);
-	// rpc GetRewardDetails(GetRewardDetailsRequest) returns (GetRewardDetailsResponse);
-	// rpc Checkpoints(CheckpointsRequest) returns (CheckpointsResponse);
-	// rpc Delegations(DelegationsRequest) returns (DelegationsResponse);
-	// rpc PartyStake(PartyStakeRequest) returns (PartyStakeResponse);
-}
-
-// CoreNode is a Vega Core node
-// type CoreNode interface {
-// 	GetAddress() (url.URL, error)
-// 	CoreService
-// 	CoreStateService
-// }
-
-// DataNode is a Vega Data node
-//go:generate go run github.com/golang/mock/mockgen -destination mocks/datanode_mock.go -package mocks code.vegaprotocol.io/liqbot/bot/normal DataNode
-type DataNode interface {
-	GetAddress() (url.URL, error)
-	CoreService
-	TradingDataService
-}
-
-// PricingEngine is the source of price information from the price proxy.
-//go:generate go run github.com/golang/mock/mockgen -destination mocks/pricingengine_mock.go -package mocks code.vegaprotocol.io/liqbot/bot/normal PricingEngine
-type PricingEngine interface {
-	GetPrice(pricecfg ppconfig.PriceConfig) (pi ppservice.PriceResponse, err error)
-}
-
+// TODO: make thread safe
 // Bot represents one Normal liquidity bot.
 type Bot struct {
 	config                 config.BotConfig
+	seedConfig             *config.SeedConfig
 	active                 bool
 	log                    *log.Entry
 	pricingEngine          PricingEngine
@@ -167,9 +45,13 @@ type Bot struct {
 	balanceMargin  *num.Uint
 	balanceBond    *num.Uint
 
-	walletServer     *wallets.Handler
+	walletClient     WalletClient
 	walletPassphrase string
 	walletPubKey     string // "58595a" ...
+
+	proposalIDCh      chan string
+	proposalEnactedCh chan string
+	stakeLinkingCh    chan struct{}
 
 	buyShape   []*vega.LiquidityOrder
 	sellShape  []*vega.LiquidityOrder
@@ -190,21 +72,25 @@ type Bot struct {
 }
 
 // New returns a new instance of Bot.
-func New(config config.BotConfig, pe PricingEngine, ws *wallets.Handler) (b *Bot, err error) {
+func New(botConf config.BotConfig, seedConf *config.SeedConfig, pe PricingEngine, wc WalletClient) (b *Bot, err error) {
 	b = &Bot{
-		config: config,
+		config:     botConf,
+		seedConfig: seedConf,
 		log: log.WithFields(log.Fields{
-			"bot":  config.Name,
-			"node": config.Location,
+			"bot":  botConf.Name,
+			"node": botConf.Location,
 		}),
 		pricingEngine:       pe,
-		walletServer:        ws,
+		walletClient:        wc,
 		eventStreamLive:     false,
 		positionStreamLive:  false,
 		auctionOrdersPlaced: false,
+		proposalIDCh:        make(chan string),
+		proposalEnactedCh:   make(chan string),
+		stakeLinkingCh:      make(chan struct{}),
 	}
 
-	b.strategy, err = validateStrategyConfig(config.StrategyDetails)
+	b.strategy, err = validateStrategyConfig(botConf.StrategyDetails)
 	if err != nil {
 		err = fmt.Errorf("failed to read strategy details: %w", err)
 		return
@@ -218,7 +104,7 @@ func New(config config.BotConfig, pe PricingEngine, ws *wallets.Handler) (b *Bot
 
 // Start starts the liquidity bot goroutine(s).
 func (b *Bot) Start() error {
-	_, err := b.setupWallet()
+	err := b.setupWallet()
 	if err != nil {
 		return fmt.Errorf("failed to setup wallet: %w", err)
 	}
@@ -231,6 +117,7 @@ func (b *Bot) Start() error {
 	if err != nil {
 		return fmt.Errorf("failed to connect to Vega gRPC node: %w", err)
 	}
+
 	b.log.WithFields(log.Fields{
 		"address": b.config.Location,
 	}).Debug("Connected to Vega gRPC node")
@@ -239,7 +126,16 @@ func (b *Bot) Start() error {
 	if err != nil {
 		return fmt.Errorf("failed to get markets: %w", err)
 	}
+
 	b.market = nil
+
+	if len(marketsResponse.Markets) == 0 {
+		marketsResponse, err = b.createMarket(context.Background())
+		if err != nil {
+			return fmt.Errorf("failed to create market: %w", err)
+		}
+	}
+
 	for _, mkt := range marketsResponse.Markets {
 		instrument := mkt.TradableInstrument.GetInstrument()
 		if instrument != nil {
@@ -267,9 +163,11 @@ func (b *Bot) Start() error {
 			}
 		}
 	}
+
 	if b.market == nil {
 		return fmt.Errorf("failed to find futures markets: base/ticker=%s, quote=%s", b.config.InstrumentBase, b.config.InstrumentQuote)
 	}
+
 	b.log.WithFields(log.Fields{
 		"id":                b.market.Id,
 		"base/ticker":       b.config.InstrumentBase,
@@ -282,6 +180,7 @@ func (b *Bot) Start() error {
 	if err != nil {
 		return fmt.Errorf("unable to look up asset details for %s", b.settlementAssetID)
 	}
+
 	erc20 := assetResponse.Asset.Details.GetErc20()
 	if erc20 != nil {
 		b.settlementAssetAddress = erc20.ContractAddress
@@ -291,17 +190,25 @@ func (b *Bot) Start() error {
 
 	b.balanceGeneral = num.Zero()
 	b.balanceMargin = num.Zero()
-
 	b.active = true
 	b.stopPosMgmt = make(chan bool)
 	b.stopPriceSteer = make(chan bool)
 
-	err = b.initialiseData()
-	if err != nil {
+	if err = b.initialiseData(); err != nil {
 		return fmt.Errorf("failed to initialise data: %w", err)
 	}
-	go b.runPositionManagement()
-	go b.runPriceSteering()
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	go func() {
+		defer cancel()
+		b.runPositionManagement(ctx)
+	}()
+
+	go func() {
+		defer cancel()
+		b.runPriceSteering(ctx)
+	}()
 
 	return nil
 }
@@ -331,7 +238,7 @@ func (b *Bot) GetTraderDetails() string {
 }
 
 func (b *Bot) canPlaceOrders() bool {
-	return b.marketData.MarketTradingMode == vega.Market_TRADING_MODE_CONTINUOUS
+	return b.marketData != nil && b.marketData.MarketTradingMode == vega.Market_TRADING_MODE_CONTINUOUS
 }
 
 func mulFrac(n *num.Uint, x float64, precision float64) *num.Uint {
@@ -341,7 +248,7 @@ func mulFrac(n *num.Uint, x float64, precision float64) *num.Uint {
 	return val
 }
 
-func (b *Bot) sendLiquidityProvision(buys, sells []*vega.LiquidityOrder) error {
+func (b *Bot) sendLiquidityProvision(ctx context.Context, buys, sells []*vega.LiquidityOrder) error {
 	// CommitmentAmount is the fractional commitment value * total collateral
 	balTotal := num.Sum(b.balanceGeneral, b.balanceMargin, b.balanceBond)
 	commitment := mulFrac(balTotal, b.strategy.CommitmentFraction, 15)
@@ -359,10 +266,12 @@ func (b *Bot) sendLiquidityProvision(buys, sells []*vega.LiquidityOrder) error {
 		PubKey:  b.walletPubKey,
 		Command: cmd,
 	}
-	err := b.signSubmitTx(submitTxReq, nil)
+
+	err := b.signSubmitTx(ctx, submitTxReq)
 	if err != nil {
 		return fmt.Errorf("failed to submit LiquidityProvisionSubmission(%v): %w", cmd, err)
 	}
+
 	b.log.WithFields(log.Fields{
 		"commitment":         commitment,
 		"commitmentFraction": b.strategy.CommitmentFraction,
@@ -371,12 +280,12 @@ func (b *Bot) sendLiquidityProvision(buys, sells []*vega.LiquidityOrder) error {
 	return nil
 }
 
-func (b *Bot) sendLiquidityProvisionAmendment(buys, sells []*vega.LiquidityOrder) error {
+func (b *Bot) sendLiquidityProvisionAmendment(ctx context.Context, buys, sells []*vega.LiquidityOrder) error {
 	balTotal := num.Sum(b.balanceGeneral, b.balanceMargin, b.balanceBond)
 	commitment := mulFrac(balTotal, b.strategy.CommitmentFraction, 15)
 
 	if commitment == num.NewUint(0) {
-		return b.sendLiquidityProvisionCancellation(balTotal)
+		return b.sendLiquidityProvisionCancellation(ctx, balTotal)
 	}
 
 	cmd := &walletpb.SubmitTransactionRequest_LiquidityProvisionAmendment{
@@ -394,7 +303,7 @@ func (b *Bot) sendLiquidityProvisionAmendment(buys, sells []*vega.LiquidityOrder
 		Command: cmd,
 	}
 
-	err := b.signSubmitTx(submitTxReq, nil)
+	err := b.signSubmitTx(ctx, submitTxReq)
 	if err != nil {
 		return fmt.Errorf("failed to submit LiquidityProvisionAmendment: %w", err)
 	}
@@ -407,7 +316,7 @@ func (b *Bot) sendLiquidityProvisionAmendment(buys, sells []*vega.LiquidityOrder
 	return nil
 }
 
-func (b *Bot) sendLiquidityProvisionCancellation(balTotal *num.Uint) error {
+func (b *Bot) sendLiquidityProvisionCancellation(ctx context.Context, balTotal *num.Uint) error {
 	cmd := &walletpb.SubmitTransactionRequest_LiquidityProvisionCancellation{
 		LiquidityProvisionCancellation: &commandspb.LiquidityProvisionCancellation{
 			MarketId: b.market.Id,
@@ -419,7 +328,7 @@ func (b *Bot) sendLiquidityProvisionCancellation(balTotal *num.Uint) error {
 		Command: cmd,
 	}
 
-	err := b.signSubmitTx(submitTxReq, nil)
+	err := b.signSubmitTx(ctx, submitTxReq)
 	if err != nil {
 		return fmt.Errorf("failed to submit LiquidityProvisionCancellation: %w", err)
 	}
@@ -432,7 +341,7 @@ func (b *Bot) sendLiquidityProvisionCancellation(balTotal *num.Uint) error {
 	return nil
 }
 
-func (b *Bot) checkForShapeChange() {
+func (b *Bot) checkForShapeChange(ctx context.Context) {
 	var shape string
 	if b.openVolume <= 0 {
 		shape = "longening"
@@ -456,7 +365,7 @@ func (b *Bot) checkForShapeChange() {
 	if (b.openVolume > 0 && b.previousOpenVolume <= 0) ||
 		(b.openVolume < 0 && b.previousOpenVolume >= 0) {
 		b.log.WithFields(log.Fields{"shape": shape}).Debug("Flipping LP direction")
-		err := b.sendLiquidityProvisionAmendment(b.buyShape, b.sellShape)
+		err := b.sendLiquidityProvisionAmendment(ctx, b.buyShape, b.sellShape)
 		if err != nil {
 			b.log.WithFields(log.Fields{
 				"error": err.Error(),
@@ -467,7 +376,7 @@ func (b *Bot) checkForShapeChange() {
 	}
 }
 
-func (b *Bot) checkPositionManagement() {
+func (b *Bot) checkPositionManagement(ctx context.Context) {
 	if !b.canPlaceOrders() {
 		// Only allow position management during continuous trading
 		return
@@ -501,7 +410,7 @@ func (b *Bot) checkPositionManagement() {
 		return
 	}
 
-	err := b.submitOrder(size, num.Zero(), side, vega.Order_TIME_IN_FORCE_IOC, vega.Order_TYPE_MARKET, "PosManagement", 0)
+	err := b.submitOrder(ctx, size, num.Zero(), side, vega.Order_TIME_IN_FORCE_IOC, vega.Order_TYPE_MARKET, "PosManagement", 0)
 	if err != nil {
 		b.log.WithFields(log.Fields{
 			"error": err,
@@ -511,49 +420,21 @@ func (b *Bot) checkPositionManagement() {
 	}
 }
 
-func (b *Bot) signSubmitTx(
-	submitTxReq *walletpb.SubmitTransactionRequest,
-	blockData *vegaapipb.LastBlockHeightResponse,
-) error {
+func (b *Bot) signSubmitTx(ctx context.Context, submitTxReq *walletpb.SubmitTransactionRequest) error {
 	msg := "failed to sign+submit tx: %w"
-	if blockData == nil {
-		var err error
-		blockData, err = b.node.LastBlockData()
-		if err != nil {
-			return fmt.Errorf(msg, fmt.Errorf("failed to get block height: %w", err))
-		}
-	}
 
-	signedTx, err := b.walletServer.SignTx(b.config.Name, submitTxReq, blockData.Height)
+	submitTxReq.Propagate = true
+
+	_, err := b.walletClient.SignTx(ctx, submitTxReq)
 	if err != nil {
 		return fmt.Errorf(msg, fmt.Errorf("failed to sign tx: %w", err))
 	}
 
-	tid := vgcrypto.RandomHash()
-	powNonce, _, err := vgcrypto.PoW(blockData.Hash, tid, uint(blockData.SpamPowDifficulty), vgcrypto.Sha3)
-	if err != nil {
-		return fmt.Errorf(msg, fmt.Errorf("failed to generate proof of work: %w", err))
-	}
-	signedTx.Pow = &commandspb.ProofOfWork{
-		Tid:   tid,
-		Nonce: powNonce,
-	}
-
-	submitReq := &vegaapipb.SubmitTransactionRequest{
-		Tx:   signedTx,
-		Type: vegaapipb.SubmitTransactionRequest_TYPE_ASYNC,
-	}
-	submitResponse, err := b.node.SubmitTransaction(submitReq)
-	if err != nil {
-		return fmt.Errorf(msg, fmt.Errorf("failed to submit signed tx: %w", err))
-	}
-	if !submitResponse.Success {
-		return fmt.Errorf(msg, errors.New("success=false"))
-	}
 	return nil
 }
 
 func (b *Bot) submitOrder(
+	ctx context.Context,
 	size uint64,
 	price *num.Uint,
 	side vega.Side,
@@ -575,9 +456,11 @@ func (b *Bot) submitOrder(
 			PeggedOrder: nil,
 		},
 	}
+
 	if tif == vega.Order_TIME_IN_FORCE_GTT {
 		cmd.OrderSubmission.ExpiresAt = time.Now().UnixNano() + (secondsFromNow * 1000000000)
 	}
+
 	if orderType != vega.Order_TYPE_MARKET {
 		cmd.OrderSubmission.Price = price.String()
 	}
@@ -586,10 +469,11 @@ func (b *Bot) submitOrder(
 		PubKey:  b.walletPubKey,
 		Command: cmd,
 	}
-	err := b.signSubmitTx(submitTxReq, nil)
-	if err != nil {
+
+	if err := b.signSubmitTx(ctx, submitTxReq); err != nil {
 		return fmt.Errorf("failed to submit OrderSubmission: %w", err)
 	}
+
 	return nil
 }
 
@@ -600,8 +484,8 @@ func (b *Bot) checkInitialMargin() error {
 	buyOrders := b.calculateOrderSizes(b.market.Id, b.walletPubKey, obligation, b.buyShape)
 	sellOrders := b.calculateOrderSizes(b.market.Id, b.walletPubKey, obligation, b.sellShape)
 
-	buyRisk := float64(0.01)
-	sellRisk := float64(0.01)
+	buyRisk := 0.01
+	sellRisk := 0.01
 
 	buyCost := b.calculateMarginCost(buyRisk, buyOrders)
 	sellCost := b.calculateMarginCost(sellRisk, sellOrders)
@@ -640,10 +524,15 @@ func (b *Bot) initialiseData() error {
 	}
 
 	if !b.eventStreamLive {
-		err = b.subscribeToEvents()
-		if err != nil {
+		if err = b.subscribeToMarketEvents(); err != nil {
 			b.log.WithFields(log.Fields{"error": err.Error()}).
-				Debug("Unable to subscribe to event bus feeds")
+				Debug("Unable to subscribe to market event bus feeds")
+			return err
+		}
+
+		if err = b.subscribeToAccountEvents(); err != nil {
+			b.log.WithFields(log.Fields{"error": err.Error()}).
+				Debug("Unable to subscribe to account event bus feeds")
 			return err
 		}
 	}
@@ -652,7 +541,7 @@ func (b *Bot) initialiseData() error {
 		err = b.subscribePositions()
 		if err != nil {
 			b.log.WithFields(log.Fields{"error": err.Error()}).
-				Debug("Unable to subscribe to event bus feeds")
+				Debug("Unable to subscribe to positions event bus feeds")
 			return err
 		}
 	}
@@ -661,7 +550,7 @@ func (b *Bot) initialiseData() error {
 
 // Divide the auction amount into 10 orders and place them randomly
 // around the current price at upto 50+/- from it.
-func (b *Bot) placeAuctionOrders() {
+func (b *Bot) placeAuctionOrders(ctx context.Context) {
 	// Check we have not placed them already
 	if b.auctionOrdersPlaced {
 		return
@@ -684,7 +573,7 @@ func (b *Bot) placeAuctionOrders() {
 		if rand.Intn(2) == 0 {
 			side = vega.Side_SIDE_SELL
 		}
-		err := b.submitOrder(size.Uint64(), price, side, vega.Order_TIME_IN_FORCE_GTT, vega.Order_TYPE_LIMIT, "AuctionOrder", 330)
+		err := b.submitOrder(ctx, size.Uint64(), price, side, vega.Order_TIME_IN_FORCE_GTT, vega.Order_TYPE_LIMIT, "AuctionOrder", 330)
 		if err == nil {
 			totalVolume = num.Zero().Add(totalVolume, size)
 		} else {
@@ -695,25 +584,31 @@ func (b *Bot) placeAuctionOrders() {
 	b.auctionOrdersPlaced = true
 }
 
-func (b *Bot) runPositionManagement() {
-	var err error
-	var firstTime bool = true
+func (b *Bot) runPositionManagement(ctx context.Context) {
+	defer b.log.Warning("Position management stopped")
+
+	firstTime := true
 
 	// We always start off with longening shapes
 	b.buyShape = b.strategy.LongeningShape.Buys
 	b.sellShape = b.strategy.LongeningShape.Sells
 
 	sleepTime := b.strategy.PosManagementSleepMilliseconds
+
 	for {
 		select {
 		case <-b.stopPosMgmt:
 			b.log.Debug("Stopping bot position management")
 			b.active = false
 			return
-
+		case <-ctx.Done():
+			b.log.Warning(ctx.Err())
+			return
 		default:
 			// At the start of each loop, wait for positive general account balance. This is in case the network has
 			// been restarted.
+			var err error
+
 			if firstTime {
 				err = b.checkInitialMargin()
 				if err != nil {
@@ -724,7 +619,7 @@ func (b *Bot) runPositionManagement() {
 					return
 				}
 				// Submit LP order to market.
-				err = b.sendLiquidityProvision(b.buyShape, b.sellShape)
+				err = b.sendLiquidityProvision(ctx, b.buyShape, b.sellShape)
 				if err != nil {
 					b.log.WithFields(log.Fields{
 						"error": err.Error(),
@@ -736,10 +631,10 @@ func (b *Bot) runPositionManagement() {
 			// Only update liquidity and position if we are not in auction
 			if b.canPlaceOrders() {
 				b.auctionOrdersPlaced = false
-				b.checkForShapeChange()
-				b.checkPositionManagement()
+				b.checkForShapeChange(ctx)
+				b.checkPositionManagement(ctx)
 			} else {
-				b.placeAuctionOrders()
+				b.placeAuctionOrders(ctx)
 			}
 
 			// If we have lost the incoming streams we should attempt to reconnect
@@ -823,7 +718,18 @@ func (b *Bot) calculateMarginCost(risk float64, orders []*vega.Order) *num.Uint 
 	return totalMargin
 }
 
-func (b *Bot) runPriceSteering() {
+func (b *Bot) runPriceSteering(ctx context.Context) {
+	defer b.log.Warning("Price steering stopped")
+
+	if !b.canPlaceOrders() {
+		if err := b.seedOrders(ctx); err != nil {
+			b.log.WithFields(
+				log.Fields{
+					"error": err.Error(),
+				}).Error("Failed to seed orders")
+		}
+	}
+
 	var externalPrice *num.Uint
 	var currentPrice *num.Uint
 	var err error
@@ -842,9 +748,11 @@ func (b *Bot) runPriceSteering() {
 			b.log.Debug("Stopping bot market price steering")
 			b.active = false
 			return
-
+		case <-ctx.Done():
+			b.log.Warning(ctx.Err())
+			return
 		default:
-			canPlaceOrders := b.canPlaceOrders()
+			canPlaceOrders := b.canPlaceOrders() // redundant?
 			if b.strategy.PriceSteerOrderScale > 0 && canPlaceOrders {
 				externalPriceResponse, err = b.pricingEngine.GetPrice(ppcfg)
 				if err != nil {
@@ -898,6 +806,7 @@ func (b *Bot) runPriceSteering() {
 						}).Debug("Submitting order")
 
 						err = b.submitOrder(
+							ctx,
 							size.Uint64(),
 							price,
 							side,
@@ -931,8 +840,8 @@ func (b *Bot) runPriceSteering() {
 					"canPlaceOrders":       canPlaceOrders,
 				}).Debug("Price steering: Cannot place orders")
 			}
-			err = doze(time.Duration(sleepTime)*time.Millisecond, b.stopPriceSteer)
-			if err != nil {
+
+			if err = doze(time.Duration(sleepTime)*time.Millisecond, b.stopPriceSteer); err != nil {
 				b.log.Debug("Stopping bot market price steering")
 				b.active = false
 				return
@@ -976,43 +885,44 @@ func (b *Bot) GetRealisticOrderDetails(externalPrice *num.Uint) (price, size *nu
 	}
 }
 
-func (b *Bot) setupWallet() (mnemonic string, err error) {
+func (b *Bot) setupWallet() error {
+	ctx := context.Background()
+
 	b.walletPassphrase = "123"
 
-	err = b.walletServer.LoginWallet(b.config.Name, b.walletPassphrase)
-	if err != nil {
-		if err == wallets.ErrWalletDoesNotExists {
-			mnemonic, err = b.walletServer.CreateWallet(b.config.Name, b.walletPassphrase)
-			if err != nil {
-				return "", fmt.Errorf("failed to create wallet: %w", err)
+	if err := b.walletClient.LoginWallet(ctx, b.config.Name, b.walletPassphrase); err != nil {
+		if strings.Contains(err.Error(), wallets.ErrWalletDoesNotExists.Error()) {
+			if err = b.walletClient.CreateWallet(ctx, b.config.Name, b.walletPassphrase); err != nil {
+				return fmt.Errorf("failed to create wallet: %w", err)
 			}
 			b.log.Debug("Created and logged into wallet")
 		} else {
-			return "", fmt.Errorf("failed to log in to wallet: %w", err)
+			return fmt.Errorf("failed to log into wallet: %w", err)
 		}
-	} else {
-		b.log.Debug("Logged into wallet")
 	}
 
+	b.log.Debug("Logged into wallet")
+
 	if b.walletPubKey == "" {
-		var keys []wallet.PublicKey
-		keys, err = b.walletServer.ListPublicKeys(b.config.Name)
+		publicKeys, err := b.walletClient.ListPublicKeys(ctx)
 		if err != nil {
-			return "", fmt.Errorf("failed to list public keys: %w", err)
+			return fmt.Errorf("failed to list public keys: %w", err)
 		}
-		if len(keys) == 0 {
-			var key wallet.KeyPair
-			key, err = b.walletServer.GenerateKeyPair(b.config.Name, b.walletPassphrase, []wallet.Meta{})
+
+		if len(publicKeys) == 0 {
+			key, err := b.walletClient.GenerateKeyPair(ctx, b.walletPassphrase, []types.Meta{})
 			if err != nil {
-				return "", fmt.Errorf("failed to generate keypair: %w", err)
+				return fmt.Errorf("failed to generate keypair: %w", err)
 			}
-			b.walletPubKey = key.PublicKey()
+			b.walletPubKey = key.Pub
 			b.log.WithFields(log.Fields{"pubKey": b.walletPubKey}).Debug("Created keypair")
 		} else {
-			b.walletPubKey = keys[0].Key()
+			b.walletPubKey = publicKeys[0]
 			b.log.WithFields(log.Fields{"pubKey": b.walletPubKey}).Debug("Using existing keypair")
 		}
 	}
+
 	b.log = b.log.WithFields(log.Fields{"pubkey": b.walletPubKey})
-	return mnemonic, err
+
+	return nil
 }
