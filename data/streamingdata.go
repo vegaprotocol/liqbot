@@ -21,8 +21,8 @@ type data struct {
 	marketID          string
 	settlementAssetID string
 	store             dataStore
-	busEvProc         *eventProcessor[*coreapipb.ObserveEventBusRequest, *coreapipb.ObserveEventBusResponse]
-	posEvProc         *eventProcessor[*v1.PositionsSubscribeRequest, *v1.PositionsSubscribeResponse]
+	busEvProc         busEventer
+	posEvProc         posEventer
 }
 
 func NewStream(node DataNode, store dataStore, pauseCh chan types.PauseSignal) *data {

@@ -17,7 +17,7 @@ type Market struct {
 	node              DataNode
 	log               *log.Entry
 	walletPubKey      string
-	busEvProc         *eventProcessor[*coreapipb.ObserveEventBusRequest, *coreapipb.ObserveEventBusResponse]
+	busEvProc         busEventer
 	stakeLinkingCh    chan struct{}
 	proposalIDCh      chan string
 	proposalEnactedCh chan string

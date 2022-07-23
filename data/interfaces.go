@@ -10,6 +10,7 @@ import (
 )
 
 // DataNode is a Vega Data node
+//
 //go:generate go run github.com/golang/mock/mockgen -destination mocks/datanode_mock.go -package mocks code.vegaprotocol.io/liqbot/data DataNode
 type DataNode interface {
 	ObserveEventBus() (client vegaapipb.CoreService_ObserveEventBusClient, err error)
@@ -25,4 +26,12 @@ type dataStore interface {
 	marketDataSet(marketData *types.MarketData)
 	openVolumeSet(openVolume int64)
 	cache()
+}
+
+type busEventer interface {
+	processEvents(name string, req *vegaapipb.ObserveEventBusRequest, process func(*vegaapipb.ObserveEventBusResponse) error)
+}
+
+type posEventer interface {
+	processEvents(name string, req *dataapipb.PositionsSubscribeRequest, process func(*dataapipb.PositionsSubscribeResponse) error)
 }
