@@ -35,9 +35,9 @@ func (b *eventProcessor[request, response, _]) processEvents(name string, req re
 				},
 			).Warningf("Stream closed, resubscribing...")
 
-			b.pauseBot(true, name)
+			b.pause(true, name)
 			s = b.mustGetStream(name, req)
-			b.pauseBot(false, name)
+			b.pause(false, name)
 			continue
 		}
 
@@ -95,7 +95,7 @@ func (b *eventProcessor[request, response, getter]) mustGetStream(name string, r
 	return s
 }
 
-func (b *eventProcessor[_, _, _]) pauseBot(p bool, name string) {
+func (b *eventProcessor[_, _, _]) pause(p bool, name string) {
 	select {
 	case b.pauseCh <- types.PauseSignal{From: name, Pause: p}:
 	default:
