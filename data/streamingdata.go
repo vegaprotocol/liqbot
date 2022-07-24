@@ -102,6 +102,13 @@ func (s *data) setInitialData() error {
 }
 
 func (s *data) subscribeToMarketEvents() {
+	req := &coreapipb.ObserveEventBusRequest{
+		Type: []eventspb.BusEventType{
+			eventspb.BusEventType_BUS_EVENT_TYPE_MARKET_DATA,
+		},
+		MarketId: s.marketID,
+	}
+
 	proc := func(rsp *coreapipb.ObserveEventBusResponse) error {
 		for _, event := range rsp.Events {
 			marketData := event.GetMarketData()
@@ -125,17 +132,8 @@ func (s *data) subscribeToMarketEvents() {
 				MarkPrice:      markPrice,
 				TradingMode:    marketData.MarketTradingMode,
 			})
-
-			return nil
 		}
 		return nil
-	}
-
-	req := &coreapipb.ObserveEventBusRequest{
-		Type: []eventspb.BusEventType{
-			eventspb.BusEventType_BUS_EVENT_TYPE_MARKET_DATA,
-		},
-		MarketId: s.marketID,
 	}
 
 	go s.busEvProc.processEvents("MarketData", req, proc)
@@ -143,6 +141,13 @@ func (s *data) subscribeToMarketEvents() {
 
 // Party related events
 func (s *data) subscribeToAccountEvents() {
+	req := &coreapipb.ObserveEventBusRequest{
+		Type: []eventspb.BusEventType{
+			eventspb.BusEventType_BUS_EVENT_TYPE_ACCOUNT,
+		},
+		PartyId: s.walletPubKey,
+	}
+
 	proc := func(rsp *coreapipb.ObserveEventBusResponse) error {
 		for _, event := range rsp.Events {
 			acct := event.GetAccount()
@@ -162,13 +167,6 @@ func (s *data) subscribeToAccountEvents() {
 			s.store.balanceSet(acct.Type, bal)
 		}
 		return nil
-	}
-
-	req := &coreapipb.ObserveEventBusRequest{
-		Type: []eventspb.BusEventType{
-			eventspb.BusEventType_BUS_EVENT_TYPE_ACCOUNT,
-		},
-		PartyId: s.walletPubKey,
 	}
 
 	go s.busEvProc.processEvents("AccountData", req, proc)

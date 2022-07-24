@@ -20,8 +20,8 @@ type streamGetter[req any, rsp any] interface {
 	getStream(DataNode, req) (streamer[rsp], error)
 }
 
-type streamer[resp any] interface {
-	Recv() (resp, error)
+type streamer[rsp any] interface {
+	Recv() (rsp, error)
 }
 
 func (b *eventProcessor[request, response, _]) processEvents(name string, req request, process func(response) error) {

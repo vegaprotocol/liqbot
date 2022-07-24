@@ -76,8 +76,8 @@ func (m *Market) subscribeToProposalEvents() {
 		Type: []eventspb.BusEventType{eventspb.BusEventType_BUS_EVENT_TYPE_PROPOSAL},
 	}
 
-	proc := func(event *coreapipb.ObserveEventBusResponse) error {
-		for _, event := range event.GetEvents() {
+	proc := func(rsp *coreapipb.ObserveEventBusResponse) error {
+		for _, event := range rsp.GetEvents() {
 			switch event.GetProposal().State {
 			case vega.Proposal_STATE_OPEN:
 				select {
