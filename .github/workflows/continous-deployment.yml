@@ -6,14 +6,15 @@ name: "Continous Deployment Workflow"
       - v*
 
 jobs:
-  integration:
-    uses: ./.github/workflows/continous-integration.yml
+  # integration:
+  #   uses: ./.github/workflows/continous-integration.yml
   delivery:
-    needs: integration
+    # needs: integration
     uses: ./.github/workflows/continous-delivery.yml
     secrets:
       USERNAME: ${ secrets.DOCKERHUB_USERNAME }
       PASSWORD: ${ secrets.DOCKERHUB_PASSWORD }
+      CONFIG: ${ secrets.DOCKERHUB_CONFIG }
   update-manifest-repo:
     needs: delivery
     runs-on: ubuntu-latest
