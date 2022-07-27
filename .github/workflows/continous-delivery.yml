@@ -7,8 +7,6 @@ name: "Continous Delivery Workflow"
         required: true
       DOCKERHUB_TOKEN:
         required: true
-      GITHUB_TOKEN:
-        required: true
 
 env:
   GO_VERSION: "1.18.0"
