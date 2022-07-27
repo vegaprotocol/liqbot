@@ -55,7 +55,7 @@ func (d *data) subscribe() {
 	go d.subscribePositions()
 }
 
-// WaitForDepositFinalize is a blocking call that waits for the deposit finalize event to be received
+// WaitForDepositFinalize is a blocking call that waits for the deposit finalize event to be received.
 func (d *data) WaitForDepositFinalize(amount *num.Uint) error {
 	req := &coreapipb.ObserveEventBusRequest{
 		Type: []eventspb.BusEventType{
