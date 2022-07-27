@@ -36,6 +36,10 @@ coverage:
 	@go test -covermode=count -coverprofile="coverage.txt" ./...
 	@go tool cover -func="coverage.txt"
 
+.PHONY: docker
+docker: ## Build docker image
+	@docker build -t vegaprotocol/${REPO_NAME}:local .
+
 .PHONY: coveragehtml
 coveragehtml: coverage
 	@go tool cover -html=coverage.txt -o coverage.html
@@ -93,7 +97,3 @@ clean: ## Remove previous build
 .PHONY: help
 help: ## Display this help screen
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
-
-.PHONY: docker
-docker: ## Build docker image
-	@docker build --platform=linux/amd64 -t vegaprotocol/liqbot:local .
