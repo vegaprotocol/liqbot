@@ -28,5 +28,5 @@ Process includes following parts (from bottom to top)
 Process for this repository is based on tags, meaning that TAGS from following branches get automatically get deployed to these environments:
 
 
-* devnet -> main
+* stagnet2 -> main
 
