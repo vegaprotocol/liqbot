@@ -25,7 +25,7 @@ jobs:
           PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
         with:
           username: vegaprotocol
-          password: $PASSWORD
+          password: ${{ env.PASSWORD }}
 
       - name: Log in to the Container registry
         uses: docker/login-action@v2
