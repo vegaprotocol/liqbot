@@ -29,9 +29,9 @@ jobs:
           git config --global user.name 'vega-ci-bot'
           git config --global user.email 'dev@vega.xyz'
           git clone git@github.com:vegaprotocol/k8s.git
-                    if [ "$(git rev-parse --abbrev-ref HEAD)" = "main" ]; then
-            echo -n "$version" > k8s/charts/apps/liqbot/stagnet2/VERSION
-          fi
+                    
+          echo -n "$version" > k8s/charts/apps/liqbot/stagnet2/VERSION
+          
                     (
             cd k8s
             git add -A
