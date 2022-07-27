@@ -1,66 +1,96 @@
 package data
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"time"
 
+	coreapipb "code.vegaprotocol.io/protos/vega/api/v1"
 	log "github.com/sirupsen/logrus"
 
 	e "code.vegaprotocol.io/liqbot/errors"
 	"code.vegaprotocol.io/liqbot/types"
 )
 
-type eventProcessor[req any, rsp any, _ streamGetter[req, rsp]] struct {
+type busEventProcessor struct {
 	node    DataNode
 	log     *log.Entry
 	pauseCh chan types.PauseSignal
 }
 
-type streamGetter[req any, rsp any] interface {
-	getStream(DataNode, req) (streamer[rsp], error)
+func newBusEventProcessor(node DataNode, pauseCh chan types.PauseSignal) *busEventProcessor {
+	return &busEventProcessor{
+		node:    node,
+		log:     log.WithFields(log.Fields{"module": "EventProcessor", "event": "EventBus"}),
+		pauseCh: pauseCh,
+	}
 }
 
-type streamer[rsp any] interface {
-	Recv() (rsp, error)
-}
+func (b *busEventProcessor) processEvents(
+	ctx context.Context,
+	name string,
+	req *coreapipb.ObserveEventBusRequest,
+	process func(*coreapipb.ObserveEventBusResponse) (bool, error),
+) {
+	defer b.log.WithFields(log.Fields{
+		"name": name,
+	}).Debug("Stopping event processor")
 
-func (b *eventProcessor[request, response, _]) processEvents(name string, req request, process func(response) error) {
-	for s := b.mustGetStream(name, req); ; {
-		rsp, err := s.Recv()
-		if err != nil {
-			b.log.WithFields(
-				log.Fields{
+	var stop bool
+	for s := b.mustGetStream(ctx, name, req); !stop; {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			if s == nil {
+				return
+			}
+
+			rsp, err := s.Recv()
+			if err != nil {
+				if ctx.Err() == context.DeadlineExceeded {
+					return
+				}
+
+				b.log.WithFields(
+					log.Fields{
+						"error": err,
+						"name":  name,
+					},
+				).Warningf("Stream closed, resubscribing...")
+
+				b.pause(true, name)
+				s = b.mustGetStream(ctx, name, req)
+				b.pause(false, name)
+				continue
+			}
+
+			stop, err = process(rsp)
+			if err != nil {
+				b.log.WithFields(log.Fields{
 					"error": err,
 					"name":  name,
-				},
-			).Warningf("Stream closed, resubscribing...")
-
-			b.pause(true, name)
-			s = b.mustGetStream(name, req)
-			b.pause(false, name)
-			continue
-		}
-
-		if err = process(rsp); err != nil {
-			b.log.WithFields(log.Fields{
-				"error": err,
-				"name":  name,
-			}).Warning("Unable to process event")
+				}).Warning("Unable to process event")
+			}
 		}
 	}
 }
 
-func (b *eventProcessor[request, response, getter]) mustGetStream(name string, req request) streamer[response] {
+func (b *busEventProcessor) mustGetStream(
+	ctx context.Context,
+	name string,
+	req *coreapipb.ObserveEventBusRequest,
+) coreapipb.CoreService_ObserveEventBusClient {
 	var (
-		sg  getter
-		s   streamer[response]
+		s   coreapipb.CoreService_ObserveEventBusClient
 		err error
 	)
 
 	attempt := 0
 	sleepTime := time.Second * 3
 
-	for s, err = sg.getStream(b.node, req); err != nil; s, err = sg.getStream(b.node, req) {
+	for s, err = b.getStream(ctx, req); err != nil; s, err = b.getStream(ctx, req) {
 		if errors.Unwrap(err).Error() == e.ErrConnectionNotReady.Error() {
 			b.log.WithFields(log.Fields{
 				"name":    name,
@@ -68,12 +98,18 @@ func (b *eventProcessor[request, response, getter]) mustGetStream(name string, r
 				"attempt": attempt,
 			}).Warning("Node is not ready, reconnecting")
 
-			<-b.node.DialConnection()
+			<-b.node.DialConnection(ctx)
 
 			b.log.WithFields(log.Fields{
 				"name":    name,
 				"attempt": attempt,
 			}).Debug("Node reconnected, reattempting to subscribe to stream")
+		} else if ctx.Err() == context.DeadlineExceeded {
+			b.log.WithFields(log.Fields{
+				"name": name,
+			}).Warning("Deadline exceeded. Stopping event processor")
+
+			break
 		} else {
 			attempt++
 
@@ -95,7 +131,19 @@ func (b *eventProcessor[request, response, getter]) mustGetStream(name string, r
 	return s
 }
 
-func (b *eventProcessor[_, _, _]) pause(p bool, name string) {
+func (b *busEventProcessor) getStream(ctx context.Context, req *coreapipb.ObserveEventBusRequest) (coreapipb.CoreService_ObserveEventBusClient, error) {
+	s, err := b.node.ObserveEventBus(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// Then we subscribe to the data
+	if err = s.SendMsg(req); err != nil {
+		return nil, fmt.Errorf("failed to send event bus request for stream: %w", err)
+	}
+	return s, nil
+}
+
+func (b *busEventProcessor) pause(p bool, name string) {
 	select {
 	case b.pauseCh <- types.PauseSignal{From: name, Pause: p}:
 	default:

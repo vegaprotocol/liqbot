@@ -48,6 +48,10 @@ func (b *bot) runPositionManagement(ctx context.Context) {
 
 			// Only update liquidity and position if we are not in auction
 			if !b.canPlaceOrders() {
+				if err := b.ensureCommitmentAmount(ctx); err != nil {
+					b.log.WithFields(log.Fields{"error": err.Error()}).Warning("Failed to update commitment amount")
+				}
+
 				if err = b.placeAuctionOrders(ctx); err != nil {
 					b.log.WithFields(log.Fields{"error": err.Error()}).Warning("Failed to place auction orders")
 				}
@@ -66,6 +70,68 @@ func (b *bot) runPositionManagement(ctx context.Context) {
 	}
 }
 
+func (b *bot) ensureCommitmentAmount(ctx context.Context) error {
+	suppliedStake := b.data.SuppliedStake()
+	targetStake := b.data.TargetStake()
+
+	if suppliedStake.IsZero() {
+		return fmt.Errorf("no stake supplied")
+	}
+
+	if suppliedStake.GT(targetStake) {
+		return nil
+	}
+
+	newCommitmentAmount := num.Zero().Mul(targetStake, num.NewUint(2))
+	balanceTotal := b.data.Balance().Total()
+
+	b.log.WithFields(
+		log.Fields{
+			"suppliedStake": suppliedStake,
+			"targetStake":   targetStake,
+			"balanceTotal":  balanceTotal,
+			"newCommitment": newCommitmentAmount,
+		},
+	).Debug("Supplied stake is less than target stake, increasing commitment amount...")
+
+	if dx := num.Zero().Sub(newCommitmentAmount, balanceTotal); dx.GT(num.Zero()) {
+		depositAmount := num.Zero().Mul(dx, num.NewUint(2))
+
+		b.log.WithFields(
+			log.Fields{
+				"balanceTotal":  balanceTotal,
+				"newCommitment": newCommitmentAmount,
+				"delta":         dx,
+				"depositAmount": depositAmount,
+			}).Debug("Account balance is less than new commitment amount, depositing...")
+
+		if err := b.tokens.Deposit(ctx, depositAmount); err != nil {
+			// "VM Exception while processing transaction: revert" could mean amount is too high
+			return fmt.Errorf("failed to deposit tokens: %w", err)
+		}
+
+		b.log.Debug("Waiting for deposit to be finalized...")
+
+		if err := b.dataStream.WaitForDepositFinalize(depositAmount); err != nil {
+			return fmt.Errorf("failed to finalize deposit: %w", err)
+		}
+	}
+
+	buys, sells, _ := b.getShape()
+
+	b.log.WithFields(
+		log.Fields{
+			"newCommitment": newCommitmentAmount,
+		},
+	).Debug("Sending new commitment amount...")
+
+	if err := b.sendLiquidityProvisionAmendment(ctx, newCommitmentAmount, buys, sells); err != nil {
+		return fmt.Errorf("failed to update commitment amount: %w", err)
+	}
+
+	return nil
+}
+
 func (b *bot) manageDirection(ctx context.Context, previousOpenVolume int64) (int64, error) {
 	openVolume := b.data.OpenVolume()
 	buyShape, sellShape, shape := b.getShape()
@@ -77,21 +143,23 @@ func (b *bot) manageDirection(ctx context.Context, previousOpenVolume int64) (in
 	}).Debug("Checking for direction change")
 
 	// If we flipped then send the new LP order
-	if !b.shouldAmend(previousOpenVolume) {
+	if !b.shouldAmend(openVolume, previousOpenVolume) {
 		return openVolume, nil
 	}
 
 	b.log.WithFields(log.Fields{"shape": shape}).Debug("Flipping LP direction")
 
-	if err := b.sendLiquidityProvisionAmendment(ctx, buyShape, sellShape); err != nil {
+	commitment := b.data.Balance().Total()
+
+	if err := b.sendLiquidityProvisionAmendment(ctx, commitment, buyShape, sellShape); err != nil {
 		return openVolume, fmt.Errorf("failed to send liquidity provision amendment: %w", err)
 	}
 
 	return openVolume, nil
 }
 
-func (b *bot) shouldAmend(previousOpenVolume int64) bool {
-	return (b.data.OpenVolume() > 0 && previousOpenVolume <= 0) || (b.data.OpenVolume() < 0 && previousOpenVolume >= 0)
+func (b *bot) shouldAmend(openVolume, previousOpenVolume int64) bool {
+	return (openVolume > 0 && previousOpenVolume <= 0) || (b.data.OpenVolume() < 0 && previousOpenVolume >= 0)
 }
 
 func (b *bot) managePosition(ctx context.Context) error {
@@ -123,6 +191,82 @@ func (b *bot) managePosition(ctx context.Context) error {
 	return nil
 }
 
+func (b *bot) sendLiquidityProvision(ctx context.Context, commitment *num.Uint, buys, sells []*vega.LiquidityOrder) error {
+	submitTxReq := &walletpb.SubmitTransactionRequest{
+		PubKey: b.walletPubKey,
+		Command: &walletpb.SubmitTransactionRequest_LiquidityProvisionSubmission{
+			LiquidityProvisionSubmission: &commandspb.LiquidityProvisionSubmission{
+				MarketId:         b.marketID,
+				CommitmentAmount: commitment.String(),
+				Fee:              b.config.StrategyDetails.Fee,
+				Sells:            sells,
+				Buys:             buys,
+			},
+		},
+	}
+
+	if err := b.walletClient.SignTx(ctx, submitTxReq); err != nil {
+		return fmt.Errorf("failed to submit LiquidityProvisionSubmission: %w", err)
+	}
+
+	b.log.WithFields(log.Fields{
+		"commitment":   commitment,
+		"balanceTotal": b.data.Balance().Total(),
+	}).Debug("Submitted LiquidityProvisionSubmission")
+	return nil
+}
+
+// call this if the position flips.
+func (b *bot) sendLiquidityProvisionAmendment(ctx context.Context, commitment *num.Uint, buys, sells []*vega.LiquidityOrder) error {
+	if commitment == num.Zero() {
+		return b.sendLiquidityProvisionCancellation(ctx)
+	}
+
+	submitTxReq := &walletpb.SubmitTransactionRequest{
+		PubKey: b.walletPubKey,
+		Command: &walletpb.SubmitTransactionRequest_LiquidityProvisionAmendment{
+			LiquidityProvisionAmendment: &commandspb.LiquidityProvisionAmendment{
+				MarketId:         b.marketID,
+				CommitmentAmount: commitment.String(),
+				Fee:              b.config.StrategyDetails.Fee,
+				Sells:            sells,
+				Buys:             buys,
+			},
+		},
+	}
+
+	if err := b.walletClient.SignTx(ctx, submitTxReq); err != nil {
+		return fmt.Errorf("failed to submit LiquidityProvisionAmendment: %w", err)
+	}
+
+	b.log.WithFields(log.Fields{
+		"commitment": commitment,
+	}).Debug("Submitted LiquidityProvisionAmendment")
+	return nil
+}
+
+func (b *bot) sendLiquidityProvisionCancellation(ctx context.Context) error {
+	submitTxReq := &walletpb.SubmitTransactionRequest{
+		PubKey: b.walletPubKey,
+		Command: &walletpb.SubmitTransactionRequest_LiquidityProvisionCancellation{
+			LiquidityProvisionCancellation: &commandspb.LiquidityProvisionCancellation{
+				MarketId: b.marketID,
+			},
+		},
+	}
+
+	if err := b.walletClient.SignTx(ctx, submitTxReq); err != nil {
+		return fmt.Errorf("failed to submit LiquidityProvisionCancellation: %w", err)
+	}
+
+	b.log.WithFields(log.Fields{
+		"commitment":   "0",
+		"balanceTotal": b.data.Balance().Total(),
+	}).Debug("Submitted LiquidityProvisionAmendment")
+
+	return nil
+}
+
 func (b *bot) checkPosition() (uint64, vega.Side, bool) {
 	size := uint64(0)
 	side := vega.Side_SIDE_UNSPECIFIED
@@ -150,8 +294,11 @@ func (b *bot) prePositionManagement(ctx context.Context) error {
 	if err := b.checkInitialMargin(buyShape, sellShape); err != nil {
 		return fmt.Errorf("failed initial margin check: %w", err)
 	}
+
+	commitment := b.data.Balance().Total()
+
 	// Submit LP order to market.
-	if err := b.sendLiquidityProvision(ctx, buyShape, sellShape); err != nil {
+	if err := b.sendLiquidityProvision(ctx, commitment, buyShape, sellShape); err != nil {
 		return fmt.Errorf("failed to send liquidity provision order: %w", err)
 	}
 
@@ -175,7 +322,7 @@ func (b *bot) getShape() ([]*vega.LiquidityOrder, []*vega.LiquidityOrder, string
 
 func (b *bot) checkInitialMargin(buyShape, sellShape []*vega.LiquidityOrder) error {
 	// Turn the shapes into a set of orders scaled by commitment
-	obligation := b.getCommitment()
+	obligation := b.data.Balance().Total()
 	buyOrders := b.calculateOrderSizes(obligation, buyShape)
 	sellOrders := b.calculateOrderSizes(obligation, sellShape)
 
@@ -306,95 +453,6 @@ func (b *bot) calculateMarginCost(risk float64, orders []*vega.Order) *num.Uint 
 
 	totalMargin := num.UintChain(num.Zero()).Add(margins...).Mul(b.data.MarkPrice()).Get()
 	return mulFrac(totalMargin, risk, 15)
-}
-
-func (b *bot) sendLiquidityProvision(ctx context.Context, buys, sells []*vega.LiquidityOrder) error {
-	commitment := b.getCommitment()
-
-	submitTxReq := &walletpb.SubmitTransactionRequest{
-		PubKey: b.walletPubKey,
-		Command: &walletpb.SubmitTransactionRequest_LiquidityProvisionSubmission{
-			LiquidityProvisionSubmission: &commandspb.LiquidityProvisionSubmission{
-				MarketId:         b.marketID,
-				CommitmentAmount: commitment.String(),
-				Fee:              b.config.StrategyDetails.Fee,
-				Sells:            sells,
-				Buys:             buys,
-			},
-		},
-	}
-
-	if err := b.walletClient.SignTx(ctx, submitTxReq); err != nil {
-		return fmt.Errorf("failed to submit LiquidityProvisionSubmission: %w", err)
-	}
-
-	b.log.WithFields(log.Fields{
-		"commitment":         commitment,
-		"commitmentFraction": b.config.StrategyDetails.CommitmentFraction,
-		"balanceTotal":       b.data.Balance().Total(),
-	}).Debug("Submitted LiquidityProvisionSubmission")
-	return nil
-}
-
-// call this if the position flips.
-func (b *bot) sendLiquidityProvisionAmendment(ctx context.Context, buys, sells []*vega.LiquidityOrder) error {
-	commitment := b.getCommitment()
-	if commitment == num.Zero() {
-		return b.sendLiquidityProvisionCancellation(ctx)
-	}
-
-	submitTxReq := &walletpb.SubmitTransactionRequest{
-		PubKey: b.walletPubKey,
-		Command: &walletpb.SubmitTransactionRequest_LiquidityProvisionAmendment{
-			LiquidityProvisionAmendment: &commandspb.LiquidityProvisionAmendment{
-				MarketId:         b.marketID,
-				CommitmentAmount: commitment.String(),
-				Fee:              b.config.StrategyDetails.Fee,
-				Sells:            sells,
-				Buys:             buys,
-			},
-		},
-	}
-
-	if err := b.walletClient.SignTx(ctx, submitTxReq); err != nil {
-		return fmt.Errorf("failed to submit LiquidityProvisionAmendment: %w", err)
-	}
-
-	b.log.WithFields(log.Fields{
-		"commitment":         commitment,
-		"commitmentFraction": b.config.StrategyDetails.CommitmentFraction,
-		"balanceTotal":       b.data.Balance().Total(),
-	}).Debug("Submitted LiquidityProvisionAmendment")
-
-	return nil
-}
-
-func (b *bot) getCommitment() *num.Uint {
-	// CommitmentAmount is the fractional commitment value * total collateral
-	return mulFrac(b.data.Balance().Total(), b.config.StrategyDetails.CommitmentFraction, 15)
-}
-
-func (b *bot) sendLiquidityProvisionCancellation(ctx context.Context) error {
-	submitTxReq := &walletpb.SubmitTransactionRequest{
-		PubKey: b.walletPubKey,
-		Command: &walletpb.SubmitTransactionRequest_LiquidityProvisionCancellation{
-			LiquidityProvisionCancellation: &commandspb.LiquidityProvisionCancellation{
-				MarketId: b.marketID,
-			},
-		},
-	}
-
-	if err := b.walletClient.SignTx(ctx, submitTxReq); err != nil {
-		return fmt.Errorf("failed to submit LiquidityProvisionCancellation: %w", err)
-	}
-
-	b.log.WithFields(log.Fields{
-		"commitment":         num.Zero(),
-		"commitmentFraction": b.config.StrategyDetails.CommitmentFraction,
-		"balanceTotal":       b.data.Balance().Total(),
-	}).Debug("Submitted LiquidityProvisionAmendment")
-
-	return nil
 }
 
 func mulFrac(n *num.Uint, x float64, precision float64) *num.Uint {

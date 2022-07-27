@@ -15,6 +15,7 @@ import (
 	"code.vegaprotocol.io/liqbot/config"
 	"code.vegaprotocol.io/liqbot/data"
 	"code.vegaprotocol.io/liqbot/node"
+	"code.vegaprotocol.io/liqbot/token"
 	"code.vegaprotocol.io/liqbot/types"
 )
 
@@ -25,11 +26,13 @@ type bot struct {
 	locations     []string
 	data          dataStore
 	marketStream  marketStream
+	dataStream    dataStream
 	walletClient  WalletClient
+	tokens        tokenService
 
-	config     config.BotConfig
-	seedConfig *config.SeedConfig
-	log        *log.Entry
+	config      config.BotConfig
+	tokenConfig *config.TokenConfig
+	log         *log.Entry
 
 	stopPosMgmt     chan bool
 	stopPriceSteer  chan bool
@@ -46,10 +49,10 @@ type bot struct {
 }
 
 // New returns a new instance of bot.
-func New(botConf config.BotConfig, locations []string, seedConf *config.SeedConfig, pe PricingEngine, wc WalletClient) *bot {
+func New(botConf config.BotConfig, locations []string, seedConf *config.TokenConfig, pe PricingEngine, wc WalletClient) *bot {
 	return &bot{
-		config:     botConf,
-		seedConfig: seedConf,
+		config:      botConf,
+		tokenConfig: seedConf,
 		log: log.WithFields(log.Fields{
 			"bot":  botConf.Name,
 			"node": locations,
@@ -73,19 +76,27 @@ func (b *bot) Start() error {
 		callTimeout,
 	)
 
-	dataNode.DialConnection() // blocking
+	dataNode.DialConnection(context.Background()) // blocking
 
-	if err := b.setupWallet(); err != nil {
+	b.node = dataNode
+	b.log = b.log.WithFields(log.Fields{"node": b.node.Target()})
+	b.log.Debug("Connected to Vega gRPC node")
+
+	err := b.setupWallet()
+	if err != nil {
 		return fmt.Errorf("failed to setup wallet: %w", err)
 	}
 
 	pauseCh := b.pauseChannel()
-	b.node = dataNode
-	b.marketStream = data.NewMarket(dataNode, b.walletPubKey, pauseCh)
-	b.log = b.log.WithFields(log.Fields{"node": b.node.Target()})
-	b.log.Debug("Connected to Vega gRPC node")
 
-	if err := b.setupMarket(); err != nil {
+	b.marketStream = data.NewMarketStream(dataNode, b.walletPubKey, pauseCh)
+
+	b.tokens, err = token.NewService(b.tokenConfig, b.walletPubKey)
+	if err != nil {
+		return fmt.Errorf("failed to create token service: %w", err)
+	}
+
+	if err = b.setupMarket(); err != nil {
 		return fmt.Errorf("failed to setup market: %w", err)
 	}
 
@@ -109,10 +120,10 @@ func (b *bot) Start() error {
 
 	store := data.NewStore()
 	b.data = store
-	stream := data.NewStream(dataNode, store, pauseCh)
 
-	if err = stream.InitForData(b.marketID, b.walletPubKey, b.settlementAssetID); err != nil {
-		return fmt.Errorf("failed to initialise data: %w", err)
+	b.dataStream, err = data.NewDataStream(b.marketID, b.walletPubKey, b.settlementAssetID, dataNode, store, pauseCh)
+	if err != nil {
+		return fmt.Errorf("failed to create data stream: %w", err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

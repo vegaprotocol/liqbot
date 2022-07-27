@@ -28,7 +28,7 @@ func TestCheckConfig(t *testing.T) {
 	err = cfg.CheckConfig()
 	assert.True(t, strings.HasPrefix(err.Error(), errors.ErrMissingEmptyConfigSection.Error()))
 
-	cfg.Seed = &config.SeedConfig{}
+	cfg.Token = &config.TokenConfig{}
 	err = cfg.CheckConfig()
 	assert.True(t, strings.HasPrefix(err.Error(), errors.ErrMissingEmptyConfigSection.Error()))
 

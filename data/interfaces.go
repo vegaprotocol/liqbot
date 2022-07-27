@@ -1,6 +1,8 @@
 package data
 
 import (
+	"context"
+
 	dataapipb "code.vegaprotocol.io/protos/data-node/api/v1"
 	"code.vegaprotocol.io/protos/vega"
 	vegaapipb "code.vegaprotocol.io/protos/vega/api/v1"
@@ -13,12 +15,11 @@ import (
 //
 //go:generate go run github.com/golang/mock/mockgen -destination mocks/datanode_mock.go -package mocks code.vegaprotocol.io/liqbot/data DataNode
 type DataNode interface {
-	ObserveEventBus() (client vegaapipb.CoreService_ObserveEventBusClient, err error)
+	ObserveEventBus(ctx context.Context) (client vegaapipb.CoreService_ObserveEventBusClient, err error)
 	PartyAccounts(req *dataapipb.PartyAccountsRequest) (response *dataapipb.PartyAccountsResponse, err error)
 	MarketDataByID(req *dataapipb.MarketDataByIDRequest) (response *dataapipb.MarketDataByIDResponse, err error)
 	PositionsByParty(req *dataapipb.PositionsByPartyRequest) (response *dataapipb.PositionsByPartyResponse, err error)
-	PositionsSubscribe(req *dataapipb.PositionsSubscribeRequest) (client dataapipb.TradingDataService_PositionsSubscribeClient, err error)
-	DialConnection() chan struct{}
+	DialConnection(ctx context.Context) chan struct{}
 }
 
 type dataStore interface {
@@ -26,12 +27,9 @@ type dataStore interface {
 	marketDataSet(marketData *types.MarketData)
 	openVolumeSet(openVolume int64)
 	cache()
+	OpenVolume() int64
 }
 
 type busEventer interface {
-	processEvents(name string, req *vegaapipb.ObserveEventBusRequest, process func(*vegaapipb.ObserveEventBusResponse) error)
-}
-
-type posEventer interface {
-	processEvents(name string, req *dataapipb.PositionsSubscribeRequest, process func(*dataapipb.PositionsSubscribeResponse) error)
+	processEvents(ctx context.Context, name string, req *vegaapipb.ObserveEventBusRequest, process func(*vegaapipb.ObserveEventBusResponse) (bool, error))
 }

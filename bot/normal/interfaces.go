@@ -21,6 +21,7 @@ type tradingDataService interface {
 }
 
 // PricingEngine is the source of price information from the price proxy.
+//
 //go:generate go run github.com/golang/mock/mockgen -destination mocks/pricingengine_mock.go -package mocks code.vegaprotocol.io/liqbot/bot/normal PricingEngine
 type PricingEngine interface {
 	GetPrice(pricecfg ppconfig.PriceConfig) (ppservice.PriceResponse, error)
@@ -38,12 +39,22 @@ type dataStore interface {
 	Balance() types.Balance
 	TradingMode() vega.Market_TradingMode
 	StaticMidPrice() *num.Uint
+	TargetStake() *num.Uint
+	SuppliedStake() *num.Uint
 	MarkPrice() *num.Uint
 	OpenVolume() int64
 }
 type marketStream interface {
-	Subscribe()
 	WaitForStakeLinking() error
 	WaitForProposalID() (string, error)
 	WaitForProposalEnacted(pID string) error
+}
+
+type dataStream interface {
+	WaitForDepositFinalize(amount *num.Uint) error
+}
+
+type tokenService interface {
+	Stake(ctx context.Context, amount *num.Uint) error
+	Deposit(ctx context.Context, amount *num.Uint) error
 }

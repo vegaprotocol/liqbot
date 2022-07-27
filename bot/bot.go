@@ -11,6 +11,7 @@ import (
 )
 
 // Bot is the generic bot interface.
+//
 //go:generate go run github.com/golang/mock/mockgen -destination mocks/bot_mock.go -package mocks code.vegaprotocol.io/liqbot/bot Bot
 type Bot interface {
 	Start() error
@@ -19,13 +20,14 @@ type Bot interface {
 }
 
 // PricingEngine is the source of price information from the price proxy.
+//
 //go:generate go run github.com/golang/mock/mockgen -destination mocks/pricingengine_mock.go -package mocks code.vegaprotocol.io/liqbot/bot PricingEngine
 type PricingEngine interface {
 	GetPrice(pricecfg ppconfig.PriceConfig) (pi ppservice.PriceResponse, err error)
 }
 
 // New returns a new Bot instance.
-func New(botConf config.BotConfig, locations []string, seedConf *config.SeedConfig, pe PricingEngine, wc normal.WalletClient) (Bot, error) {
+func New(botConf config.BotConfig, locations []string, seedConf *config.TokenConfig, pe PricingEngine, wc normal.WalletClient) (Bot, error) {
 	switch botConf.Strategy {
 	case config.BotStrategyNormal:
 		return normal.New(botConf, locations, seedConf, pe, wc), nil

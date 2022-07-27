@@ -24,8 +24,11 @@ type Strategy struct {
 	// AuctionVolume ...
 	AuctionVolume Uint `yaml:"auctionVolume"`
 
-	// CommitmentFraction is the fractional amount of stake for the LP
-	CommitmentFraction float64 `yaml:"commitmentFraction"`
+	// SeedAmount is the amount of tokens to mint, deposit and stake
+	SeedAmount Uint `yaml:"seedAmount"`
+
+	// SeedOrderSize is the size of the seed orders that tries to get the market out of auction
+	SeedOrderSize uint64 `yaml:"seedOrderSize"`
 
 	// CommitmentAmount is the amount of stake for the LP
 	CommitmentAmount string `yaml:"commitmentAmount"`
@@ -42,11 +45,7 @@ type Strategy struct {
 	// PosManagementFraction controls the size of market orders used to manage the bot's position.
 	PosManagementFraction float64 `yaml:"posManagementFraction"`
 
-	// StakeFraction (along with OrdersFraction) is used in rule-of-thumb heuristics to decide how
-	// the bot should deploy collateral.
-	StakeFraction float64 `yaml:"stakeFraction"`
-
-	// OrdersFraction (along with StakeFraction) is used in rule-of-thumb heuristics to decide how
+	// OrdersFraction is used in rule-of-thumb heuristics to decide how
 	// the bot should deploy collateral.
 	OrdersFraction float64 `yaml:"ordersFraction"`
 
@@ -86,7 +85,6 @@ AuctionVolume=%d,
 MaxLong=%d, 
 MaxShort=%d, 
 PosManagementFraction=%f, 
-StakeFraction=%f, 
 OrdersFraction=%f, 
 ShorteningShape=TBD(*ShapeConfig), 
 LongeningShape=TBD(*ShapeConfig), 
@@ -101,7 +99,6 @@ TargetLNVol=%f}`,
 		s.MaxLong,
 		s.MaxShort,
 		s.PosManagementFraction,
-		s.StakeFraction,
 		s.OrdersFraction,
 		// s.ShorteningShape,
 		// s.LongeningShape,

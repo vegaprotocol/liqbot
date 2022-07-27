@@ -18,7 +18,7 @@ type Config struct {
 
 	Pricing   *PricingConfig `yaml:"pricing"`
 	Wallet    *WalletConfig  `yaml:"wallet"`
-	Seed      *SeedConfig    `yaml:"seed"`
+	Token     *TokenConfig   `yaml:"token"`
 	Locations []string       `yaml:"locations"`
 
 	Bots []BotConfig `yaml:"bots"`
@@ -36,6 +36,10 @@ func (cfg *Config) CheckConfig() error {
 
 	if cfg.Wallet == nil {
 		return fmt.Errorf("%s: %s", errors.ErrMissingEmptyConfigSection.Error(), "wallet")
+	}
+
+	if cfg.Token == nil {
+		return fmt.Errorf("%s: %s", errors.ErrMissingEmptyConfigSection.Error(), "token")
 	}
 
 	if len(cfg.Locations) == 0 {
@@ -139,7 +143,7 @@ type WalletConfig struct {
 	URL string `yaml:"url"`
 }
 
-type SeedConfig struct {
+type TokenConfig struct {
 	EthereumAPIAddress      string `yaml:"ethereumAPIAddress"`
 	Erc20BridgeAddress      string `yaml:"erc20BridgeAddress"`
 	StakingBridgeAddress    string `yaml:"stakingBridgeAddress"`
@@ -147,6 +151,4 @@ type SeedConfig struct {
 	VegaTokenAddress        string `yaml:"vegaTokenAddress"`
 	ContractOwnerAddress    string `yaml:"contractOwnerAddress"`
 	ContractOwnerPrivateKey string `yaml:"contractOwnerPrivateKey"`
-	Amount                  int64  `yaml:"amount"`
-	OrderSize               uint64 `yaml:"orderSize"`
 }
