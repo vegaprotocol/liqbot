@@ -24,6 +24,7 @@ jobs:
         env:
           PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
         with:
+          registry: registry.hub.docker.com
           username: vegaprotocol
           password: ${{ env.PASSWORD }}
 

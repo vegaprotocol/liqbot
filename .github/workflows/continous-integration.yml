@@ -3,18 +3,28 @@ name: "Continous Integration Workflow"
 "on":
   workflow_call:
   pull_request:
-  
+
   push:
     branches:
-    
+
     - main
-    
-  
+
+
 jobs:
   integration:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v2
+        if: ${{!github.event.repository.private}}
+        env:
+          PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
+        with:
+          registry: registry.hub.docker.com
+          username: vegaprotocol
+          password: ${{ env.PASSWORD }}
 
       - name: Setup Go
         uses: actions/setup-go@v3
@@ -24,15 +34,14 @@ jobs:
       - name: build
         run: make build
 
-      
+
       - name: test
         run: make test
-      
 
-      
+
+
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v3
         with:
           version: v1.45
           args: --config .golangci.toml
-      
