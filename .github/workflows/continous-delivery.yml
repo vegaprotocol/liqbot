@@ -21,9 +21,11 @@ jobs:
       - name: Log in to the Container registry
         uses: docker/login-action@v2
         if: ${{!github.event.repository.private}}
+        env:
+          PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
         with:
           username: vegaprotocol
-          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+          password: $PASSWORD
 
       - name: Log in to the Container registry
         uses: docker/login-action@v2
