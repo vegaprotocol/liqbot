@@ -9,6 +9,8 @@ import (
 type MarketData struct {
 	StaticMidPrice *num.Uint
 	MarkPrice      *num.Uint
+	TargetStake    *num.Uint
+	SuppliedStake  *num.Uint
 	TradingMode    vega.Market_TradingMode
 }
 

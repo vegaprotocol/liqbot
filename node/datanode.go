@@ -35,8 +35,8 @@ func NewDataNode(hosts []string, callTimeout time.Duration) *DataNode {
 	}
 }
 
-func (n *DataNode) DialConnection() chan struct{} {
-	ctx, cancel := context.WithCancel(context.Background())
+func (n *DataNode) DialConnection(ctx context.Context) chan struct{} {
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	wg := &sync.WaitGroup{}
@@ -160,39 +160,8 @@ func (n *DataNode) LastBlockData() (*vegaapipb.LastBlockHeightResponse, error) {
 	return response, err
 }
 
-// GetVegaTime gets the latest block header time from the node.
-func (n *DataNode) GetVegaTime() (t time.Time, err error) {
-	msg := "gRPC call failed: GetVegaTime: %w"
-	if n == nil {
-		err = fmt.Errorf(msg, e.ErrNil)
-		return
-	}
-
-	if n.conn.GetState() != connectivity.Ready {
-		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
-		return
-	}
-
-	c := vegaapipb.NewCoreServiceClient(n.conn)
-	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
-	defer cancel()
-	response, err := c.GetVegaTime(ctx, &vegaapipb.GetVegaTimeRequest{})
-	if err != nil {
-		err = fmt.Errorf(msg, e.ErrorDetail(err))
-		return
-	}
-	nsec := response.Timestamp
-	if nsec < 0 {
-		err = fmt.Errorf("negative time: %d", nsec)
-		err = fmt.Errorf(msg, err)
-		return
-	}
-	t = time.Unix(0, nsec).UTC()
-	return
-}
-
 // ObserveEventBus opens a stream.
-func (n *DataNode) ObserveEventBus() (client vegaapipb.CoreService_ObserveEventBusClient, err error) {
+func (n *DataNode) ObserveEventBus(ctx context.Context) (client vegaapipb.CoreService_ObserveEventBusClient, err error) {
 	msg := "gRPC call failed: ObserveEventBus: %w"
 	if n == nil {
 		err = fmt.Errorf(msg, e.ErrNil)
@@ -206,7 +175,7 @@ func (n *DataNode) ObserveEventBus() (client vegaapipb.CoreService_ObserveEventB
 
 	c := vegaapipb.NewCoreServiceClient(n.conn)
 	// no timeout on streams
-	client, err = c.ObserveEventBus(context.Background())
+	client, err = c.ObserveEventBus(ctx)
 	if err != nil {
 		err = fmt.Errorf(msg, e.ErrorDetail(err))
 		return
