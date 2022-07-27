@@ -26,6 +26,8 @@ GO_FLAGS := -ldflags "-X main.Version=$(VERSION) -X main.VersionHash=$(VERSION_H
 build: ## install the binary in GOPATH/bin
 	@env GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build -v -o bin/${REPO_NAME} ./cmd/${REPO_NAME}
 
+
+
 .PHONY: all
 default: deps build test lint
 
