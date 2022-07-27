@@ -12,9 +12,9 @@ jobs:
     # needs: integration
     uses: ./.github/workflows/continous-delivery.yml
     secrets:
-      USERNAME: ${ secrets.DOCKERHUB_USERNAME }
-      PASSWORD: ${ secrets.DOCKERHUB_PASSWORD }
-      CONFIG: ${ secrets.DOCKERHUB_CONFIG }
+      USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
+      CONFIG: ${{ secrets.DOCKERHUB_CONFIG }}
   update-manifest-repo:
     needs: delivery
     runs-on: ubuntu-latest
