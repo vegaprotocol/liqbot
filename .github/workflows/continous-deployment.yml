@@ -1,20 +1,20 @@
 # FILE IS AUTOMATICALLY MANAGED BY github.com/vegaprotocol/terraform//github
 name: "Continous Deployment Workflow"
 "on":
+  
   push:
     tags:
       - v*
-
+  
 jobs:
-  # integration:
-  #   uses: ./.github/workflows/continous-integration.yml
+  integration:
+    uses: ./.github/workflows/continous-integration.yml
   delivery:
-    # needs: integration
+    needs: integration
     uses: ./.github/workflows/continous-delivery.yml
     secrets:
-      USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
-      CONFIG: ${{ secrets.DOCKERHUB_CONFIG }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   update-manifest-repo:
     needs: delivery
     runs-on: ubuntu-latest
@@ -26,15 +26,15 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.VEGA_CI_SSH_KEY }}
       - run: |
-
+          
           version=$(git describe --tags --abbrev=0)
-
+          
           git config --global user.name 'vega-ci-bot'
           git config --global user.email 'dev@vega.xyz'
           git clone git@github.com:vegaprotocol/k8s.git
-
+                    
           echo -n "$version" > k8s/charts/apps/liqbot/stagnet2/VERSION
-
+          
                     (
             cd k8s
             git add -A
