@@ -88,6 +88,22 @@ func (s *store) MarkPrice() *num.Uint {
 	return md.MarkPrice
 }
 
+func (s *store) TargetStake() *num.Uint {
+	md := s.marketDataGet()
+	if md == nil {
+		return num.Zero()
+	}
+	return md.TargetStake
+}
+
+func (s *store) SuppliedStake() *num.Uint {
+	md := s.marketDataGet()
+	if md == nil {
+		return num.Zero()
+	}
+	return md.SuppliedStake
+}
+
 func (s *store) OpenVolume() int64 {
 	resp := make(chan int64)
 	s.openVolumeGetCh <- openVolumeGetReq{resp}

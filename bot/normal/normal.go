@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	dataapipb "code.vegaprotocol.io/protos/data-node/api/v1"
@@ -15,6 +15,7 @@ import (
 	"code.vegaprotocol.io/liqbot/config"
 	"code.vegaprotocol.io/liqbot/data"
 	"code.vegaprotocol.io/liqbot/node"
+	"code.vegaprotocol.io/liqbot/token"
 	"code.vegaprotocol.io/liqbot/types"
 )
 
@@ -22,61 +23,78 @@ import (
 type bot struct {
 	pricingEngine PricingEngine
 	node          tradingDataService
+	locations     []string
 	data          dataStore
 	marketStream  marketStream
+	dataStream    dataStream
 	walletClient  WalletClient
+	tokens        tokenService
 
-	config     config.BotConfig
-	seedConfig *config.SeedConfig
-	log        *log.Entry
+	config      config.BotConfig
+	tokenConfig *config.TokenConfig
+	log         *log.Entry
 
-	stopPosMgmt    chan bool
-	stopPriceSteer chan bool
+	stopPosMgmt     chan bool
+	stopPriceSteer  chan bool
+	pausePosMgmt    chan struct{}
+	pausePriceSteer chan struct{}
 
 	walletPubKey           string // "58595a" ...
 	marketID               string
 	decimalPlaces          int
 	settlementAssetID      string
 	settlementAssetAddress string
+	botPaused              bool
+	mu                     sync.Mutex
 }
 
 // New returns a new instance of bot.
-func New(botConf config.BotConfig, seedConf *config.SeedConfig, pe PricingEngine, wc WalletClient) *bot {
+func New(botConf config.BotConfig, locations []string, seedConf *config.TokenConfig, pe PricingEngine, wc WalletClient) *bot {
 	return &bot{
-		config:     botConf,
-		seedConfig: seedConf,
+		config:      botConf,
+		tokenConfig: seedConf,
 		log: log.WithFields(log.Fields{
 			"bot":  botConf.Name,
-			"node": botConf.Location,
+			"node": locations,
 		}),
-		pricingEngine:  pe,
-		walletClient:   wc,
-		stopPosMgmt:    make(chan bool),
-		stopPriceSteer: make(chan bool),
+		locations:       locations,
+		pricingEngine:   pe,
+		walletClient:    wc,
+		stopPosMgmt:     make(chan bool),
+		stopPriceSteer:  make(chan bool),
+		pausePosMgmt:    make(chan struct{}),
+		pausePriceSteer: make(chan struct{}),
 	}
 }
 
 // Start starts the liquidity bot goroutine(s).
 func (b *bot) Start() error {
-	if err := b.setupWallet(); err != nil {
+	callTimeout := time.Duration(b.config.CallTimeout) * time.Millisecond
+
+	dataNode := node.NewDataNode(
+		b.locations,
+		callTimeout,
+	)
+
+	dataNode.DialConnection(context.Background()) // blocking
+
+	b.node = dataNode
+	b.log = b.log.WithFields(log.Fields{"node": b.node.Target()})
+	b.log.Debug("Connected to Vega gRPC node")
+
+	err := b.setupWallet()
+	if err != nil {
 		return fmt.Errorf("failed to setup wallet: %w", err)
 	}
 
-	dataNode, err := node.NewDataNode(
-		url.URL{Host: b.config.Location},
-		time.Duration(b.config.ConnectTimeout)*time.Millisecond,
-		time.Duration(b.config.CallTimeout)*time.Millisecond,
-	)
+	pauseCh := b.pauseChannel()
+
+	b.marketStream = data.NewMarketStream(dataNode, b.walletPubKey, pauseCh)
+
+	b.tokens, err = token.NewService(b.tokenConfig, b.walletPubKey)
 	if err != nil {
-		return fmt.Errorf("failed to connect to Vega gRPC node: %w", err)
+		return fmt.Errorf("failed to create token service: %w", err)
 	}
-
-	b.node = dataNode
-	b.marketStream = data.NewMarket(dataNode, b.walletPubKey)
-
-	b.log.WithFields(log.Fields{
-		"address": b.config.Location,
-	}).Debug("Connected to Vega gRPC node")
 
 	if err = b.setupMarket(); err != nil {
 		return fmt.Errorf("failed to setup market: %w", err)
@@ -92,7 +110,7 @@ func (b *bot) Start() error {
 	// Use the settlementAssetID to lookup the settlement ethereum address
 	assetResponse, err := b.node.AssetByID(&dataapipb.AssetByIDRequest{Id: b.settlementAssetID})
 	if err != nil {
-		return fmt.Errorf("unable to look up asset details for %s", b.settlementAssetID)
+		return fmt.Errorf("unable to look up asset details for %s: %w", b.settlementAssetID, err)
 	}
 
 	erc20 := assetResponse.Asset.Details.GetErc20()
@@ -101,11 +119,11 @@ func (b *bot) Start() error {
 	}
 
 	store := data.NewStore()
-	stream := data.NewStream(dataNode, store)
 	b.data = store
 
-	if err = stream.InitForData(b.marketID, b.walletPubKey, b.settlementAssetID); err != nil {
-		return fmt.Errorf("failed to initialise data: %w", err)
+	b.dataStream, err = data.NewDataStream(b.marketID, b.walletPubKey, b.settlementAssetID, dataNode, store, pauseCh)
+	if err != nil {
+		return fmt.Errorf("failed to create data stream: %w", err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -121,6 +139,45 @@ func (b *bot) Start() error {
 	}()
 
 	return nil
+}
+
+func (b *bot) pauseChannel() chan types.PauseSignal {
+	in := make(chan types.PauseSignal)
+	go func() {
+		for {
+			select {
+			case p := <-in:
+				if !b.togglePause(p) {
+					return
+				}
+				select {
+				default:
+					b.pausePosMgmt <- struct{}{}
+				}
+				select {
+				default:
+					b.pausePriceSteer <- struct{}{}
+				}
+			}
+		}
+	}()
+	return in
+}
+
+func (b *bot) togglePause(p types.PauseSignal) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if p.Pause && !b.botPaused {
+		b.log.WithFields(log.Fields{"From": p.From}).Info("Pausing bot")
+		b.botPaused = true
+	} else if !p.Pause && b.botPaused {
+		b.log.WithFields(log.Fields{"From": p.From}).Info("Resuming bot")
+		b.botPaused = false
+	} else {
+		return false
+	}
+	return true
 }
 
 // Stop stops the liquidity bot goroutine(s).

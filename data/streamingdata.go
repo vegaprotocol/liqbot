@@ -1,250 +1,269 @@
 package data
 
 import (
+	"context"
 	"fmt"
-	"io"
+	"time"
+
+	"code.vegaprotocol.io/vega/events"
 
 	"code.vegaprotocol.io/liqbot/types"
 	"code.vegaprotocol.io/liqbot/types/num"
+	"code.vegaprotocol.io/liqbot/util"
 
-	dataapipb "code.vegaprotocol.io/protos/data-node/api/v1"
 	"code.vegaprotocol.io/protos/vega"
+	coreapipb "code.vegaprotocol.io/protos/vega/api/v1"
 	eventspb "code.vegaprotocol.io/protos/vega/events/v1"
 	log "github.com/sirupsen/logrus"
 )
 
 type data struct {
-	node              DataNode
 	log               *log.Entry
+	node              DataNode
 	walletPubKey      string
 	marketID          string
 	settlementAssetID string
 	store             dataStore
+	busEvProc         busEventer
 }
 
-func NewStream(node DataNode, store dataStore) *data {
-	return &data{
-		node:  node,
-		log:   log.WithField("module", "DataStreamer"),
-		store: store,
+func NewDataStream(marketID, pubKey, settlementAssetID string, node DataNode, store dataStore, pauseCh chan types.PauseSignal) (*data, error) {
+	d := &data{
+		log:       log.WithField("module", "DataStreamer"),
+		node:      node,
+		store:     store,
+		busEvProc: newBusEventProcessor(node, pauseCh),
 	}
+
+	d.walletPubKey = pubKey
+	d.marketID = marketID
+	d.settlementAssetID = settlementAssetID
+
+	go d.store.cache()
+
+	if err := d.setInitialData(); err != nil {
+		return nil, fmt.Errorf("failed to set initial data: %w", err)
+	}
+
+	d.subscribe()
+	return d, nil
 }
 
-func (s *data) InitForData(marketID, pubKey, settlementAssetID string) error {
-	go s.store.cache()
-
-	s.walletPubKey = pubKey
-	s.marketID = marketID
-	s.settlementAssetID = settlementAssetID
-
-	if err := s.setInitialData(); err != nil {
-		return fmt.Errorf("failed to set initial data: %w", err)
-	}
-
-	if err := s.subscribeToMarketEvents(); err != nil {
-		return fmt.Errorf("failed to subscribeToMarketEvents: %w", err)
-	}
-
-	if err := s.subscribeToAccountEvents(); err != nil {
-		return fmt.Errorf("failed to subscribeToAccountEvents: %w", err)
-	}
-
-	if err := s.subscribePositions(); err != nil {
-		return fmt.Errorf("failed to subscribePositions: %w", err)
-	}
-
-	return nil
+func (d *data) subscribe() {
+	go d.subscribeToMarketEvents()
+	go d.subscribeToAccountEvents()
+	go d.subscribePositions()
 }
 
-func (s *data) setInitialData() error {
+// WaitForDepositFinalize is a blocking call that waits for the deposit finalize event to be received.
+func (d *data) WaitForDepositFinalize(amount *num.Uint) error {
+	req := &coreapipb.ObserveEventBusRequest{
+		Type: []eventspb.BusEventType{
+			eventspb.BusEventType_BUS_EVENT_TYPE_DEPOSIT,
+		},
+		PartyId: d.walletPubKey,
+	}
+
+	proc := func(rsp *coreapipb.ObserveEventBusResponse) (bool, error) {
+		for _, event := range rsp.Events {
+			dep := event.GetDeposit()
+			// filter out any that are for different assets, or not finalized
+			if dep.Asset != d.settlementAssetID || dep.Status != vega.Deposit_STATUS_FINALIZED {
+				continue
+			}
+
+			if dep.Amount == amount.String() {
+				d.log.WithFields(log.Fields{"amount": amount}).Info("Deposit finalized")
+				return true, nil
+			}
+		}
+		return false, nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*40)
+	defer cancel()
+
+	d.busEvProc.processEvents(ctx, "DepositData", req, proc)
+	return ctx.Err()
+}
+
+func (d *data) setInitialData() error {
 	// Collateral
-	balanceGeneral, err := s.getAccountGeneral()
+	balanceGeneral, err := d.getAccountGeneral()
 	if err != nil {
 		return fmt.Errorf("failed to get account general: %w", err)
 	}
 
-	s.store.balanceSet(vega.AccountType_ACCOUNT_TYPE_GENERAL, balanceGeneral)
+	d.store.balanceSet(vega.AccountType_ACCOUNT_TYPE_GENERAL, balanceGeneral)
 
-	balanceMargin, err := s.getAccountMargin()
+	balanceMargin, err := d.getAccountMargin()
 	if err != nil {
 		return fmt.Errorf("failed to get account margin: %w", err)
 	}
 
-	s.store.balanceSet(vega.AccountType_ACCOUNT_TYPE_MARGIN, balanceMargin)
+	d.store.balanceSet(vega.AccountType_ACCOUNT_TYPE_MARGIN, balanceMargin)
 
-	balanceBond, err := s.getAccountBond()
+	balanceBond, err := d.getAccountBond()
 	if err != nil {
 		return fmt.Errorf("failed to get account bond: %w", err)
 	}
 
-	s.store.balanceSet(vega.AccountType_ACCOUNT_TYPE_BOND, balanceBond)
+	d.store.balanceSet(vega.AccountType_ACCOUNT_TYPE_BOND, balanceBond)
 
-	marketData, err := s.getMarketData()
+	marketData, err := d.getMarketData()
 	if err != nil {
 		return fmt.Errorf("failed to get market data: %w", err)
 	}
 
-	currentPrice, err := convertUint256(marketData.StaticMidPrice)
+	currentPrice, err := util.ConvertUint256(marketData.StaticMidPrice)
 	if err != nil {
 		return fmt.Errorf("failed to convert current price: %w", err)
 	}
 
-	s.store.marketDataSet(&types.MarketData{
+	targetStake, err := util.ConvertUint256(marketData.TargetStake)
+	if err != nil {
+		d.log.WithFields(log.Fields{
+			"targetStake": marketData.TargetStake,
+		}).Warning("processEventBusData: failed to unmarshal uint256: error or overflow")
+	}
+
+	suppliedStake, err := util.ConvertUint256(marketData.SuppliedStake)
+	if err != nil {
+		d.log.WithFields(log.Fields{
+			"suppliedStake": marketData.SuppliedStake,
+		}).Warning("processEventBusData: failed to unmarshal uint256: error or overflow")
+	}
+
+	d.store.marketDataSet(&types.MarketData{
 		StaticMidPrice: currentPrice,
 		MarkPrice:      &num.Uint{},
+		TargetStake:    targetStake,
+		SuppliedStake:  suppliedStake,
 		TradingMode:    marketData.MarketTradingMode,
 	})
 
-	openVolume, err := s.getOpenVolume()
+	openVolume, err := d.getOpenVolume()
 	if err != nil {
 		return fmt.Errorf("failed to get open volume: %w", err)
 	}
 
-	s.store.openVolumeSet(openVolume)
+	d.store.openVolumeSet(openVolume)
 
 	return nil
 }
 
-func (s *data) subscribeToMarketEvents() error {
-	req := &dataapipb.ObserveEventBusRequest{
+func (d *data) subscribeToMarketEvents() {
+	req := &coreapipb.ObserveEventBusRequest{
 		Type: []eventspb.BusEventType{
 			eventspb.BusEventType_BUS_EVENT_TYPE_MARKET_DATA,
 		},
-		MarketId: s.marketID,
+		MarketId: d.marketID,
 	}
 
-	proc := func(event *eventspb.BusEvent) bool {
-		marketData := event.GetMarketData()
+	proc := func(rsp *coreapipb.ObserveEventBusResponse) (bool, error) {
+		for _, event := range rsp.Events {
+			marketData := event.GetMarketData()
 
-		markPrice, errOrOverflow := num.UintFromString(marketData.MarkPrice, 10)
-		if errOrOverflow {
-			s.log.WithFields(log.Fields{
-				"markPrice": marketData.MarkPrice,
-			}).Warning("processEventBusData: failed to unmarshal uint256: error or overflow")
+			markPrice, err := util.ConvertUint256(marketData.MarkPrice)
+			if err != nil {
+				d.log.WithFields(log.Fields{
+					"staticMidPrice": marketData.StaticMidPrice,
+				}).Warning("processEventBusData: failed to unmarshal uint256: error or overflow")
+			}
+
+			staticMidPrice, err := util.ConvertUint256(marketData.StaticMidPrice)
+			if err != nil {
+				d.log.WithFields(log.Fields{
+					"staticMidPrice": marketData.StaticMidPrice,
+				}).Warning("processEventBusData: failed to unmarshal uint256: error or overflow")
+			}
+
+			targetStake, err := util.ConvertUint256(marketData.TargetStake)
+			if err != nil {
+				d.log.WithFields(log.Fields{
+					"targetStake": marketData.TargetStake,
+				}).Warning("processEventBusData: failed to unmarshal uint256: error or overflow")
+			}
+
+			suppliedStake, err := util.ConvertUint256(marketData.SuppliedStake)
+			if err != nil {
+				d.log.WithFields(log.Fields{
+					"suppliedStake": marketData.SuppliedStake,
+				}).Warning("processEventBusData: failed to unmarshal uint256: error or overflow")
+			}
+
+			d.store.marketDataSet(&types.MarketData{
+				StaticMidPrice: staticMidPrice,
+				MarkPrice:      markPrice,
+				TargetStake:    targetStake,
+				SuppliedStake:  suppliedStake,
+				TradingMode:    marketData.MarketTradingMode,
+			})
 		}
-
-		staticMidPrice, err := convertUint256(marketData.StaticMidPrice)
-		if err != nil {
-			s.log.WithFields(log.Fields{
-				"staticMidPrice": marketData.StaticMidPrice,
-			}).Warning("processEventBusData: failed to unmarshal uint256: error or overflow")
-		}
-
-		s.store.marketDataSet(&types.MarketData{
-			StaticMidPrice: staticMidPrice,
-			MarkPrice:      markPrice,
-			TradingMode:    marketData.MarketTradingMode,
-		})
-
-		return false
+		return false, nil
 	}
 
-	if err := s.processEvents(req, proc); err != nil {
-		return fmt.Errorf("failed to process market events: %w", err)
-	}
-
-	return nil
+	d.busEvProc.processEvents(context.Background(), "MarketData", req, proc)
 }
 
 // Party related events.
-func (s *data) subscribeToAccountEvents() error {
-	req := &dataapipb.ObserveEventBusRequest{
+func (d *data) subscribeToAccountEvents() {
+	req := &coreapipb.ObserveEventBusRequest{
 		Type: []eventspb.BusEventType{
 			eventspb.BusEventType_BUS_EVENT_TYPE_ACCOUNT,
 		},
-		PartyId: s.walletPubKey,
+		PartyId: d.walletPubKey,
 	}
 
-	proc := func(event *eventspb.BusEvent) bool {
-		acct := event.GetAccount()
-		// Filter out any that are for different assets
-		if acct.Asset != s.settlementAssetID {
-			return false
+	proc := func(rsp *coreapipb.ObserveEventBusResponse) (bool, error) {
+		for _, event := range rsp.Events {
+			acct := event.GetAccount()
+			// filter out any that are for different assets
+			if acct.Asset != d.settlementAssetID {
+				continue
+			}
+
+			bal, err := util.ConvertUint256(acct.Balance)
+			if err != nil {
+				d.log.WithFields(log.Fields{
+					"error":          err,
+					"AccountBalance": acct.Balance,
+				}).Warning("processEventBusData: failed to unmarshal uint256: error or overflow")
+				continue
+			}
+
+			d.store.balanceSet(acct.Type, bal)
 		}
-
-		bal, errOrOverflow := num.UintFromString(acct.Balance, 10)
-		if errOrOverflow {
-			s.log.WithFields(log.Fields{
-				"AccountBalance": acct.Balance,
-			}).Warning("processEventBusData: failed to unmarshal uint256: error or overflow")
-			return false
-		}
-
-		s.store.balanceSet(acct.Type, bal)
-
-		return false
+		return false, nil
 	}
 
-	if err := s.processEvents(req, proc); err != nil {
-		return fmt.Errorf("failed to process account events: %w", err)
-	}
-
-	return nil
+	d.busEvProc.processEvents(context.Background(), "AccountData", req, proc)
 }
 
-func (s *data) subscribePositions() error {
-	stream, err := s.node.PositionsSubscribe(&dataapipb.PositionsSubscribeRequest{
-		MarketId: s.marketID,
-		PartyId:  s.walletPubKey,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to subscribe to positions: %w", err)
+func (d *data) subscribePositions() {
+	req := &coreapipb.ObserveEventBusRequest{
+		Type: []eventspb.BusEventType{
+			eventspb.BusEventType_BUS_EVENT_TYPE_SETTLE_POSITION,
+		},
+		PartyId:  d.walletPubKey,
+		MarketId: d.marketID,
 	}
 
-	go func() {
-		for {
-			o, err := stream.Recv()
-			if err == io.EOF {
-				log.Debugln("positions: stream closed by server err:", err)
-				break
-			}
-			if err != nil {
-				log.Debugln("positions: stream closed err:", err)
-				break
-			}
+	proc := func(ev *coreapipb.ObserveEventBusResponse) (bool, error) {
+		ctx := context.Background()
+		openVolume := d.store.OpenVolume()
 
-			s.store.openVolumeSet(o.GetPosition().OpenVolume)
-		}
-		// Let the app know we have stopped receiving position updates
-		// s.positionStreamLive = false TODO
-	}()
+		for _, event := range ev.Events {
+			posEvt := events.SettlePositionEventFromStream(ctx, event)
 
-	return nil
-}
-
-func (s *data) processEvents(request *dataapipb.ObserveEventBusRequest, cb func(event *eventspb.BusEvent) bool) error {
-	// First we have to create the stream
-	stream, err := s.node.ObserveEventBus()
-	if err != nil {
-		return fmt.Errorf("failed to subscribe to event bus data: %w", err)
-	}
-
-	// Then we subscribe to the data
-	if err = stream.SendMsg(request); err != nil {
-		return fmt.Errorf("unable to send event bus request on the stream: %w", err)
-	}
-
-	go func() {
-		for {
-			eb, err := stream.Recv()
-			if err == io.EOF {
-				s.log.Warning("event bus data: stream closed by server (EOF)")
-				break
-			}
-			if err != nil {
-				s.log.WithFields(log.Fields{
-					"error": err,
-				}).Warning("event bus data: stream closed")
-				break
-			}
-
-			for _, event := range eb.Events {
-				if cb(event) {
-					return
-				}
+			for _, p := range posEvt.Trades() {
+				openVolume += p.Size()
 			}
 		}
-	}()
 
-	return nil
+		d.store.openVolumeSet(openVolume)
+		return false, nil
+	}
+
+	d.busEvProc.processEvents(context.Background(), "PositionData", req, proc)
 }

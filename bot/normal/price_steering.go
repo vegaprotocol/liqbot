@@ -32,12 +32,16 @@ func (b *bot) runPriceSteering(ctx context.Context) {
 
 	for {
 		select {
+		case <-b.pausePriceSteer:
+			b.log.Warning("Price steering paused")
+			<-b.pausePriceSteer
+			b.log.Info("Price steering resumed")
 		case <-b.stopPriceSteer:
 			return
 		case <-ctx.Done():
 			b.log.WithFields(log.Fields{
 				"error": ctx.Err(),
-			}).Warning("Stopped by Position management")
+			}).Warning("Stopped by context")
 			return
 		default:
 			if err := doze(time.Duration(sleepTime)*time.Millisecond, b.stopPriceSteer); err != nil {

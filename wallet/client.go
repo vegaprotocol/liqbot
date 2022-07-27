@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"strings"
 
-	commandspb "code.vegaprotocol.io/protos/vega/commands/v1"
 	walletpb "code.vegaprotocol.io/protos/vega/wallet/v1"
 	"github.com/golang/protobuf/jsonpb"
 
@@ -22,6 +21,8 @@ type Client struct {
 	walletURL string
 	client    *http.Client
 	token     string
+	name      string
+	pass      string
 }
 
 func NewClient(walletURL string) *Client {
@@ -55,7 +56,7 @@ func (c *Client) CreateWallet(ctx context.Context, name, passphrase string) erro
 		return fmt.Errorf("failed to create wallet at vegawallet API: %v", err)
 	}
 
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -77,6 +78,8 @@ func (c *Client) CreateWallet(ctx context.Context, name, passphrase string) erro
 	}
 
 	c.token = result.Token
+	c.name = name
+	c.pass = passphrase
 
 	return nil
 }
@@ -109,7 +112,7 @@ func (c *Client) LoginWallet(ctx context.Context, name, passphrase string) error
 		return fmt.Errorf("failed to login with vegawallet API: %v", err)
 	}
 
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -128,6 +131,8 @@ func (c *Client) LoginWallet(ctx context.Context, name, passphrase string) error
 	}
 
 	c.token = result.Token
+	c.name = name
+	c.pass = passphrase
 
 	return nil
 }
@@ -161,7 +166,7 @@ func (c Client) GenerateKeyPair(ctx context.Context, passphrase string, meta []t
 		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
 
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -204,7 +209,7 @@ func (c *Client) ListPublicKeys(ctx context.Context) ([]string, error) {
 		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
 
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -236,14 +241,14 @@ type SignTxRequest struct {
 	Propagate bool   `json:"propagate"`
 }
 
-func (c *Client) SignTx(ctx context.Context, request *walletpb.SubmitTransactionRequest) (*commandspb.Transaction, error) {
+func (c *Client) SignTx(ctx context.Context, request *walletpb.SubmitTransactionRequest) error {
 	m := jsonpb.Marshaler{Indent: "    "}
 
 	request.Propagate = true
 
 	data, err := m.MarshalToString(request)
 	if err != nil {
-		return nil, fmt.Errorf("couldn't marshal input data: %w", err)
+		return fmt.Errorf("couldn't marshal input data: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(
@@ -253,27 +258,32 @@ func (c *Client) SignTx(ctx context.Context, request *walletpb.SubmitTransaction
 		bytes.NewBuffer([]byte(data)),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
+		return fmt.Errorf("failed to create request: %v", err)
 	}
 
 	req.Header.Add("Authorization", "Bearer "+c.token)
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
+		return fmt.Errorf("failed to create request: %v", err)
 	}
 
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %s", err)
+		return fmt.Errorf("failed to read response body: %s", err)
 	}
 
 	sb := string(body)
 	if strings.Contains(sb, "error") {
-		return nil, fmt.Errorf("error response: %s", sb)
+		if sb == `{"error":"session not found"}` {
+			if err := c.LoginWallet(ctx, c.name, c.pass); err != nil {
+				return fmt.Errorf("failed to login with vegawallet API: %v", err)
+			}
+		}
+		return fmt.Errorf("error response: %s", sb)
 	}
 
-	return nil, nil
+	return nil
 }

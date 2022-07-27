@@ -15,7 +15,6 @@ import (
 	walletpb "code.vegaprotocol.io/protos/vega/wallet/v1"
 	log "github.com/sirupsen/logrus"
 
-	"code.vegaprotocol.io/liqbot/seed"
 	"code.vegaprotocol.io/liqbot/types/num"
 )
 
@@ -87,30 +86,28 @@ func (b *bot) findMarket(markets []*vega.Market) (*vega.Market, error) {
 }
 
 func (b *bot) createMarket(ctx context.Context) (*vega.Market, error) {
-	if err := b.marketStream.Subscribe(); err != nil {
-		return nil, fmt.Errorf("failed to subscribe to market stream: %w", err)
+	b.log.Info("Minting, staking and depositing tokens")
+
+	amount := b.config.StrategyDetails.SeedAmount.Get()
+
+	if err := b.tokens.Deposit(ctx, amount); err != nil {
+		return nil, fmt.Errorf("failed to seed deposit tokens: %w", err)
 	}
 
-	b.log.Debug("minting and staking tokens")
-	seedSvc, err := seed.NewService(b.seedConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create seed service: %w", err)
-	}
-
-	if err = seedSvc.SeedStakeDeposit(ctx, b.walletPubKey); err != nil {
+	if err := b.tokens.Stake(ctx, amount); err != nil {
 		return nil, fmt.Errorf("failed to seed stake tokens: %w", err)
 	}
 
 	b.log.Debug("Waiting for stake to propagate...")
 
-	if err = b.marketStream.WaitForStakeLinking(); err != nil {
+	if err := b.marketStream.WaitForStakeLinking(); err != nil {
 		return nil, fmt.Errorf("failed stake linking: %w", err)
 	}
 
 	b.log.Debug("Successfully linked stake")
 	b.log.Debug("Sending new market proposal")
 
-	if err = b.sendNewMarketProposal(ctx); err != nil {
+	if err := b.sendNewMarketProposal(ctx); err != nil {
 		return nil, fmt.Errorf("failed to send new market proposal: %w", err)
 	}
 
@@ -159,7 +156,7 @@ func (b *bot) sendNewMarketProposal(ctx context.Context) error {
 		Command:   cmd,
 	}
 
-	if _, err := b.walletClient.SignTx(ctx, submitTxReq); err != nil {
+	if err := b.walletClient.SignTx(ctx, submitTxReq); err != nil {
 		return fmt.Errorf("failed to sign transaction: %v", err)
 	}
 
@@ -184,13 +181,14 @@ func (b *bot) sendVote(ctx context.Context, proposalId string, vote bool) error 
 		Command: cmd,
 	}
 
-	if _, err := b.walletClient.SignTx(ctx, submitTxReq); err != nil {
+	if err := b.walletClient.SignTx(ctx, submitTxReq); err != nil {
 		return fmt.Errorf("failed to submit Vote Submission: %w", err)
 	}
 
 	return nil
 }
 
+// TODO: make retryable.
 func (b *bot) submitOrder(
 	ctx context.Context,
 	size uint64,
@@ -236,7 +234,7 @@ func (b *bot) submitOrder(
 		Command: cmd,
 	}
 
-	if _, err := b.walletClient.SignTx(ctx, submitTxReq); err != nil {
+	if err := b.walletClient.SignTx(ctx, submitTxReq); err != nil {
 		return fmt.Errorf("failed to submit OrderSubmission: %w", err)
 	}
 
@@ -269,7 +267,7 @@ func (b *bot) seedOrders(ctx context.Context) error {
 		}
 
 		if err := b.submitOrder(ctx,
-			b.seedConfig.OrderSize,
+			b.config.StrategyDetails.SeedOrderSize,
 			price,
 			side,
 			tif,
