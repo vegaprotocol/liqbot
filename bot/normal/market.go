@@ -188,7 +188,7 @@ func (b *bot) sendVote(ctx context.Context, proposalId string, vote bool) error 
 	return nil
 }
 
-// TODO: make retryable
+// TODO: make retryable.
 func (b *bot) submitOrder(
 	ctx context.Context,
 	size uint64,
