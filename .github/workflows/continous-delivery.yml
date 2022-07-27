@@ -34,7 +34,6 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           context: .
-          build-args: GO_VERSION=${{env.GO_VERSION}}
           push: true
           tags: ghcr.io/${{ github.repository }}:latest,ghcr.io/${{ github.repository }}:${{ github.sha }},ghcr.io/${{ github.repository }}:${{ github.ref_name }}
 
@@ -44,7 +43,6 @@ jobs:
         if: ${{!github.event.repository.private}}
         with:
           context: .
-          build-args: GO_VERSION=${{env.GO_VERSION}}
           push: true
           tags: ${{ github.repository }}:latest,${{ github.repository }}:${{ github.sha }},${{ github.repository }}:${{ github.ref_name }}
 
