@@ -2,6 +2,13 @@
 name: "Continous Delivery Workflow"
 "on":
   workflow_call:
+    secrets:
+      DOCKERHUB_USERNAME:
+        required: true
+      DOCKERHUB_TOKEN:
+        required: true
+      GITHUB_TOKEN:
+        required: true
 
 env:
   GO_VERSION: "1.18.0"
@@ -21,12 +28,10 @@ jobs:
       - name: Log in to the Container registry
         uses: docker/login-action@v2
         if: ${{ !github.event.repository.private }}
-        env:
-          PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
         with:
           registry: registry.hub.docker.com
           username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ env.PASSWORD }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
 
       - name: Log in to the Container registry
