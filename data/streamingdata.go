@@ -206,7 +206,7 @@ func (d *data) subscribeToMarketEvents() {
 	d.busEvProc.processEvents(context.Background(), "MarketData", req, proc)
 }
 
-// Party related events
+// Party related events.
 func (d *data) subscribeToAccountEvents() {
 	req := &coreapipb.ObserveEventBusRequest{
 		Type: []eventspb.BusEventType{
