@@ -27,10 +27,10 @@ type DataNode struct {
 }
 
 // NewDataNode returns a new node.
-func NewDataNode(hosts []string, callTimeout time.Duration) *DataNode {
+func NewDataNode(hosts []string, callTimeoutMil int) *DataNode {
 	return &DataNode{
 		hosts:       hosts,
-		callTimeout: callTimeout,
+		callTimeout: time.Duration(callTimeoutMil) * time.Millisecond,
 		log:         log.WithFields(log.Fields{"service": "DataNode"}),
 	}
 }
@@ -277,29 +277,6 @@ func (n *DataNode) PositionsByParty(req *dataapipb.PositionsByPartyRequest) (res
 	response, err = c.PositionsByParty(ctx, req)
 	if err != nil {
 		err = fmt.Errorf(msg, e.ErrorDetail(err))
-	}
-	return
-}
-
-// PositionsSubscribe opens a stream.
-func (n *DataNode) PositionsSubscribe(req *dataapipb.PositionsSubscribeRequest) (client dataapipb.TradingDataService_PositionsSubscribeClient, err error) {
-	msg := "gRPC call failed: PositionsSubscribe: %w"
-	if n == nil {
-		err = fmt.Errorf(msg, e.ErrNil)
-		return
-	}
-
-	if n.conn.GetState() != connectivity.Ready {
-		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
-		return
-	}
-
-	c := dataapipb.NewTradingDataServiceClient(n.conn)
-	// no timeout on streams
-	client, err = c.PositionsSubscribe(context.Background(), req)
-	if err != nil {
-		err = fmt.Errorf(msg, e.ErrorDetail(err))
-		return
 	}
 	return
 }

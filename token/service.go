@@ -27,7 +27,7 @@ type Service struct {
 	log                     *log.Entry
 }
 
-func NewService(conf *config.TokenConfig, vegaPubKey string) (*Service, error) {
+func NewService(conf *config.TokenConfig, baseTokenAddress, vegaPubKey string) (*Service, error) {
 	ctx := context.Background()
 
 	client, err := vgethereum.NewClient(ctx, conf.EthereumAPIAddress, 1440)
@@ -40,7 +40,7 @@ func NewService(conf *config.TokenConfig, vegaPubKey string) (*Service, error) {
 		vegaPubKey:              vegaPubKey,
 		erc20BridgeAddress:      common.HexToAddress(conf.Erc20BridgeAddress),
 		stakingBridgeAddress:    common.HexToAddress(conf.StakingBridgeAddress),
-		erc20TokenAddress:       common.HexToAddress(conf.ERC20TokenAddress),
+		erc20TokenAddress:       common.HexToAddress(baseTokenAddress),
 		vegaTokenAddress:        common.HexToAddress(conf.VegaTokenAddress),
 		contractOwnerAddress:    common.HexToAddress(conf.ContractOwnerAddress),
 		contractOwnerPrivateKey: conf.ContractOwnerPrivateKey,

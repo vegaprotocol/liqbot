@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-	"time"
 
 	dataapipb "code.vegaprotocol.io/protos/data-node/api/v1"
 	"code.vegaprotocol.io/vegawallet/wallets"
@@ -69,11 +68,9 @@ func New(botConf config.BotConfig, locations []string, seedConf *config.TokenCon
 
 // Start starts the liquidity bot goroutine(s).
 func (b *bot) Start() error {
-	callTimeout := time.Duration(b.config.CallTimeout) * time.Millisecond
-
 	dataNode := node.NewDataNode(
 		b.locations,
-		callTimeout,
+		b.config.CallTimeoutMills,
 	)
 
 	dataNode.DialConnection(context.Background()) // blocking
@@ -91,7 +88,7 @@ func (b *bot) Start() error {
 
 	b.marketStream = data.NewMarketStream(dataNode, b.walletPubKey, pauseCh)
 
-	b.tokens, err = token.NewService(b.tokenConfig, b.walletPubKey)
+	b.tokens, err = token.NewService(b.tokenConfig, b.config.QuoteTokenAddress, b.walletPubKey)
 	if err != nil {
 		return fmt.Errorf("failed to create token service: %w", err)
 	}

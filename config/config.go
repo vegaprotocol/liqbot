@@ -119,14 +119,17 @@ type BotConfig struct {
 	// It is *not* a public key seen by Vega.
 	Name string `yaml:"name"`
 
-	// CallTimeout is the per-call timeout (in milliseconds) for communicating with the Vega node gRPC endpoint.
-	CallTimeout int `yaml:"callTimeout"`
+	// CallTimeoutMills is the per-call timeout (in milliseconds) for communicating with the Vega node gRPC endpoint.
+	CallTimeoutMills int `yaml:"callTimeoutMills"`
 
 	// InstrumentBase is the base asset of the instrument.
 	InstrumentBase string `yaml:"instrumentBase"`
 
 	// InstrumentQuote is the quote asset of the instrument.
 	InstrumentQuote string `yaml:"instrumentQuote"`
+
+	// QuoteTokenAddress is the address of the base token.
+	QuoteTokenAddress string `yaml:"quoteTokenAddress"`
 
 	// Strategy specifies which algorithm the bot is to use.
 	Strategy string `yaml:"strategy"`
@@ -147,7 +150,6 @@ type TokenConfig struct {
 	EthereumAPIAddress      string `yaml:"ethereumAPIAddress"`
 	Erc20BridgeAddress      string `yaml:"erc20BridgeAddress"`
 	StakingBridgeAddress    string `yaml:"stakingBridgeAddress"`
-	ERC20TokenAddress       string `yaml:"erc20TokenAddress"`
 	VegaTokenAddress        string `yaml:"vegaTokenAddress"`
 	ContractOwnerAddress    string `yaml:"contractOwnerAddress"`
 	ContractOwnerPrivateKey string `yaml:"contractOwnerPrivateKey"`
