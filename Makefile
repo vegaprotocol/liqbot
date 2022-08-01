@@ -28,6 +28,10 @@ build: ## install the binary in GOPATH/bin
 
 
 
+.PHONY: build-simple
+build-simple:
+	@env go build -v -o bin/${REPO_NAME} ./cmd/${REPO_NAME}
+
 .PHONY: all
 default: deps build test lint
 
