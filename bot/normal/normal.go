@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -68,16 +70,23 @@ func New(botConf config.BotConfig, locations []string, seedConf *config.TokenCon
 
 // Start starts the liquidity bot goroutine(s).
 func (b *bot) Start() error {
+	setupLogger(false) // TODO: pretty from config?
+
 	dataNode := node.NewDataNode(
 		b.locations,
 		b.config.CallTimeoutMills,
 	)
 
-	dataNode.DialConnection(context.Background()) // blocking
+	b.log.WithFields(
+		log.Fields{
+			"hosts": b.locations,
+		}).Debug("Attempting to connect to Vega gRPC node...")
+
+	dataNode.MustDialConnection(context.Background()) // blocking
 
 	b.node = dataNode
 	b.log = b.log.WithFields(log.Fields{"node": b.node.Target()})
-	b.log.Debug("Connected to Vega gRPC node")
+	b.log.Info("Connected to Vega gRPC node")
 
 	err := b.setupWallet()
 	if err != nil {
@@ -88,7 +97,22 @@ func (b *bot) Start() error {
 
 	b.marketStream = data.NewMarketStream(dataNode, b.walletPubKey, pauseCh)
 
-	b.tokens, err = token.NewService(b.tokenConfig, b.config.QuoteTokenAddress, b.walletPubKey)
+	assetResponse, err := b.node.AssetByID(&dataapipb.AssetByIDRequest{
+		Id: b.config.QuoteTokenID,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to get asset info: %w", err)
+	}
+
+	erc20 := assetResponse.Asset.Details.GetErc20()
+
+	quoteTokenAddress := b.config.QuoteTokenID
+
+	if erc20 != nil {
+		quoteTokenAddress = erc20.ContractAddress
+	}
+
+	b.tokens, err = token.NewService(b.tokenConfig, quoteTokenAddress, b.walletPubKey)
 	if err != nil {
 		return fmt.Errorf("failed to create token service: %w", err)
 	}
@@ -105,14 +129,15 @@ func (b *bot) Start() error {
 	}).Info("Fetched market info")
 
 	// Use the settlementAssetID to lookup the settlement ethereum address
-	assetResponse, err := b.node.AssetByID(&dataapipb.AssetByIDRequest{Id: b.settlementAssetID})
+	assetResponse, err = b.node.AssetByID(&dataapipb.AssetByIDRequest{Id: b.settlementAssetID})
 	if err != nil {
 		return fmt.Errorf("unable to look up asset details for %s: %w", b.settlementAssetID, err)
 	}
 
-	erc20 := assetResponse.Asset.Details.GetErc20()
-	if erc20 != nil {
+	if erc20 := assetResponse.Asset.Details.GetErc20(); erc20 != nil {
 		b.settlementAssetAddress = erc20.ContractAddress
+	} else {
+		b.settlementAssetAddress = b.settlementAssetID
 	}
 
 	store := data.NewStore()
@@ -136,6 +161,24 @@ func (b *bot) Start() error {
 	}()
 
 	return nil
+}
+
+func setupLogger(pretty bool) {
+	log.SetReportCaller(true)
+	log.SetFormatter(&log.JSONFormatter{
+		CallerPrettyfier: func(f *runtime.Frame) (string, string) {
+			filename := path.Base(f.File)
+			function := strings.ReplaceAll(f.Function, "code.vegaprotocol.io/", "")
+			idx := strings.Index(function, ".")
+			function = fmt.Sprintf("%s/%s/%s():%d", function[:idx], filename, function[idx+1:], f.Line)
+			return function, ""
+		},
+		PrettyPrint: pretty,
+		DataKey:     "_vals",
+		FieldMap: log.FieldMap{
+			log.FieldKeyMsg: "_msg",
+		},
+	})
 }
 
 func (b *bot) pauseChannel() chan types.PauseSignal {
@@ -212,13 +255,13 @@ func (b *bot) setupWallet() error {
 			if err = b.walletClient.CreateWallet(ctx, b.config.Name, walletPassphrase); err != nil {
 				return fmt.Errorf("failed to create wallet: %w", err)
 			}
-			b.log.Debug("Created and logged into wallet")
+			b.log.Info("Created and logged into wallet")
 		} else {
 			return fmt.Errorf("failed to log into wallet: %w", err)
 		}
 	}
 
-	b.log.Debug("Logged into wallet")
+	b.log.Info("Logged into wallet")
 
 	if b.walletPubKey == "" {
 		publicKeys, err := b.walletClient.ListPublicKeys(ctx)

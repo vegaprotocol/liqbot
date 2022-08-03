@@ -89,26 +89,12 @@ func (d *data) WaitForDepositFinalize(amount *num.Uint) error {
 
 func (d *data) setInitialData() error {
 	// Collateral
-	balanceGeneral, err := d.getAccountGeneral()
+	balance, err := d.getAccount()
 	if err != nil {
 		return fmt.Errorf("failed to get account general: %w", err)
 	}
 
-	d.store.balanceSet(vega.AccountType_ACCOUNT_TYPE_GENERAL, balanceGeneral)
-
-	balanceMargin, err := d.getAccountMargin()
-	if err != nil {
-		return fmt.Errorf("failed to get account margin: %w", err)
-	}
-
-	d.store.balanceSet(vega.AccountType_ACCOUNT_TYPE_MARGIN, balanceMargin)
-
-	balanceBond, err := d.getAccountBond()
-	if err != nil {
-		return fmt.Errorf("failed to get account bond: %w", err)
-	}
-
-	d.store.balanceSet(vega.AccountType_ACCOUNT_TYPE_BOND, balanceBond)
+	d.store.balanceInit(balance)
 
 	marketData, err := d.getMarketData()
 	if err != nil {
@@ -226,7 +212,7 @@ func (d *data) subscribeToAccountEvents() {
 			bal, err := util.ConvertUint256(acct.Balance)
 			if err != nil {
 				d.log.WithFields(log.Fields{
-					"error":          err,
+					"error":          err.Error(),
 					"AccountBalance": acct.Balance,
 				}).Warning("processEventBusData: failed to unmarshal uint256: error or overflow")
 				continue

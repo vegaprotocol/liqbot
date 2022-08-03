@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"time"
+
+	log "github.com/sirupsen/logrus"
 
 	vgethereum "code.vegaprotocol.io/shared/libs/ethereum"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -24,13 +26,19 @@ type Service struct {
 	vegaTokenAddress        common.Address
 	contractOwnerAddress    common.Address
 	contractOwnerPrivateKey string
+	syncTimeout             *time.Duration
 	log                     *log.Entry
 }
 
 func NewService(conf *config.TokenConfig, baseTokenAddress, vegaPubKey string) (*Service, error) {
 	ctx := context.Background()
 
-	client, err := vgethereum.NewClient(ctx, conf.EthereumAPIAddress, 1440)
+	var syncTimeout time.Duration
+	if conf.SyncTimeoutSec != 0 {
+		syncTimeout = time.Duration(conf.SyncTimeoutSec) * time.Second
+	}
+
+	client, err := vgethereum.NewClient(ctx, conf.EthereumAPIAddress, conf.ChainID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Ethereum client: %w", err)
 	}
@@ -44,17 +52,18 @@ func NewService(conf *config.TokenConfig, baseTokenAddress, vegaPubKey string) (
 		vegaTokenAddress:        common.HexToAddress(conf.VegaTokenAddress),
 		contractOwnerAddress:    common.HexToAddress(conf.ContractOwnerAddress),
 		contractOwnerPrivateKey: conf.ContractOwnerPrivateKey,
-		log:                     log.WithFields(log.Fields{"service": "token"}),
+		syncTimeout:             &syncTimeout,
+		log:                     log.WithFields(log.Fields{"service": "Token"}),
 	}, nil
 }
 
 func (s *Service) Stake(ctx context.Context, amount *num.Uint) error {
-	stakingBridge, err := s.client.NewStakingBridgeSession(ctx, s.contractOwnerPrivateKey, s.stakingBridgeAddress, nil)
+	stakingBridge, err := s.client.NewStakingBridgeSession(ctx, s.contractOwnerPrivateKey, s.stakingBridgeAddress, s.syncTimeout)
 	if err != nil {
 		return fmt.Errorf("failed to create staking bridge: %w", err)
 	}
 
-	vegaToken, err := s.client.NewBaseTokenSession(ctx, s.contractOwnerPrivateKey, s.vegaTokenAddress, nil)
+	vegaToken, err := s.client.NewBaseTokenSession(ctx, s.contractOwnerPrivateKey, s.vegaTokenAddress, s.syncTimeout)
 	if err != nil {
 		return fmt.Errorf("failed to create vega token: %w", err)
 	}
@@ -73,12 +82,12 @@ func (s *Service) Stake(ctx context.Context, amount *num.Uint) error {
 }
 
 func (s *Service) Deposit(ctx context.Context, amount *num.Uint) error {
-	erc20Token, err := s.client.NewBaseTokenSession(ctx, s.contractOwnerPrivateKey, s.erc20TokenAddress, nil)
+	erc20Token, err := s.client.NewBaseTokenSession(ctx, s.contractOwnerPrivateKey, s.erc20TokenAddress, s.syncTimeout)
 	if err != nil {
 		return fmt.Errorf("failed to create ERC20 token: %w", err)
 	}
 
-	erc20bridge, err := s.client.NewERC20BridgeSession(ctx, s.contractOwnerPrivateKey, s.erc20BridgeAddress, nil)
+	erc20bridge, err := s.client.NewERC20BridgeSession(ctx, s.contractOwnerPrivateKey, s.erc20BridgeAddress, s.syncTimeout)
 	if err != nil {
 		return fmt.Errorf("failed to create staking bridge: %w", err)
 	}
@@ -116,7 +125,7 @@ func (s *Service) mintToken(token token, address common.Address, amount *big.Int
 			"address": address,
 		}).Debug("Minting new token")
 
-	if _, err := token.MintSync(address, amount); err != nil {
+	if _, err = token.MintSync(address, amount); err != nil {
 		return fmt.Errorf("failed to call Mint contract: %w", err)
 	}
 

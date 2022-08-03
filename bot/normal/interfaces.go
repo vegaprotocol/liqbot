@@ -44,6 +44,7 @@ type dataStore interface {
 	MarkPrice() *num.Uint
 	OpenVolume() int64
 }
+
 type marketStream interface {
 	WaitForStakeLinking() error
 	WaitForProposalID() (string, error)

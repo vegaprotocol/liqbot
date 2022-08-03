@@ -196,7 +196,8 @@ func (b *bot) submitOrder(
 	side vega.Side,
 	tif vega.Order_TimeInForce,
 	orderType vega.Order_Type,
-	reference string,
+	reference,
+	from string,
 	secondsFromNow int64,
 ) error {
 	cmd := &walletpb.SubmitTransactionRequest_OrderSubmission{
@@ -217,9 +218,9 @@ func (b *bot) submitOrder(
 		"reference": reference,
 		"size":      size,
 		"side":      side,
-		"price":     price,
+		"price":     price.String(),
 		"tif":       tif.String(),
-	}).Debug("Submitting order")
+	}).Debugf("%s: Submitting order", from)
 
 	if tif == vega.Order_TIME_IN_FORCE_GTT {
 		cmd.OrderSubmission.ExpiresAt = time.Now().UnixNano() + (secondsFromNow * 1000000000)
@@ -241,8 +242,8 @@ func (b *bot) submitOrder(
 	return nil
 }
 
-func (b *bot) seedOrders(ctx context.Context) error {
-	b.log.Debug("Seeding orders")
+func (b *bot) seedOrders(ctx context.Context, from string) error {
+	b.log.Debugf("%s: Seeding orders", from)
 
 	externalPrice, err := b.getExternalPrice()
 	if err != nil {
@@ -273,6 +274,7 @@ func (b *bot) seedOrders(ctx context.Context) error {
 			tif,
 			vega.Order_TYPE_LIMIT,
 			"MarketCreation",
+			from,
 			int64(b.config.StrategyDetails.PosManagementFraction),
 		); err != nil {
 			return fmt.Errorf("failed to create seed order: %w", err)
@@ -285,7 +287,7 @@ func (b *bot) seedOrders(ctx context.Context) error {
 		}
 	}
 
-	b.log.Debug("Seeding orders finished")
+	b.log.Debugf("%s: Seeding orders finished", from)
 	return nil
 }
 
@@ -342,7 +344,7 @@ func (b *bot) getExampleMarket() *vega.NewMarket {
 func (b *bot) getExampleProduct() *vega.InstrumentConfiguration_Future {
 	return &vega.InstrumentConfiguration_Future{
 		Future: &vega.FutureProduct{
-			SettlementAsset: b.config.SettlementAsset,
+			SettlementAsset: b.config.SettlementAssetID,
 			QuoteName:       fmt.Sprintf("%s%s", b.config.InstrumentBase, b.config.InstrumentQuote),
 			OracleSpecForSettlementPrice: &oraclesv1.OracleSpecConfiguration{
 				PubKeys: []string{"0xDEADBEEF"},

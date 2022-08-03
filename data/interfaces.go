@@ -19,11 +19,12 @@ type DataNode interface {
 	PartyAccounts(req *dataapipb.PartyAccountsRequest) (response *dataapipb.PartyAccountsResponse, err error)
 	MarketDataByID(req *dataapipb.MarketDataByIDRequest) (response *dataapipb.MarketDataByIDResponse, err error)
 	PositionsByParty(req *dataapipb.PositionsByPartyRequest) (response *dataapipb.PositionsByPartyResponse, err error)
-	DialConnection(ctx context.Context) chan struct{}
+	MustDialConnection(ctx context.Context)
 }
 
 type dataStore interface {
 	balanceSet(typ vega.AccountType, bal *num.Uint)
+	balanceInit(balance *types.Balance)
 	marketDataSet(marketData *types.MarketData)
 	openVolumeSet(openVolume int64)
 	cache()

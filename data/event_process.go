@@ -55,7 +55,7 @@ func (b *busEventProcessor) processEvents(
 
 				b.log.WithFields(
 					log.Fields{
-						"error": err,
+						"error": err.Error(),
 						"name":  name,
 					},
 				).Warningf("Stream closed, resubscribing...")
@@ -69,7 +69,7 @@ func (b *busEventProcessor) processEvents(
 			stop, err = process(rsp)
 			if err != nil {
 				b.log.WithFields(log.Fields{
-					"error": err,
+					"error": err.Error(),
 					"name":  name,
 				}).Warning("Unable to process event")
 			}
@@ -94,11 +94,11 @@ func (b *busEventProcessor) mustGetStream(
 		if errors.Unwrap(err).Error() == e.ErrConnectionNotReady.Error() {
 			b.log.WithFields(log.Fields{
 				"name":    name,
-				"error":   err,
+				"error":   err.Error(),
 				"attempt": attempt,
 			}).Warning("Node is not ready, reconnecting")
 
-			<-b.node.DialConnection(ctx)
+			b.node.MustDialConnection(ctx)
 
 			b.log.WithFields(log.Fields{
 				"name":    name,
@@ -115,7 +115,7 @@ func (b *busEventProcessor) mustGetStream(
 
 			b.log.WithFields(log.Fields{
 				"name":    name,
-				"error":   err,
+				"error":   err.Error(),
 				"attempt": attempt,
 			}).Errorf("Failed to subscribe to stream, retrying in %s...", sleepTime)
 

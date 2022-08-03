@@ -8,8 +8,9 @@ import (
 )
 
 type store struct {
-	balanceGetCh chan balanceGetReq
-	balanceSetCh chan balanceSetReq
+	balanceGetCh  chan balanceGetReq
+	balanceInitCh chan balanceInitReq
+	balanceSetCh  chan balanceSetReq
 
 	marketDataGetCh chan marketDataGetReq
 	marketDataSetCh chan marketDataSetReq
@@ -21,6 +22,7 @@ type store struct {
 func NewStore() *store {
 	return &store{
 		balanceGetCh:    make(chan balanceGetReq),
+		balanceInitCh:   make(chan balanceInitReq),
 		balanceSetCh:    make(chan balanceSetReq),
 		marketDataGetCh: make(chan marketDataGetReq),
 		marketDataSetCh: make(chan marketDataSetReq),
@@ -31,6 +33,10 @@ func NewStore() *store {
 
 type balanceGetReq struct {
 	resp chan *types.Balance
+}
+
+type balanceInitReq struct {
+	balance *types.Balance
 }
 
 type balanceSetReq struct {
@@ -110,6 +116,10 @@ func (s *store) OpenVolume() int64 {
 	return <-resp
 }
 
+func (s *store) balanceInit(balance *types.Balance) {
+	s.balanceInitCh <- balanceInitReq{balance: balance}
+}
+
 func (s *store) balanceSet(typ vega.AccountType, bal *num.Uint) {
 	s.balanceSetCh <- balanceSetReq{typ: typ, balance: bal.Clone()}
 }
@@ -152,6 +162,8 @@ func (s *store) cache() {
 			case vega.AccountType_ACCOUNT_TYPE_BOND:
 				d.balance.Bond = req.balance
 			}
+		case req := <-s.balanceInitCh:
+			d.balance = req.balance
 		case req := <-s.marketDataGetCh:
 			if d.marketData != nil {
 				mdVal := *d.marketData
@@ -164,7 +176,6 @@ func (s *store) cache() {
 		case req := <-s.openVolumeSetCh:
 			d.openVolume = req.openVolume
 		default:
-			// Do nothing
 		}
 	}
 }

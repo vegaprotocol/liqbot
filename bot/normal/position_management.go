@@ -14,13 +14,15 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"code.vegaprotocol.io/liqbot/types/num"
+	"code.vegaprotocol.io/liqbot/util"
 )
 
+// TODO: maybe after staking, deposit back the same amount as staked.
 func (b *bot) runPositionManagement(ctx context.Context) {
-	defer b.log.Warning("Position management stopped")
+	defer b.log.Warning("PositionManagement: Stopped")
 
 	if err := b.prePositionManagement(ctx); err != nil {
-		b.log.WithFields(log.Fields{"error": err.Error()}).Warning("Failed to init position management")
+		b.log.WithFields(log.Fields{"error": err.Error()}).Error("PositionManagement: Failed to initialize")
 		return
 	}
 
@@ -30,15 +32,15 @@ func (b *bot) runPositionManagement(ctx context.Context) {
 	for {
 		select {
 		case <-b.pausePosMgmt:
-			b.log.Warning("Position management paused")
+			b.log.Warning("PositionManagement: Paused")
 			<-b.pausePosMgmt
-			b.log.Info("Position management resumed")
+			b.log.Info("PositionManagement: Resumed")
 		case <-b.stopPosMgmt:
 			return
 		case <-ctx.Done():
 			b.log.WithFields(log.Fields{
 				"error": ctx.Err(),
-			}).Warning("Stopped by context")
+			}).Warning("PositionManagement: Stopped by context")
 			return
 		default:
 			err := doze(sleepTime, b.stopPosMgmt)
@@ -49,86 +51,116 @@ func (b *bot) runPositionManagement(ctx context.Context) {
 			// Only update liquidity and position if we are not in auction
 			if !b.canPlaceOrders() {
 				if err := b.ensureCommitmentAmount(ctx); err != nil {
-					b.log.WithFields(log.Fields{"error": err.Error()}).Warning("Failed to update commitment amount")
+					b.log.WithFields(log.Fields{"error": err.Error()}).Warning("PositionManagement: Failed to update commitment amount")
 				}
 
 				if err = b.placeAuctionOrders(ctx); err != nil {
-					b.log.WithFields(log.Fields{"error": err.Error()}).Warning("Failed to place auction orders")
+					b.log.WithFields(log.Fields{"error": err.Error()}).Warning("PositionManagement: Failed to place auction orders")
 				}
 				continue
 			}
 
 			previousOpenVolume, err = b.manageDirection(ctx, previousOpenVolume)
 			if err != nil {
-				b.log.WithFields(log.Fields{"error": err.Error()}).Warning("Failed to change LP direction")
+				b.log.WithFields(log.Fields{"error": err.Error()}).Warning("PositionManagement: Failed to change LP direction")
 			}
 
 			if err = b.managePosition(ctx); err != nil {
-				b.log.WithFields(log.Fields{"error": err.Error()}).Warning("Failed to manage position")
+				b.log.WithFields(log.Fields{"error": err.Error()}).Warning("PositionManagement: Failed to manage position")
 			}
 		}
 	}
 }
 
 func (b *bot) ensureCommitmentAmount(ctx context.Context) error {
-	suppliedStake := b.data.SuppliedStake()
-	targetStake := b.data.TargetStake()
-
-	if suppliedStake.IsZero() {
-		return fmt.Errorf("no stake supplied")
+	requiredCommitment, err := b.getRequiredCommitment()
+	if err != nil {
+		return fmt.Errorf("failed to get new commitment amount: %w", err)
 	}
 
-	if suppliedStake.GT(targetStake) {
+	if requiredCommitment.IsZero() {
 		return nil
 	}
 
-	newCommitmentAmount := num.Zero().Mul(targetStake, num.NewUint(2))
-	balanceTotal := b.data.Balance().Total()
-
 	b.log.WithFields(
 		log.Fields{
-			"suppliedStake": suppliedStake,
-			"targetStake":   targetStake,
-			"balanceTotal":  balanceTotal,
-			"newCommitment": newCommitmentAmount,
+			"newCommitment": requiredCommitment.String(),
 		},
-	).Debug("Supplied stake is less than target stake, increasing commitment amount...")
+	).Debug("PositionManagement: Supplied stake is less than target stake, increasing commitment amount...")
 
-	if dx := num.Zero().Sub(newCommitmentAmount, balanceTotal); dx.GT(num.Zero()) {
-		depositAmount := num.Zero().Mul(dx, num.NewUint(2))
-
-		b.log.WithFields(
-			log.Fields{
-				"balanceTotal":  balanceTotal,
-				"newCommitment": newCommitmentAmount,
-				"delta":         dx,
-				"depositAmount": depositAmount,
-			}).Debug("Account balance is less than new commitment amount, depositing...")
-
-		if err := b.tokens.Deposit(ctx, depositAmount); err != nil {
-			// "VM Exception while processing transaction: revert" could mean amount is too high
-			return fmt.Errorf("failed to deposit tokens: %w", err)
-		}
-
-		b.log.Debug("Waiting for deposit to be finalized...")
-
-		if err := b.dataStream.WaitForDepositFinalize(depositAmount); err != nil {
-			return fmt.Errorf("failed to finalize deposit: %w", err)
-		}
+	if err = b.ensureBalance(ctx, requiredCommitment); err != nil {
+		return fmt.Errorf("failed to ensure balance: %w", err)
 	}
 
 	buys, sells, _ := b.getShape()
 
 	b.log.WithFields(
 		log.Fields{
-			"newCommitment": newCommitmentAmount,
+			"newCommitment": requiredCommitment.String(),
 		},
-	).Debug("Sending new commitment amount...")
+	).Debug("PositionManagement: Sending new commitment amount...")
 
-	if err := b.sendLiquidityProvisionAmendment(ctx, newCommitmentAmount, buys, sells); err != nil {
+	if err = b.sendLiquidityProvisionAmendment(ctx, requiredCommitment, buys, sells); err != nil {
 		return fmt.Errorf("failed to update commitment amount: %w", err)
 	}
 
+	return nil
+}
+
+func (b *bot) getRequiredCommitment() (*num.Uint, error) {
+	suppliedStake := b.data.SuppliedStake().Clone()
+	targetStake := b.data.TargetStake().Clone()
+
+	b.log.WithFields(log.Fields{
+		"suppliedStake": suppliedStake.String(),
+		"targetStake":   targetStake.String(),
+	}).Debug("PositionManagement: Checking for required commitment")
+
+	if targetStake.IsZero() {
+		var err error
+		targetStake, err = util.ConvertUint256(b.config.StrategyDetails.CommitmentAmount)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert commitment amount: %w", err)
+		}
+	}
+
+	dx := suppliedStake.Int().Sub(targetStake.Int())
+
+	if dx.IsPositive() {
+		return num.Zero(), nil
+	}
+
+	return num.Zero().Add(targetStake, dx.Uint()), nil
+}
+
+func (b *bot) ensureBalance(ctx context.Context, targetAmount *num.Uint) error {
+	balanceTotal := b.data.Balance().Total() // TODO: should it be total balance?
+	dx := balanceTotal.Int().Sub(targetAmount.Int())
+
+	if dx.IsPositive() {
+		return nil
+	}
+
+	depositAmount := num.Zero().Add(targetAmount, dx.Uint())
+
+	b.log.WithFields(
+		log.Fields{
+			"balanceTotal":  balanceTotal.String(),
+			"targetAmount":  targetAmount.String(),
+			"delta":         dx.String(),
+			"depositAmount": depositAmount.String(),
+		}).Debug("PositionManagement: Account balance is less than target amount, depositing...")
+
+	if err := b.tokens.Deposit(ctx, depositAmount); err != nil {
+		// "VM Exception while processing transaction: revert" could mean amount is too high
+		return fmt.Errorf("failed to deposit tokens: %w", err)
+	}
+
+	b.log.Debug("PositionManagement: Waiting for deposit to be finalized...")
+
+	if err := b.dataStream.WaitForDepositFinalize(depositAmount); err != nil {
+		return fmt.Errorf("failed to finalize deposit: %w", err)
+	}
 	return nil
 }
 
@@ -140,18 +172,25 @@ func (b *bot) manageDirection(ctx context.Context, previousOpenVolume int64) (in
 		"openVolume":         b.data.OpenVolume(),
 		"previousOpenVolume": previousOpenVolume,
 		"shape":              shape,
-	}).Debug("Checking for direction change")
+	}).Debug("PositionManagement: Checking for direction change")
 
 	// If we flipped then send the new LP order
 	if !b.shouldAmend(openVolume, previousOpenVolume) {
 		return openVolume, nil
 	}
 
-	b.log.WithFields(log.Fields{"shape": shape}).Debug("Flipping LP direction")
+	b.log.WithFields(log.Fields{"shape": shape}).Debug("PositionManagement: Flipping LP direction")
 
-	commitment := b.data.Balance().Total()
+	commitment, err := b.getRequiredCommitment()
+	if err != nil {
+		return openVolume, fmt.Errorf("failed to get required commitment amount: %w", err)
+	}
 
-	if err := b.sendLiquidityProvisionAmendment(ctx, commitment, buyShape, sellShape); err != nil {
+	if err = b.ensureBalance(ctx, commitment); err != nil {
+		return openVolume, fmt.Errorf("failed to ensure balance: %w", err)
+	}
+
+	if err = b.sendLiquidityProvisionAmendment(ctx, commitment, buyShape, sellShape); err != nil {
 		return openVolume, fmt.Errorf("failed to send liquidity provision amendment: %w", err)
 	}
 
@@ -164,16 +203,19 @@ func (b *bot) shouldAmend(openVolume, previousOpenVolume int64) bool {
 
 func (b *bot) managePosition(ctx context.Context) error {
 	size, side, shouldPlace := b.checkPosition()
+	b.log.WithFields(log.Fields{
+		"currentPrice":   b.data.MarkPrice().String(),
+		"balanceGeneral": b.data.Balance().General.String(),
+		"balanceMargin":  b.data.Balance().Margin.String(),
+		"openVolume":     b.data.OpenVolume(),
+		"size":           size,
+		"side":           side,
+		"shouldPlace":    shouldPlace,
+	}).Debug("PositionManagement: Checking for position management")
+
 	if !shouldPlace {
 		return nil
 	}
-
-	b.log.WithFields(log.Fields{
-		"currentPrice":   b.data.MarkPrice(),
-		"balanceGeneral": b.data.Balance().General,
-		"balanceMargin":  b.data.Balance().Margin,
-		"openVolume":     b.data.OpenVolume(),
-	}).Debug("Position management info")
 
 	if err := b.submitOrder(
 		ctx,
@@ -183,6 +225,7 @@ func (b *bot) managePosition(ctx context.Context) error {
 		vega.Order_TIME_IN_FORCE_IOC,
 		vega.Order_TYPE_MARKET,
 		"PosManagement",
+		"PositionManagement",
 		0,
 	); err != nil {
 		return fmt.Errorf("failed to place order: %w", err)
@@ -205,14 +248,19 @@ func (b *bot) sendLiquidityProvision(ctx context.Context, commitment *num.Uint, 
 		},
 	}
 
+	b.log.WithFields(log.Fields{
+		"commitment":   commitment.String(),
+		"balanceTotal": b.data.Balance().Total().String(),
+	}).Debug("PositionManagement: Submitting LiquidityProvisionSubmission...")
+
 	if err := b.walletClient.SignTx(ctx, submitTxReq); err != nil {
 		return fmt.Errorf("failed to submit LiquidityProvisionSubmission: %w", err)
 	}
 
 	b.log.WithFields(log.Fields{
-		"commitment":   commitment,
-		"balanceTotal": b.data.Balance().Total(),
-	}).Debug("Submitted LiquidityProvisionSubmission")
+		"commitment":   commitment.String(),
+		"balanceTotal": b.data.Balance().Total().String(),
+	}).Debug("PositionManagement: Submitted LiquidityProvisionSubmission")
 	return nil
 }
 
@@ -240,8 +288,8 @@ func (b *bot) sendLiquidityProvisionAmendment(ctx context.Context, commitment *n
 	}
 
 	b.log.WithFields(log.Fields{
-		"commitment": commitment,
-	}).Debug("Submitted LiquidityProvisionAmendment")
+		"commitment": commitment.String(),
+	}).Debug("PositionManagement: Submitted LiquidityProvisionAmendment")
 	return nil
 }
 
@@ -261,8 +309,8 @@ func (b *bot) sendLiquidityProvisionCancellation(ctx context.Context) error {
 
 	b.log.WithFields(log.Fields{
 		"commitment":   "0",
-		"balanceTotal": b.data.Balance().Total(),
-	}).Debug("Submitted LiquidityProvisionAmendment")
+		"balanceTotal": b.data.Balance().Total().String(),
+	}).Debug("PositionManagement: Submitted LiquidityProvisionAmendment")
 
 	return nil
 }
@@ -295,10 +343,22 @@ func (b *bot) prePositionManagement(ctx context.Context) error {
 		return fmt.Errorf("failed initial margin check: %w", err)
 	}
 
-	commitment := b.data.Balance().Total()
+	commitment, err := b.getRequiredCommitment()
+	if err != nil {
+		return fmt.Errorf("failed to get required commitment: %w", err)
+	}
+
+	// TODO: is this ok?
+	if commitment.IsZero() {
+		return nil
+	}
+
+	if err = b.ensureBalance(ctx, commitment); err != nil {
+		return fmt.Errorf("failed to ensure balance: %w", err)
+	}
 
 	// Submit LP order to market.
-	if err := b.sendLiquidityProvision(ctx, commitment, buyShape, sellShape); err != nil {
+	if err = b.sendLiquidityProvision(ctx, commitment, buyShape, sellShape); err != nil {
 		return fmt.Errorf("failed to send liquidity provision order: %w", err)
 	}
 
@@ -347,11 +407,11 @@ func (b *bot) checkInitialMargin(buyShape, sellShape []*vega.LiquidityOrder) err
 	}
 
 	b.log.WithFields(log.Fields{
-		"available":      avail,
-		"cost":           shapeMarginCost,
-		"missing":        num.Zero().Sub(avail, shapeMarginCost),
+		"available":      avail.String(),
+		"cost":           shapeMarginCost.String(),
+		"missing":        num.Zero().Sub(avail, shapeMarginCost).String(),
 		"missingPercent": missingPercent,
-	}).Error("Not enough collateral to safely keep orders up given current price, risk parameters and supplied default shapes.")
+	}).Error("PositionManagement: Not enough collateral to safely keep orders up given current price, risk parameters and supplied default shapes.")
 
 	return errors.New("not enough collateral")
 }
@@ -361,11 +421,11 @@ func (b *bot) checkInitialMargin(buyShape, sellShape []*vega.LiquidityOrder) err
 func (b *bot) placeAuctionOrders(ctx context.Context) error {
 	// Check if we have a currentPrice we can use
 	if b.data.MarkPrice().IsZero() {
-		b.log.Debug("No current price to place auction orders")
+		b.log.Debug("PositionManagement: No current price to place auction orders")
 		return nil
 	}
 
-	b.log.WithFields(log.Fields{"currentPrice": b.data.MarkPrice()}).Debug("Placing auction orders")
+	b.log.WithFields(log.Fields{"currentPrice": b.data.MarkPrice().String()}).Debug("PositionManagement: Placing auction orders")
 
 	// Place the random orders split into
 	totalVolume := num.Zero()
@@ -389,7 +449,7 @@ func (b *bot) placeAuctionOrders(ctx context.Context) error {
 		orderType := vega.Order_TYPE_LIMIT
 		ref := "AuctionOrder"
 
-		if err := b.submitOrder(ctx, size.Uint64(), price, side, tif, orderType, ref, 330); err != nil {
+		if err := b.submitOrder(ctx, size.Uint64(), price, side, tif, orderType, ref, "PositionManagement", 330); err != nil {
 			// We failed to send an order so stop trying to send anymore
 			return fmt.Errorf("failed to send auction order: %w", err)
 		}
@@ -397,7 +457,7 @@ func (b *bot) placeAuctionOrders(ctx context.Context) error {
 		totalVolume = num.Zero().Add(totalVolume, size)
 	}
 
-	b.log.WithFields(log.Fields{"totalVolume": totalVolume}).Debug("Placed auction orders")
+	b.log.WithFields(log.Fields{"totalVolume": totalVolume.String()}).Debug("PositionManagement: Placed auction orders")
 
 	return nil
 }

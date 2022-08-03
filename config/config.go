@@ -128,14 +128,14 @@ type BotConfig struct {
 	// InstrumentQuote is the quote asset of the instrument.
 	InstrumentQuote string `yaml:"instrumentQuote"`
 
-	// QuoteTokenAddress is the address of the base token.
-	QuoteTokenAddress string `yaml:"quoteTokenAddress"`
+	// QuoteTokenID is the id of the base token.
+	QuoteTokenID string `yaml:"quoteTokenID"`
 
 	// Strategy specifies which algorithm the bot is to use.
 	Strategy string `yaml:"strategy"`
 
-	// SettlementAsset is the asset used for settlement.
-	SettlementAsset string `yaml:"settlementAsset"`
+	// SettlementAssetID is the asset used for settlement.
+	SettlementAssetID string `yaml:"settlementAssetID"`
 
 	// StrategyDetails contains the parameters needed by the strategy algorithm.
 	StrategyDetails Strategy `yaml:"strategyDetails"`
@@ -153,4 +153,6 @@ type TokenConfig struct {
 	VegaTokenAddress        string `yaml:"vegaTokenAddress"`
 	ContractOwnerAddress    string `yaml:"contractOwnerAddress"`
 	ContractOwnerPrivateKey string `yaml:"contractOwnerPrivateKey"`
+	ChainID                 int64  `yaml:"chainID"`
+	SyncTimeoutSec          int    `yaml:"syncTimeoutSec"`
 }

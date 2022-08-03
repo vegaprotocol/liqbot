@@ -1,3 +1,4 @@
+// TODO: shared libs?
 package num
 
 import (
@@ -130,6 +131,11 @@ func (u Uint) Uint64() uint64 {
 // BigInt ...
 func (u Uint) BigInt() *big.Int {
 	return u.u.ToBig()
+}
+
+// Int ...
+func (u Uint) Int() *Int {
+	return IntFromUint(&u, true)
 }
 
 // Float64 ...
