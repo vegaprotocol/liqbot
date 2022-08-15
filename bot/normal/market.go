@@ -90,11 +90,12 @@ func (b *bot) createMarket(ctx context.Context) (*vega.Market, error) {
 
 	amount := b.config.StrategyDetails.SeedAmount.Get()
 
-	if err := b.tokens.Deposit(ctx, amount); err != nil {
+	// TODO: is it b.settlementAssetID?
+	if err := b.whale.TopUp(ctx, b.config.Name, b.walletPubKey, b.settlementAssetID, amount); err != nil {
 		return nil, fmt.Errorf("failed to seed deposit tokens: %w", err)
 	}
 
-	if err := b.tokens.Stake(ctx, amount); err != nil {
+	if err := b.whale.TopUp(ctx, b.config.Name, b.walletPubKey, b.vegaAssetID, amount); err != nil {
 		return nil, fmt.Errorf("failed to seed stake tokens: %w", err)
 	}
 
@@ -200,6 +201,11 @@ func (b *bot) submitOrder(
 	from string,
 	secondsFromNow int64,
 ) error {
+	// TODO: is it ok to ensure balance here?
+	if err := b.ensureBalance(ctx, price, from); err != nil {
+		return fmt.Errorf("failed to ensure balance: %w", err)
+	}
+
 	cmd := &walletpb.SubmitTransactionRequest_OrderSubmission{
 		OrderSubmission: &commandspb.OrderSubmission{
 			MarketId:    b.marketID,
@@ -292,7 +298,7 @@ func (b *bot) seedOrders(ctx context.Context, from string) error {
 }
 
 func (b *bot) canPlaceOrders() bool {
-	return b.data.TradingMode() == vega.Market_TRADING_MODE_CONTINUOUS
+	return b.Market().TradingMode() == vega.Market_TRADING_MODE_CONTINUOUS
 }
 
 func (b *bot) getExampleMarketProposal() *v1.ProposalSubmission {

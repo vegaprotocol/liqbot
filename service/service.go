@@ -16,8 +16,13 @@ import (
 
 	"code.vegaprotocol.io/liqbot/bot"
 	"code.vegaprotocol.io/liqbot/config"
+	"code.vegaprotocol.io/liqbot/data"
+	"code.vegaprotocol.io/liqbot/node"
 	"code.vegaprotocol.io/liqbot/pricing"
+	"code.vegaprotocol.io/liqbot/token"
+	"code.vegaprotocol.io/liqbot/types"
 	"code.vegaprotocol.io/liqbot/wallet"
+	"code.vegaprotocol.io/liqbot/whale"
 )
 
 // Bot is the generic bot interface.
@@ -67,9 +72,14 @@ func NewService(config config.Config) (s *Service, err error) {
 		bots:   make(map[string]Bot),
 	}
 
-	pe := pricing.NewEngine(*config.Pricing)
+	pricingEngine := pricing.NewEngine(*config.Pricing)
 
-	if err = s.initBots(pe); err != nil {
+	whaleService, err := getWhale(config)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = s.initBots(pricingEngine, whaleService); err != nil {
 		return nil, fmt.Errorf("failed to initialise bots: %s", err.Error())
 	}
 
@@ -77,6 +87,35 @@ func NewService(config config.Config) (s *Service, err error) {
 	s.server = s.getServer()
 
 	return s, err
+}
+
+func getWhale(config config.Config) (*whale.Service, error) {
+	dataNode := node.NewDataNode(
+		config.Locations,
+		config.CallTimeoutMills,
+	)
+
+	faucetService := token.NewFaucetService(config.Whale.FaucetURL, config.Whale.WalletPubKey)
+	whaleWallet := wallet.NewClient(config.Wallet.URL)
+	depositStream := data.NewDepositStream(dataNode, config.Whale.WalletPubKey)
+	tokenService, err := token.NewService(config.Token, config.Whale.WalletPubKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to setup token service: %w", err)
+	}
+
+	whaleService := whale.NewService(
+		dataNode,
+		whaleWallet,
+		tokenService,
+		faucetService,
+		depositStream,
+		config.Whale,
+	)
+
+	if err = whaleService.Start(context.Background()); err != nil {
+		return nil, fmt.Errorf("failed to start whale service: %w", err)
+	}
+	return whaleService, nil
 }
 
 func (s *Service) addRoutes() {
@@ -122,9 +161,9 @@ func (s *Service) Stop() {
 	}
 }
 
-func (s *Service) initBots(pricingEngine PricingEngine) error {
+func (s *Service) initBots(pricingEngine PricingEngine, whaleService types.WhaleService) error {
 	for _, botcfg := range s.config.Bots {
-		if err := s.initBot(pricingEngine, botcfg); err != nil {
+		if err := s.initBot(pricingEngine, botcfg, whaleService); err != nil {
 			return fmt.Errorf("failed to initialise bot '%s': %w", botcfg.Name, err)
 		}
 	}
@@ -132,12 +171,10 @@ func (s *Service) initBots(pricingEngine PricingEngine) error {
 	return nil
 }
 
-func (s *Service) initBot(pricingEngine PricingEngine, botcfg config.BotConfig) error {
+func (s *Service) initBot(pricingEngine PricingEngine, botcfg config.BotConfig, whaleService types.WhaleService) error {
 	log.WithFields(log.Fields{"strategy": botcfg.StrategyDetails.String()}).Debug("read strategy config")
 
-	wc := wallet.NewClient(s.config.Wallet.URL)
-
-	b, err := bot.New(botcfg, s.config.Locations, s.config.Token, pricingEngine, wc)
+	b, err := bot.New(botcfg, s.config, pricingEngine, whaleService)
 	if err != nil {
 		return fmt.Errorf("failed to create bot %s: %w", botcfg.Name, err)
 	}

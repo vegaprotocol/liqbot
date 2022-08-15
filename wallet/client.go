@@ -1,3 +1,4 @@
+// TODO: move to a shared lib?
 package wallet
 
 import (
@@ -7,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"strings"
 
@@ -114,7 +114,7 @@ func (c *Client) LoginWallet(ctx context.Context, name, passphrase string) error
 
 	defer func() { _ = resp.Body.Close() }()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("failed to read response body: %s", err)
 	}
@@ -141,7 +141,7 @@ type keyPairResponse struct {
 	Key *types.Key `json:"key"`
 }
 
-func (c Client) GenerateKeyPair(ctx context.Context, passphrase string, meta []types.Meta) (*types.Key, error) {
+func (c *Client) GenerateKeyPair(ctx context.Context, passphrase string, meta []types.Meta) (*types.Key, error) {
 	postBody, _ := json.Marshal(struct {
 		Passphrase string       `json:"passphrase"`
 		Meta       []types.Meta `json:"meta"`
@@ -168,7 +168,7 @@ func (c Client) GenerateKeyPair(ctx context.Context, passphrase string, meta []t
 
 	defer func() { _ = resp.Body.Close() }()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %s", err)
 	}
@@ -211,7 +211,7 @@ func (c *Client) ListPublicKeys(ctx context.Context) ([]string, error) {
 
 	defer func() { _ = resp.Body.Close() }()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %s", err)
 	}
@@ -270,7 +270,7 @@ func (c *Client) SignTx(ctx context.Context, request *walletpb.SubmitTransaction
 
 	defer func() { _ = resp.Body.Close() }()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("failed to read response body: %s", err)
 	}

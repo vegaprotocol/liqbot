@@ -20,13 +20,16 @@ type market struct {
 	busEvProc    busEventer
 }
 
-func NewMarketStream(node DataNode, walletPubKey string, pauseCh chan types.PauseSignal) *market {
+func NewMarketStream(node DataNode) *market {
 	return &market{
-		node:         node,
-		log:          log.WithField("module", "MarketStreamer"),
-		busEvProc:    newBusEventProcessor(node, pauseCh),
-		walletPubKey: walletPubKey,
+		node: node,
+		log:  log.WithField("module", "MarketStreamer"),
 	}
+}
+
+func (m *market) Setup(walletPubKey string, pauseCh chan types.PauseSignal) {
+	m.walletPubKey = walletPubKey
+	m.busEvProc = newBusEventProcessor(m.node, pauseCh)
 }
 
 func (m *market) WaitForStakeLinking() error {

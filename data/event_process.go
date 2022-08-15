@@ -14,12 +14,12 @@ import (
 )
 
 type busEventProcessor struct {
-	node    DataNode
+	node    busStreamer
 	log     *log.Entry
 	pauseCh chan types.PauseSignal
 }
 
-func newBusEventProcessor(node DataNode, pauseCh chan types.PauseSignal) *busEventProcessor {
+func newBusEventProcessor(node busStreamer, pauseCh chan types.PauseSignal) *busEventProcessor {
 	return &busEventProcessor{
 		node:    node,
 		log:     log.WithFields(log.Fields{"module": "EventProcessor", "event": "EventBus"}),
@@ -144,6 +144,9 @@ func (b *busEventProcessor) getStream(ctx context.Context, req *coreapipb.Observ
 }
 
 func (b *busEventProcessor) pause(p bool, name string) {
+	if b.pauseCh == nil {
+		return
+	}
 	select {
 	case b.pauseCh <- types.PauseSignal{From: name, Pause: p}:
 	default:

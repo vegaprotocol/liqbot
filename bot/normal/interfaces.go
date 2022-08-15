@@ -6,15 +6,16 @@ import (
 	ppconfig "code.vegaprotocol.io/priceproxy/config"
 	ppservice "code.vegaprotocol.io/priceproxy/service"
 	dataapipb "code.vegaprotocol.io/protos/data-node/api/v1"
-	"code.vegaprotocol.io/protos/vega"
 	"code.vegaprotocol.io/protos/vega/wallet/v1"
 
+	"code.vegaprotocol.io/liqbot/data"
 	"code.vegaprotocol.io/liqbot/types"
 	"code.vegaprotocol.io/liqbot/types/num"
 )
 
 // TradingDataService implements the gRPC service of the same name.
 type tradingDataService interface {
+	MustDialConnection(ctx context.Context)
 	Target() string
 	Markets(req *dataapipb.MarketsRequest) (*dataapipb.MarketsResponse, error)       // BOT
 	AssetByID(req *dataapipb.AssetByIDRequest) (*dataapipb.AssetByIDResponse, error) // BOT
@@ -37,25 +38,20 @@ type WalletClient interface {
 
 type dataStore interface {
 	Balance() types.Balance
-	TradingMode() vega.Market_TradingMode
-	StaticMidPrice() *num.Uint
-	TargetStake() *num.Uint
-	SuppliedStake() *num.Uint
-	MarkPrice() *num.Uint
-	OpenVolume() int64
+	Market() types.MarketData
 }
 
 type marketStream interface {
+	Setup(walletPubKey string, pauseCh chan types.PauseSignal)
 	WaitForStakeLinking() error
 	WaitForProposalID() (string, error)
 	WaitForProposalEnacted(pID string) error
 }
 
 type dataStream interface {
-	WaitForDepositFinalize(amount *num.Uint) error
+	InitData(pubKey, marketID, settlementAssetID string, pauseCh chan types.PauseSignal) (data.GetDataStore, error)
 }
 
-type tokenService interface {
-	Stake(ctx context.Context, amount *num.Uint) error
-	Deposit(ctx context.Context, amount *num.Uint) error
+type whaleService interface {
+	TopUp(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint) error
 }

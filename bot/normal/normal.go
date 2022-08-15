@@ -14,53 +14,62 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"code.vegaprotocol.io/liqbot/config"
-	"code.vegaprotocol.io/liqbot/data"
-	"code.vegaprotocol.io/liqbot/node"
-	"code.vegaprotocol.io/liqbot/token"
 	"code.vegaprotocol.io/liqbot/types"
+	"code.vegaprotocol.io/liqbot/types/num"
 )
 
 // bot represents one Normal liquidity bot.
 type bot struct {
 	pricingEngine PricingEngine
 	node          tradingDataService
-	locations     []string
-	data          dataStore
-	marketStream  marketStream
-	dataStream    dataStream
-	walletClient  WalletClient
-	tokens        tokenService
+	dataStore
+	marketStream marketStream
+	dataStream   dataStream
+	walletClient WalletClient
+	whale        whaleService
 
-	config      config.BotConfig
-	tokenConfig *config.TokenConfig
-	log         *log.Entry
+	config config.BotConfig
+	log    *log.Entry
 
 	stopPosMgmt     chan bool
 	stopPriceSteer  chan bool
 	pausePosMgmt    chan struct{}
 	pausePriceSteer chan struct{}
 
-	walletPubKey           string // "58595a" ...
+	walletPubKey           string
 	marketID               string
 	decimalPlaces          int
 	settlementAssetID      string
+	vegaAssetID            string
 	settlementAssetAddress string
 	botPaused              bool
 	mu                     sync.Mutex
 }
 
 // New returns a new instance of bot.
-func New(botConf config.BotConfig, locations []string, seedConf *config.TokenConfig, pe PricingEngine, wc WalletClient) *bot {
+func New(
+	botConf config.BotConfig,
+	vegaAssetID string,
+	dataNode tradingDataService,
+	marketStream marketStream,
+	dataStream dataStream,
+	pe PricingEngine,
+	wc WalletClient,
+	whale whaleService,
+) *bot {
 	return &bot{
-		config:      botConf,
-		tokenConfig: seedConf,
+		config:       botConf,
+		vegaAssetID:  vegaAssetID,
+		node:         dataNode,
+		marketStream: marketStream,
+		dataStream:   dataStream,
 		log: log.WithFields(log.Fields{
-			"bot":  botConf.Name,
-			"node": locations,
+			"bot": botConf.Name,
 		}),
-		locations:       locations,
-		pricingEngine:   pe,
-		walletClient:    wc,
+		pricingEngine: pe,
+		walletClient:  wc,
+		whale:         whale,
+
 		stopPosMgmt:     make(chan bool),
 		stopPriceSteer:  make(chan bool),
 		pausePosMgmt:    make(chan struct{}),
@@ -72,50 +81,22 @@ func New(botConf config.BotConfig, locations []string, seedConf *config.TokenCon
 func (b *bot) Start() error {
 	setupLogger(false) // TODO: pretty from config?
 
-	dataNode := node.NewDataNode(
-		b.locations,
-		b.config.CallTimeoutMills,
-	)
+	b.log.Debug("Attempting to connect to Vega gRPC node...")
+	b.node.MustDialConnection(context.Background()) // blocking
 
-	b.log.WithFields(
-		log.Fields{
-			"hosts": b.locations,
-		}).Debug("Attempting to connect to Vega gRPC node...")
-
-	dataNode.MustDialConnection(context.Background()) // blocking
-
-	b.node = dataNode
 	b.log = b.log.WithFields(log.Fields{"node": b.node.Target()})
 	b.log.Info("Connected to Vega gRPC node")
 
-	err := b.setupWallet()
+	ctx := context.Background()
+
+	err := b.setupWallet(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to setup wallet: %w", err)
 	}
 
 	pauseCh := b.pauseChannel()
 
-	b.marketStream = data.NewMarketStream(dataNode, b.walletPubKey, pauseCh)
-
-	assetResponse, err := b.node.AssetByID(&dataapipb.AssetByIDRequest{
-		Id: b.config.QuoteTokenID,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to get asset info: %w", err)
-	}
-
-	erc20 := assetResponse.Asset.Details.GetErc20()
-
-	quoteTokenAddress := b.config.QuoteTokenID
-
-	if erc20 != nil {
-		quoteTokenAddress = erc20.ContractAddress
-	}
-
-	b.tokens, err = token.NewService(b.tokenConfig, quoteTokenAddress, b.walletPubKey)
-	if err != nil {
-		return fmt.Errorf("failed to create token service: %w", err)
-	}
+	b.marketStream.Setup(b.walletPubKey, pauseCh)
 
 	if err = b.setupMarket(); err != nil {
 		return fmt.Errorf("failed to setup market: %w", err)
@@ -129,26 +110,22 @@ func (b *bot) Start() error {
 	}).Info("Fetched market info")
 
 	// Use the settlementAssetID to lookup the settlement ethereum address
-	assetResponse, err = b.node.AssetByID(&dataapipb.AssetByIDRequest{Id: b.settlementAssetID})
+	assetResponse, err := b.node.AssetByID(&dataapipb.AssetByIDRequest{Id: b.settlementAssetID})
 	if err != nil {
 		return fmt.Errorf("unable to look up asset details for %s: %w", b.settlementAssetID, err)
 	}
 
+	b.settlementAssetAddress = b.settlementAssetID
 	if erc20 := assetResponse.Asset.Details.GetErc20(); erc20 != nil {
 		b.settlementAssetAddress = erc20.ContractAddress
-	} else {
-		b.settlementAssetAddress = b.settlementAssetID
 	}
 
-	store := data.NewStore()
-	b.data = store
-
-	b.dataStream, err = data.NewDataStream(b.marketID, b.walletPubKey, b.settlementAssetID, dataNode, store, pauseCh)
+	b.dataStore, err = b.dataStream.InitData(b.walletPubKey, b.marketID, b.settlementAssetID, pauseCh)
 	if err != nil {
 		return fmt.Errorf("failed to create data stream: %w", err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 
 	go func() {
 		defer cancel()
@@ -187,24 +164,15 @@ func (b *bot) pauseChannel() chan types.PauseSignal {
 		for {
 			select {
 			case p := <-in:
-				if !b.togglePause(p) {
-					return
-				}
-				select {
-				default:
-					b.pausePosMgmt <- struct{}{}
-				}
-				select {
-				default:
-					b.pausePriceSteer <- struct{}{}
-				}
+				b.Pause(p)
 			}
 		}
 	}()
 	return in
 }
 
-func (b *bot) togglePause(p types.PauseSignal) bool {
+// Pause pauses the liquidity bot goroutine(s).
+func (b *bot) Pause(p types.PauseSignal) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -215,9 +183,18 @@ func (b *bot) togglePause(p types.PauseSignal) bool {
 		b.log.WithFields(log.Fields{"From": p.From}).Info("Resuming bot")
 		b.botPaused = false
 	} else {
-		return false
+		return
 	}
-	return true
+
+	select {
+	case b.pausePosMgmt <- struct{}{}:
+	default:
+	}
+	select {
+	case b.pausePriceSteer <- struct{}{}:
+	default:
+	}
+	fmt.Println("bot paused")
 }
 
 // Stop stops the liquidity bot goroutine(s).
@@ -246,8 +223,7 @@ func (b *bot) GetTraderDetails() string {
 	return string(jsn)
 }
 
-func (b *bot) setupWallet() error {
-	ctx := context.Background()
+func (b *bot) setupWallet(ctx context.Context) error {
 	walletPassphrase := "123"
 
 	if err := b.walletClient.LoginWallet(ctx, b.config.Name, walletPassphrase); err != nil {
@@ -263,26 +239,55 @@ func (b *bot) setupWallet() error {
 
 	b.log.Info("Logged into wallet")
 
-	if b.walletPubKey == "" {
-		publicKeys, err := b.walletClient.ListPublicKeys(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to list public keys: %w", err)
-		}
+	publicKeys, err := b.walletClient.ListPublicKeys(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list public keys: %w", err)
+	}
 
-		if len(publicKeys) == 0 {
-			key, err := b.walletClient.GenerateKeyPair(ctx, walletPassphrase, []types.Meta{})
-			if err != nil {
-				return fmt.Errorf("failed to generate keypair: %w", err)
-			}
-			b.walletPubKey = key.Pub
-			b.log.WithFields(log.Fields{"pubKey": b.walletPubKey}).Debug("Created keypair")
-		} else {
-			b.walletPubKey = publicKeys[0]
-			b.log.WithFields(log.Fields{"pubKey": b.walletPubKey}).Debug("Using existing keypair")
+	if len(publicKeys) == 0 {
+		key, err := b.walletClient.GenerateKeyPair(ctx, walletPassphrase, []types.Meta{})
+		if err != nil {
+			return fmt.Errorf("failed to generate keypair: %w", err)
 		}
+		b.walletPubKey = key.Pub
+		b.log.WithFields(log.Fields{"pubKey": b.walletPubKey}).Debug("Created keypair")
+	} else {
+		b.walletPubKey = publicKeys[0]
+		b.log.WithFields(log.Fields{"pubKey": b.walletPubKey}).Debug("Using existing keypair")
 	}
 
 	b.log = b.log.WithFields(log.Fields{"pubkey": b.walletPubKey})
+
+	return nil
+}
+
+func (b *bot) ensureBalance(ctx context.Context, targetAmount *num.Uint, from string) error {
+	balanceTotal := b.Balance().Total() // TODO: should it be total balance?
+
+	b.log.WithFields(
+		log.Fields{
+			"balanceTotal": balanceTotal.String(),
+		}).Debugf("%s: Total account balance", from)
+
+	if balanceTotal.GT(targetAmount) {
+		return nil
+	}
+
+	b.log.WithFields(
+		log.Fields{
+			"balanceTotal": balanceTotal.String(),
+			"targetAmount": targetAmount.String(),
+		}).Debugf("%s: Account balance is less than target amount, depositing...", from)
+
+	b.Pause(types.PauseSignal{From: from, Pause: true})
+
+	b.log.Debugf("%s: Waiting for deposit to be finalized...", from)
+
+	if err := b.whale.TopUp(ctx, b.config.Name, b.walletPubKey, b.settlementAssetID, targetAmount); err != nil {
+		return fmt.Errorf("failed to top-up tokens: %w", err)
+	}
+
+	b.Pause(types.PauseSignal{From: from, Pause: true})
 
 	return nil
 }

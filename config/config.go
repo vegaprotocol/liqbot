@@ -16,10 +16,13 @@ import (
 type Config struct {
 	Server *ServerConfig `yaml:"server"`
 
-	Pricing   *PricingConfig `yaml:"pricing"`
-	Wallet    *WalletConfig  `yaml:"wallet"`
-	Token     *TokenConfig   `yaml:"token"`
-	Locations []string       `yaml:"locations"`
+	CallTimeoutMills int            `yaml:"callTimeoutMills"`
+	VegaAssetID      string         `yaml:"vegaAssetID"`
+	Pricing          *PricingConfig `yaml:"pricing"`
+	Wallet           *WalletConfig  `yaml:"wallet"`
+	Whale            *WhaleConfig   `yaml:"whale"`
+	Token            *TokenConfig   `yaml:"token"`
+	Locations        []string       `yaml:"locations"`
 
 	Bots []BotConfig `yaml:"bots"`
 }
@@ -36,6 +39,10 @@ func (cfg *Config) CheckConfig() error {
 
 	if cfg.Wallet == nil {
 		return fmt.Errorf("%s: %s", errors.ErrMissingEmptyConfigSection.Error(), "wallet")
+	}
+
+	if cfg.Whale == nil {
+		return fmt.Errorf("%s: %s", errors.ErrMissingEmptyConfigSection.Error(), "whale")
 	}
 
 	if cfg.Token == nil {
@@ -112,6 +119,15 @@ type PricingConfig struct {
 	Address *url.URL `yaml:"address"`
 }
 
+type WhaleConfig struct {
+	WalletPubKey     string            `yaml:"walletPubKey"`
+	WalletName       string            `yaml:"walletName"`
+	WalletPassphrase string            `yaml:"walletPassphrase"`
+	OwnerPrivateKeys map[string]string `yaml:"ownerPrivateKeys"`
+	FaucetURL        string            `yaml:"faucetURL"`
+	SyncTimeoutSec   int               `yaml:"syncTimeoutSec"`
+}
+
 // BotConfig specifies the configuration parameters for one bot, which talks to one market on one
 // Vega node.
 type BotConfig struct {
@@ -119,17 +135,14 @@ type BotConfig struct {
 	// It is *not* a public key seen by Vega.
 	Name string `yaml:"name"`
 
-	// CallTimeoutMills is the per-call timeout (in milliseconds) for communicating with the Vega node gRPC endpoint.
-	CallTimeoutMills int `yaml:"callTimeoutMills"`
-
 	// InstrumentBase is the base asset of the instrument.
 	InstrumentBase string `yaml:"instrumentBase"`
 
 	// InstrumentQuote is the quote asset of the instrument.
 	InstrumentQuote string `yaml:"instrumentQuote"`
 
-	// QuoteTokenID is the id of the base token.
-	QuoteTokenID string `yaml:"quoteTokenID"`
+	// QuoteAssetID is the id of the quote asset.
+	QuoteAssetID string `yaml:"quoteAssetID"`
 
 	// Strategy specifies which algorithm the bot is to use.
 	Strategy string `yaml:"strategy"`
@@ -147,12 +160,8 @@ type WalletConfig struct {
 }
 
 type TokenConfig struct {
-	EthereumAPIAddress      string `yaml:"ethereumAPIAddress"`
-	Erc20BridgeAddress      string `yaml:"erc20BridgeAddress"`
-	StakingBridgeAddress    string `yaml:"stakingBridgeAddress"`
-	VegaTokenAddress        string `yaml:"vegaTokenAddress"`
-	ContractOwnerAddress    string `yaml:"contractOwnerAddress"`
-	ContractOwnerPrivateKey string `yaml:"contractOwnerPrivateKey"`
-	ChainID                 int64  `yaml:"chainID"`
-	SyncTimeoutSec          int    `yaml:"syncTimeoutSec"`
+	EthereumAPIAddress   string `yaml:"ethereumAPIAddress"`
+	Erc20BridgeAddress   string `yaml:"erc20BridgeAddress"`
+	StakingBridgeAddress string `yaml:"stakingBridgeAddress"`
+	SyncTimeoutSec       int    `yaml:"syncTimeoutSec"`
 }

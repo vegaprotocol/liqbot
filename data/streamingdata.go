@@ -3,18 +3,14 @@ package data
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"code.vegaprotocol.io/vega/events"
 
-	"code.vegaprotocol.io/liqbot/types"
-	"code.vegaprotocol.io/liqbot/types/num"
-	"code.vegaprotocol.io/liqbot/util"
-
-	"code.vegaprotocol.io/protos/vega"
 	coreapipb "code.vegaprotocol.io/protos/vega/api/v1"
 	eventspb "code.vegaprotocol.io/protos/vega/events/v1"
 	log "github.com/sirupsen/logrus"
+
+	"code.vegaprotocol.io/liqbot/types"
 )
 
 type data struct {
@@ -23,117 +19,56 @@ type data struct {
 	walletPubKey      string
 	marketID          string
 	settlementAssetID string
-	store             dataStore
+	store             setDataStore
 	busEvProc         busEventer
 }
 
-func NewDataStream(marketID, pubKey, settlementAssetID string, node DataNode, store dataStore, pauseCh chan types.PauseSignal) (*data, error) {
-	d := &data{
-		log:       log.WithField("module", "DataStreamer"),
-		node:      node,
-		store:     store,
-		busEvProc: newBusEventProcessor(node, pauseCh),
+func NewStreamData(
+	node DataNode,
+) *data {
+	return &data{
+		log:  log.WithField("module", "DataStreamer"),
+		node: node,
 	}
+}
+
+func (d *data) InitData(
+	pubKey,
+	marketID,
+	settlementAssetID string,
+	pauseCh chan types.PauseSignal,
+) (GetDataStore, error) {
+	store := types.NewStore()
 
 	d.walletPubKey = pubKey
 	d.marketID = marketID
 	d.settlementAssetID = settlementAssetID
-
-	go d.store.cache()
+	d.store = store
+	d.busEvProc = newBusEventProcessor(d.node, pauseCh)
 
 	if err := d.setInitialData(); err != nil {
 		return nil, fmt.Errorf("failed to set initial data: %w", err)
 	}
 
-	d.subscribe()
-	return d, nil
-}
-
-func (d *data) subscribe() {
 	go d.subscribeToMarketEvents()
 	go d.subscribeToAccountEvents()
 	go d.subscribePositions()
-}
 
-// WaitForDepositFinalize is a blocking call that waits for the deposit finalize event to be received.
-func (d *data) WaitForDepositFinalize(amount *num.Uint) error {
-	req := &coreapipb.ObserveEventBusRequest{
-		Type: []eventspb.BusEventType{
-			eventspb.BusEventType_BUS_EVENT_TYPE_DEPOSIT,
-		},
-		PartyId: d.walletPubKey,
-	}
-
-	proc := func(rsp *coreapipb.ObserveEventBusResponse) (bool, error) {
-		for _, event := range rsp.Events {
-			dep := event.GetDeposit()
-			// filter out any that are for different assets, or not finalized
-			if dep.Asset != d.settlementAssetID || dep.Status != vega.Deposit_STATUS_FINALIZED {
-				continue
-			}
-
-			if dep.Amount == amount.String() {
-				d.log.WithFields(log.Fields{"amount": amount}).Info("Deposit finalized")
-				return true, nil
-			}
-		}
-		return false, nil
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*40)
-	defer cancel()
-
-	d.busEvProc.processEvents(ctx, "DepositData", req, proc)
-	return ctx.Err()
+	return store, nil
 }
 
 func (d *data) setInitialData() error {
-	// Collateral
-	balance, err := d.getAccount()
-	if err != nil {
-		return fmt.Errorf("failed to get account general: %w", err)
+	if err := d.initBalance(); err != nil {
+		return fmt.Errorf("failed to set account balance: %w", err)
 	}
 
-	d.store.balanceInit(balance)
-
-	marketData, err := d.getMarketData()
-	if err != nil {
+	if err := d.initMarketData(); err != nil {
 		return fmt.Errorf("failed to get market data: %w", err)
 	}
 
-	currentPrice, err := util.ConvertUint256(marketData.StaticMidPrice)
-	if err != nil {
-		return fmt.Errorf("failed to convert current price: %w", err)
-	}
-
-	targetStake, err := util.ConvertUint256(marketData.TargetStake)
-	if err != nil {
-		d.log.WithFields(log.Fields{
-			"targetStake": marketData.TargetStake,
-		}).Warning("processEventBusData: failed to unmarshal uint256: error or overflow")
-	}
-
-	suppliedStake, err := util.ConvertUint256(marketData.SuppliedStake)
-	if err != nil {
-		d.log.WithFields(log.Fields{
-			"suppliedStake": marketData.SuppliedStake,
-		}).Warning("processEventBusData: failed to unmarshal uint256: error or overflow")
-	}
-
-	d.store.marketDataSet(&types.MarketData{
-		StaticMidPrice: currentPrice,
-		MarkPrice:      &num.Uint{},
-		TargetStake:    targetStake,
-		SuppliedStake:  suppliedStake,
-		TradingMode:    marketData.MarketTradingMode,
-	})
-
-	openVolume, err := d.getOpenVolume()
-	if err != nil {
+	if err := d.initOpenVolume(); err != nil {
 		return fmt.Errorf("failed to get open volume: %w", err)
 	}
-
-	d.store.openVolumeSet(openVolume)
 
 	return nil
 }
@@ -150,41 +85,12 @@ func (d *data) subscribeToMarketEvents() {
 		for _, event := range rsp.Events {
 			marketData := event.GetMarketData()
 
-			markPrice, err := util.ConvertUint256(marketData.MarkPrice)
+			md, err := types.FromVegaMD(marketData)
 			if err != nil {
-				d.log.WithFields(log.Fields{
-					"staticMidPrice": marketData.StaticMidPrice,
-				}).Warning("processEventBusData: failed to unmarshal uint256: error or overflow")
+				return false, fmt.Errorf("failed to convert market data: %w", err)
 			}
 
-			staticMidPrice, err := util.ConvertUint256(marketData.StaticMidPrice)
-			if err != nil {
-				d.log.WithFields(log.Fields{
-					"staticMidPrice": marketData.StaticMidPrice,
-				}).Warning("processEventBusData: failed to unmarshal uint256: error or overflow")
-			}
-
-			targetStake, err := util.ConvertUint256(marketData.TargetStake)
-			if err != nil {
-				d.log.WithFields(log.Fields{
-					"targetStake": marketData.TargetStake,
-				}).Warning("processEventBusData: failed to unmarshal uint256: error or overflow")
-			}
-
-			suppliedStake, err := util.ConvertUint256(marketData.SuppliedStake)
-			if err != nil {
-				d.log.WithFields(log.Fields{
-					"suppliedStake": marketData.SuppliedStake,
-				}).Warning("processEventBusData: failed to unmarshal uint256: error or overflow")
-			}
-
-			d.store.marketDataSet(&types.MarketData{
-				StaticMidPrice: staticMidPrice,
-				MarkPrice:      markPrice,
-				TargetStake:    targetStake,
-				SuppliedStake:  suppliedStake,
-				TradingMode:    marketData.MarketTradingMode,
-			})
+			d.store.MarketSet(types.SetMarketData(md))
 		}
 		return false, nil
 	}
@@ -209,16 +115,14 @@ func (d *data) subscribeToAccountEvents() {
 				continue
 			}
 
-			bal, err := util.ConvertUint256(acct.Balance)
-			if err != nil {
-				d.log.WithFields(log.Fields{
-					"error":          err.Error(),
-					"AccountBalance": acct.Balance,
-				}).Warning("processEventBusData: failed to unmarshal uint256: error or overflow")
-				continue
+			if err := d.setBalanceByType(acct); err != nil {
+				d.log.WithFields(
+					log.Fields{
+						"error":       err.Error(),
+						"accountType": acct.Type.String(),
+					},
+				).Error("failed to set account balance")
 			}
-
-			d.store.balanceSet(acct.Type, bal)
 		}
 		return false, nil
 	}
@@ -247,7 +151,7 @@ func (d *data) subscribePositions() {
 			}
 		}
 
-		d.store.openVolumeSet(openVolume)
+		d.store.MarketSet(types.SetOpenVolume(openVolume))
 		return false, nil
 	}
 

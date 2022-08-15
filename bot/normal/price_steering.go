@@ -67,7 +67,7 @@ func (b *bot) steerPrice(ctx context.Context) error {
 		return fmt.Errorf("failed to get external price: %w", err)
 	}
 
-	staticMidPrice := b.data.StaticMidPrice()
+	staticMidPrice := b.Market().StaticMidPrice()
 	currentDiff, statIsGt := num.Zero().Delta(externalPrice, staticMidPrice)
 	currentDiffFraction := num.DecimalFromUint(currentDiff).Div(num.DecimalFromUint(externalPrice))
 	minPriceSteerFraction := num.DecimalFromInt64(int64(100)).Mul(num.DecimalFromFloat(b.config.StrategyDetails.MinPriceSteerFraction))
