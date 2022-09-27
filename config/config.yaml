@@ -13,7 +13,7 @@ pricing:
 wallet:
   url: http://127.0.0.1:1789
 token:
-  ethereumAPIAddress:   https://127.0.0.1:8545
+  ethereumChainID:      1440
   erc20BridgeAddress:   0x9708FF7510D4A7B9541e1699d15b53Ecb1AFDc54
   stakingBridgeAddress: 0x9135f5afd6F055e731bca2348429482eE614CFfA
   erc20TokenAddress:    0x1b8a1B6CBE5c93609b46D1829Cc7f3Cb8eeE23a0
