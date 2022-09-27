@@ -30,7 +30,7 @@ type Service struct {
 func NewService(conf *config.TokenConfig, vegaPubKey string) (*Service, error) {
 	ctx := context.Background()
 
-	client, err := vgethereum.NewClient(ctx, conf.EthereumAPIAddress, 1440)
+	client, err := vgethereum.NewClient(ctx, conf.EthereumAPIAddress)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Ethereum client: %w", err)
 	}
