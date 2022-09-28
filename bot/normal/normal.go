@@ -9,9 +9,9 @@ import (
 	"strings"
 	"sync"
 
-	dataapipb "code.vegaprotocol.io/protos/data-node/api/v1"
-	"code.vegaprotocol.io/vegawallet/wallets"
 	log "github.com/sirupsen/logrus"
+
+	"code.vegaprotocol.io/vegawallet/wallets"
 
 	"code.vegaprotocol.io/liqbot/config"
 	"code.vegaprotocol.io/liqbot/types"
@@ -45,6 +45,14 @@ type bot struct {
 	botPaused              bool
 	mu                     sync.Mutex
 }
+
+// TODO: there could be a service that would be in charge of managing the account, balance of the account, creating markets
+// and simplifying the process of placing orders.
+// The bot should only have to worry decision making about what orders to place and when, given the current market state.
+// The service should be responsible for the following:
+// - creating markets (if necessary)
+// - placing orders, as produced by the bot
+// - managing the account balance
 
 // New returns a new instance of bot.
 func New(
@@ -108,17 +116,6 @@ func (b *bot) Start() error {
 		"quote":             b.config.InstrumentQuote,
 		"settlementAssetID": b.settlementAssetID,
 	}).Info("Fetched market info")
-
-	// Use the settlementAssetID to lookup the settlement ethereum address
-	assetResponse, err := b.node.AssetByID(&dataapipb.AssetByIDRequest{Id: b.settlementAssetID})
-	if err != nil {
-		return fmt.Errorf("unable to look up asset details for %s: %w", b.settlementAssetID, err)
-	}
-
-	b.settlementAssetAddress = b.settlementAssetID
-	if erc20 := assetResponse.Asset.Details.GetErc20(); erc20 != nil {
-		b.settlementAssetAddress = erc20.ContractAddress
-	}
 
 	b.dataStore, err = b.dataStream.InitData(b.walletPubKey, b.marketID, b.settlementAssetID, pauseCh)
 	if err != nil {
@@ -215,10 +212,9 @@ func (b *bot) Stop() {
 // GetTraderDetails returns information relating to the trader.
 func (b *bot) GetTraderDetails() string {
 	jsn, _ := json.MarshalIndent(map[string]string{
-		"name":                              b.config.Name,
-		"pubKey":                            b.walletPubKey,
-		"settlementVegaAssetID":             b.settlementAssetID,
-		"settlementEthereumContractAddress": b.settlementAssetAddress,
+		"name":                  b.config.Name,
+		"pubKey":                b.walletPubKey,
+		"settlementVegaAssetID": b.settlementAssetID,
 	}, "", "  ")
 	return string(jsn)
 }

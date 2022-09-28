@@ -1,0 +1,87 @@
+---
+
+server:
+  env: prod  # dev, prod
+  listen: ":7800"
+  logformat: text  # json, text
+  loglevel: debug  # debug, info, warning, error
+
+callTimeoutMills: 10000
+vegaAssetID: fc7fd956078fb1fc9db5c19b88f0874c4299b2a7639ad05a47a28c0aef291b55
+
+pricing:
+  address:
+    scheme: https
+    host: prices.ops.vega.xyz
+    path: /prices
+wallet:
+  url: https://wallet.stagnet2.vega.xyz
+token:
+  ethereumAPIAddress:   wss://ropsten.infura.io/ws/v3/0b0e1795edae41f59f4c99d29ba0ae8e
+  erc20BridgeAddress:   0x947893AaA0A7b55f66990b3B4781514b691Fdd4a
+  stakingBridgeAddress: 0x7896C9491962D5839783CB6e0492ECebd34Bb35F
+  syncTimeoutSec: 100
+whale:
+  walletPubKey: 8c81d3c1e6fd8a21323ec5cd3d1b3d1a9512a53ff7964f9429f07fa2c379e084
+  walletName: b00
+  walletPassphrase: 123
+  ownerPrivateKeys:
+    993ed98f4f770d91a796faab1738551193ba45c62341d20597df70fea6704ede: adef89153e4bd6b43876045efdd6818cec359340683edaec5e8588e635e8428b
+  faucetURL:
+locations:
+  - n01.stagnet2.vega.xyz:3007
+  - n02.stagnet2.vega.xyz:3007
+  - n03.stagnet2.vega.xyz:3007
+  - n04.stagnet2.vega.xyz:3007
+  - n05.stagnet2.vega.xyz:3007
+bots:
+
+  - name: b01
+    instrumentBase: BTC
+    instrumentQuote: USD
+    quoteAssetID: 993ed98f4f770d91a796faab1738551193ba45c62341d20597df70fea6704ede
+    strategy: normal
+    strategyDetails:
+      expectedMarkPrice: 0
+      auctionVolume: 0
+      maxLong: 1000
+      maxShort: 1000
+      posManagementFraction: 0.25
+      ordersFraction: 0.25
+      seedAmount: 1000000000000000000
+      seedOrderSize: 400
+      commitmentAmount: 50000000000000
+      fee: 0.001
+      shorteningShape:
+        sells:
+          - {reference: Ask, proportion: 10, offset: 440000} # had to multiply by 10000, should it be the same for all markets?
+          - {reference: Ask, proportion: 20, offset: 220000}
+          - {reference: Ask, proportion: 30, offset: 210000}
+          - {reference: Ask, proportion: 40, offset: 200000}
+        buys:
+          - {reference: Bid, proportion: 40, offset: 400000}
+          - {reference: Bid, proportion: 30, offset: 410000}
+          - {reference: Bid, proportion: 20, offset: 420000}
+          - {reference: Bid, proportion: 10, offset: 840000}
+      longeningShape:
+        sells:
+          - {reference: Ask, proportion: 10, offset: 840000}
+          - {reference: Ask, proportion: 20, offset: 420000}
+          - {reference: Ask, proportion: 30, offset: 410000}
+          - {reference: Ask, proportion: 40, offset: 400000}
+        buys:
+          - {reference: Bid, proportion: 40, offset: 200000}
+          - {reference: Bid, proportion: 30, offset: 210000}
+          - {reference: Bid, proportion: 20, offset: 220000}
+          - {reference: Bid, proportion: 10, offset: 440000}
+      posManagementSleepMilliseconds: 5050
+      marketPriceSteeringRatePerSecond: 0.1
+      minPriceSteerFraction: 0.00001
+      priceSteerOrderScale: 1.5
+      limitOrderDistributionParams:
+        method: "discreteThreeLevel"
+        gttLengthSeconds: 60
+        tgtTimeHorizonHours: 1.0
+        numTicksFromMid: 5
+        numIdenticalBots: 1
+      targetLNVol: 0.25

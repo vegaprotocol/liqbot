@@ -7,13 +7,14 @@ import (
 	"strings"
 	"time"
 
+	log "github.com/sirupsen/logrus"
+
 	dataapipb "code.vegaprotocol.io/protos/data-node/api/v1"
 	"code.vegaprotocol.io/protos/vega"
 	commandspb "code.vegaprotocol.io/protos/vega/commands/v1"
 	v1 "code.vegaprotocol.io/protos/vega/commands/v1"
 	oraclesv1 "code.vegaprotocol.io/protos/vega/oracles/v1"
 	walletpb "code.vegaprotocol.io/protos/vega/wallet/v1"
-	log "github.com/sirupsen/logrus"
 
 	"code.vegaprotocol.io/liqbot/types/num"
 )
@@ -152,9 +153,9 @@ func (b *bot) sendNewMarketProposal(ctx context.Context) error {
 	}
 
 	submitTxReq := &walletpb.SubmitTransactionRequest{
-		PubKey:    b.walletPubKey,
-		Propagate: true,
-		Command:   cmd,
+		PubKey: b.walletPubKey,
+		// Propagate: true, TODO: OK to remove?
+		Command: cmd,
 	}
 
 	if err := b.walletClient.SignTx(ctx, submitTxReq); err != nil {
@@ -308,7 +309,7 @@ func (b *bot) getExampleMarketProposal() *v1.ProposalSubmission {
 		},
 		Reference: "ProposalReference",
 		Terms: &vega.ProposalTerms{
-			ValidationTimestamp: secondsFromNowInSecs(1),
+			ValidationTimestamp: secondsFromNowInSecs(1), // TODO: was removed?
 			ClosingTimestamp:    secondsFromNowInSecs(10),
 			EnactmentTimestamp:  secondsFromNowInSecs(15),
 			Change: &vega.ProposalTerms_NewMarket{

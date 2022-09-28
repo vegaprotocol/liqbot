@@ -11,8 +11,9 @@ import (
 	"net/http"
 	"strings"
 
-	walletpb "code.vegaprotocol.io/protos/vega/wallet/v1"
 	"github.com/golang/protobuf/jsonpb"
+
+	walletpb "code.vegaprotocol.io/protos/vega/wallet/v1"
 
 	"code.vegaprotocol.io/liqbot/types"
 )
@@ -23,6 +24,7 @@ type Client struct {
 	token     string
 	name      string
 	pass      string
+	pubKey    string // TODO: setup wallet and set this
 }
 
 func NewClient(walletURL string) *Client {
@@ -241,7 +243,12 @@ type SignTxRequest struct {
 	Propagate bool   `json:"propagate"`
 }
 
+// TODO: make a wallet service that would run commands instead of tx requests
 func (c *Client) SignTx(ctx context.Context, request *walletpb.SubmitTransactionRequest) error {
+	if c.pubKey != "" {
+		request.PubKey = c.pubKey
+	}
+
 	m := jsonpb.Marshaler{Indent: "    "}
 
 	request.Propagate = true

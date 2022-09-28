@@ -21,7 +21,7 @@ import (
 func (b *bot) runPositionManagement(ctx context.Context) {
 	defer b.log.Warning("PositionManagement: Stopped")
 
-	if err := b.prePositionManagement(ctx); err != nil {
+	if err := b.provideLiquidity(ctx); err != nil {
 		b.log.WithFields(log.Fields{"error": err.Error()}).Error("PositionManagement: Failed to initialize")
 		return
 	}
@@ -235,7 +235,7 @@ func (b *bot) sendLiquidityProvision(ctx context.Context, commitment *num.Uint, 
 
 // call this if the position flips.
 func (b *bot) sendLiquidityProvisionAmendment(ctx context.Context, commitment *num.Uint, buys, sells []*vega.LiquidityOrder) error {
-	if commitment == num.Zero() {
+	if commitment.IsZero() {
 		return b.sendLiquidityProvisionCancellation(ctx)
 	}
 
@@ -303,7 +303,7 @@ func (b *bot) checkPosition() (uint64, vega.Side, bool) {
 	return size, side, shouldPlace
 }
 
-func (b *bot) prePositionManagement(ctx context.Context) error {
+func (b *bot) provideLiquidity(ctx context.Context) error {
 	// We always cache off with longening shapes
 	buyShape, sellShape, _ := b.getShape()
 	// At the cache of each loop, wait for positive general account balance. This is in case the network has
@@ -453,8 +453,8 @@ func (b *bot) calculateOrderSizes(obligation *num.Uint, liquidityOrders []*vega.
 		}
 
 		order := vega.Order{
-			MarketId:    b.marketID,
-			PartyId:     b.walletPubKey,
+			//MarketId: b.marketID,
+			//PartyId:     b.walletPubKey,
 			Side:        vega.Side_SIDE_BUY,
 			Remaining:   size.Uint64(),
 			Size:        size.Uint64(),

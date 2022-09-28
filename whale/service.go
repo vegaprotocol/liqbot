@@ -7,12 +7,13 @@ import (
 	"log"
 	"time"
 
+	"github.com/ethereum/go-ethereum/crypto"
+
 	dataapipb "code.vegaprotocol.io/protos/data-node/api/v1"
 	"code.vegaprotocol.io/protos/vega"
 	commV1 "code.vegaprotocol.io/protos/vega/commands/v1"
 	"code.vegaprotocol.io/protos/vega/wallet/v1"
 	vtypes "code.vegaprotocol.io/vega/types"
-	"github.com/ethereum/go-ethereum/crypto"
 
 	"code.vegaprotocol.io/liqbot/config"
 	"code.vegaprotocol.io/liqbot/types/num"
@@ -65,16 +66,25 @@ func (s *Service) Start(ctx context.Context) error {
 
 func (s *Service) TopUp(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint) error {
 	if receiverAddress == s.walletPubKey {
-		return fmt.Errorf("the sender and receiver address cannot be the same")
+		//return fmt.Errorf("the sender and receiver address cannot be the same")
 	}
 
 	if err := s.ensureWhaleBalance(ctx, assetID, amount); err != nil {
 		return fmt.Errorf("failed to ensure enough funds: %w", err)
 	}
 
+	balance, err := s.getBalance(assetID)
+	if err != nil {
+		return fmt.Errorf("failed to check for sufficient funds: %w", err)
+	}
+
+	if balance.LT(amount.Int()) {
+		return fmt.Errorf("insufficient funds")
+	}
+
 	// TODO: is Vega staked token supposed to be transferred differently?
 
-	err := s.wallet.SignTx(ctx, &v1.SubmitTransactionRequest{
+	err = s.wallet.SignTx(ctx, &v1.SubmitTransactionRequest{
 		PubKey:    s.walletPubKey,
 		Propagate: true,
 		Command: &v1.SubmitTransactionRequest_Transfer{
@@ -173,11 +183,14 @@ func (s *Service) depositERC20(ctx context.Context, asset *vega.Asset, amount *n
 	contractAddress := asset.Details.GetErc20().ContractAddress
 	added := new(num.Uint)
 
+	var depFn func(ctx context.Context, ownerPrivateKey string, ownerAddress string, vegaTokenAddress string, amount *num.Uint) (*num.Uint, error)
+
 	if asset.Details.Symbol == "VEGA" {
-		added, err = s.erc20.Stake(ctx, ownerKey.privateKey, ownerKey.address, contractAddress, amount)
+		depFn = s.erc20.Stake
 	} else {
-		added, err = s.erc20.Deposit(ctx, ownerKey.privateKey, ownerKey.address, contractAddress, amount)
+		depFn = s.erc20.Deposit
 	}
+	added, err = depFn(ctx, ownerKey.privateKey, ownerKey.address, contractAddress, amount)
 	if err != nil {
 		return fmt.Errorf("failed to add erc20 token: %w", err)
 	}

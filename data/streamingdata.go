@@ -73,6 +73,7 @@ func (d *data) setInitialData() error {
 	return nil
 }
 
+// TODO: should be used by a new market service instead of by the bot
 func (d *data) subscribeToMarketEvents() {
 	req := &coreapipb.ObserveEventBusRequest{
 		Type: []eventspb.BusEventType{
@@ -98,6 +99,7 @@ func (d *data) subscribeToMarketEvents() {
 	d.busEvProc.processEvents(context.Background(), "MarketData", req, proc)
 }
 
+// TODO: should be used by a new account service instead of by the bot
 // Party related events.
 func (d *data) subscribeToAccountEvents() {
 	req := &coreapipb.ObserveEventBusRequest{
@@ -130,6 +132,7 @@ func (d *data) subscribeToAccountEvents() {
 	d.busEvProc.processEvents(context.Background(), "AccountData", req, proc)
 }
 
+// TODO: should be used by a new market service instead of by the bot
 func (d *data) subscribePositions() {
 	req := &coreapipb.ObserveEventBusRequest{
 		Type: []eventspb.BusEventType{
