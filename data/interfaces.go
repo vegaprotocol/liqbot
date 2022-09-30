@@ -3,15 +3,14 @@ package data
 import (
 	"context"
 
-	dataapipb "code.vegaprotocol.io/protos/data-node/api/v1"
-	vegaapipb "code.vegaprotocol.io/protos/vega/api/v1"
-
 	"code.vegaprotocol.io/liqbot/types"
+	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v1"
+	vegaapipb "code.vegaprotocol.io/vega/protos/vega/api/v1"
 )
 
 // DataNode is a Vega Data node
 //
-//go:generate go run github.com/golang/mock/mockgen -destination mocks/datanode_mock.go -package mocks code.vegaprotocol.io/liqbot/data DataNode
+//go:generate go run github.com/golang/mock/mockgen -destination mocks/datanode_mock.go -package mocks code.vegaprotocol.io/liqbot/market DataNode
 type DataNode interface {
 	busStreamer
 	PartyAccounts(req *dataapipb.PartyAccountsRequest) (response *dataapipb.PartyAccountsResponse, err error)
@@ -24,13 +23,13 @@ type busStreamer interface {
 	ObserveEventBus(ctx context.Context) (client vegaapipb.CoreService_ObserveEventBusClient, err error)
 }
 
-type GetDataStore interface {
+type BalanceStore interface {
 	Balance() types.Balance
-	Market() types.MarketData
+	BalanceSet(sets ...func(*types.Balance))
 }
 
-type setDataStore interface {
-	BalanceSet(sets ...func(*types.Balance))
+type MarketStore interface {
+	Market() types.MarketData
 	OpenVolume() int64
 	MarketSet(sets ...func(*types.MarketData))
 }

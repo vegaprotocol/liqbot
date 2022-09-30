@@ -3,9 +3,8 @@ package types
 import (
 	"testing"
 
-	vt "code.vegaprotocol.io/vega/types"
-
 	"code.vegaprotocol.io/liqbot/types/num"
+	vt "code.vegaprotocol.io/vega/core/types"
 )
 
 func Test_newBalanceCache(t *testing.T) {

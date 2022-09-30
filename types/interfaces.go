@@ -25,6 +25,7 @@ type PricingEngine interface {
 	GetPrice(pricecfg ppconfig.PriceConfig) (pi ppservice.PriceResponse, err error)
 }
 
-type WhaleService interface {
-	TopUp(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint) error
+type CoinProvider interface {
+	TopUpAsync(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint) error
+	StakeAsync(ctx context.Context, receiverAddress, assetID string, amount *num.Uint) error
 }

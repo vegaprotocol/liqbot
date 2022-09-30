@@ -9,10 +9,12 @@ import (
 	"sync"
 	"time"
 
-	ppconfig "code.vegaprotocol.io/priceproxy/config"
-	ppservice "code.vegaprotocol.io/priceproxy/service"
 	"github.com/julienschmidt/httprouter"
 	log "github.com/sirupsen/logrus"
+
+	"code.vegaprotocol.io/liqbot/account"
+	ppconfig "code.vegaprotocol.io/priceproxy/config"
+	ppservice "code.vegaprotocol.io/priceproxy/service"
 
 	"code.vegaprotocol.io/liqbot/bot"
 	"code.vegaprotocol.io/liqbot/config"
@@ -97,18 +99,26 @@ func getWhale(config config.Config) (*whale.Service, error) {
 
 	faucetService := token.NewFaucetService(config.Whale.FaucetURL, config.Whale.WalletPubKey)
 	whaleWallet := wallet.NewClient(config.Wallet.URL)
-	depositStream := data.NewDepositStream(dataNode, config.Whale.WalletPubKey)
+	accountStream := data.NewAccountStream(dataNode)
+
 	tokenService, err := token.NewService(config.Token, config.Whale.WalletPubKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup token service: %w", err)
 	}
 
+	provider := whale.NewProvider(
+		dataNode,
+		tokenService,
+		faucetService,
+		config.Whale,
+	)
+
+	accountService := account.NewAccountService("whale", "", accountStream, provider)
+
 	whaleService := whale.NewService(
 		dataNode,
 		whaleWallet,
-		tokenService,
-		faucetService,
-		depositStream,
+		accountService,
 		config.Whale,
 	)
 
@@ -161,7 +171,7 @@ func (s *Service) Stop() {
 	}
 }
 
-func (s *Service) initBots(pricingEngine PricingEngine, whaleService types.WhaleService) error {
+func (s *Service) initBots(pricingEngine PricingEngine, whaleService types.CoinProvider) error {
 	for _, botcfg := range s.config.Bots {
 		if err := s.initBot(pricingEngine, botcfg, whaleService); err != nil {
 			return fmt.Errorf("failed to initialise bot '%s': %w", botcfg.Name, err)
@@ -171,7 +181,7 @@ func (s *Service) initBots(pricingEngine PricingEngine, whaleService types.Whale
 	return nil
 }
 
-func (s *Service) initBot(pricingEngine PricingEngine, botcfg config.BotConfig, whaleService types.WhaleService) error {
+func (s *Service) initBot(pricingEngine PricingEngine, botcfg config.BotConfig, whaleService types.CoinProvider) error {
 	log.WithFields(log.Fields{"strategy": botcfg.StrategyDetails.String()}).Debug("read strategy config")
 
 	b, err := bot.New(botcfg, s.config, pricingEngine, whaleService)

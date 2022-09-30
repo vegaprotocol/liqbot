@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"code.vegaprotocol.io/liqbot/account"
 	"code.vegaprotocol.io/liqbot/config"
 	"code.vegaprotocol.io/liqbot/data"
 	"code.vegaprotocol.io/liqbot/node"
@@ -13,9 +14,11 @@ import (
 )
 
 func TestService_TopUp(t *testing.T) {
-	wKey := "8528c773a4b62d7609182cb0eb66dd1545173332b569397b8b1f7c1901f90932"
-	wName := "your_wallet_name"
-	wPassphrase := "super-secret"
+	t.Skip()
+
+	wKey := "6baf7809b6143d4be4a5b641fcef29947aeaa1ab3805c5442de8a31a3449078f"
+	wName := "w00"
+	wPassphrase := "123"
 
 	dn := node.NewDataNode([]string{"localhost:3027"}, 10000)
 	wc := wallet.NewClient("http://localhost:1789")
@@ -30,12 +33,8 @@ func TestService_TopUp(t *testing.T) {
 		return
 	}
 
-	fc := token.NewFaucetService("http://localhost:1790", wKey)
-	ds := data.NewDepositStream(dn, wKey)
-
 	dk := map[string]string{
 		"993ed98f4f770d91a796faab1738551193ba45c62341d20597df70fea6704ede": "a37f4c2a678aefb5037bf415a826df1540b330b7e471aa54184877ba901b9ef0",
-		"b4f2726571fbe8e33b442dc92ed2d7f0d810e21835b7371a7915a365f07ccd9b": "a37f4c2a678aefb5037bf415a826df1540b330b7e471aa54184877ba901b9ef0",
 	}
 
 	conf := &config.WhaleConfig{
@@ -46,7 +45,14 @@ func TestService_TopUp(t *testing.T) {
 		SyncTimeoutSec:   100,
 	}
 
-	s := NewService(dn, wc, es, fc, ds, conf)
+	fc := token.NewFaucetService("http://localhost:1790", wKey)
+
+	cp := NewProvider(dn, es, fc, conf)
+
+	ds := data.NewAccountStream(dn)
+	as := account.NewAccountService("test", "asset", ds, cp)
+
+	s := NewService(dn, wc, as, conf)
 
 	ctx := context.Background()
 
@@ -55,10 +61,54 @@ func TestService_TopUp(t *testing.T) {
 		return
 	}
 
-	key := "8528c773a4b62d7609182cb0eb66dd1545173332b569397b8b1f7c1901f90932"
-	asset := "b4f2726571fbe8e33b442dc92ed2d7f0d810e21835b7371a7915a365f07ccd9b"
-	// asset := "993ed98f4f770d91a796faab1738551193ba45c62341d20597df70fea6704ede"
-	if err := s.TopUp(ctx, "some bot", key, asset, num.NewUint(1100000000000000000)); err != nil {
-		t.Errorf("TopUp() error = %s", err)
+	key := "69f684c78deefa27fd216ba771e4ca08085dea8e2b1dafd2c62352dda1e89073"
+	asset := "993ed98f4f770d91a796faab1738551193ba45c62341d20597df70fea6704ede"
+
+	amount := num.NewUint(988939143512)
+
+	s.TopUpAsync(ctx, "some bot", key, asset, amount)
+
+	_ = s.account.EnsureBalance(ctx, asset, amount, "test")
+}
+
+func TestService_slackDan(t *testing.T) {
+	t.Skip()
+
+	type fields struct {
+		walletPubKey string
+	}
+	type args struct {
+		ctx     context.Context
+		assetID string
+		amount  *num.Uint
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		wantErr bool
+	}{
+		{
+			name: "slack",
+			fields: fields{
+				walletPubKey: "6baf7809b6143d4be4a5b641fcef29947aeaa1ab3805c5442de8a31a3449078f",
+			},
+			args: args{
+				ctx:     context.Background(),
+				assetID: "993ed98f4f770d91a796faab1738551193ba45c62341d20597df70fea6704ede",
+				amount:  num.NewUint(988939143512),
+			},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &Provider{
+				walletPubKey: tt.fields.walletPubKey,
+			}
+			if _, err := s.slackDan(tt.args.ctx, tt.args.assetID, tt.args.amount); (err != nil) != tt.wantErr {
+				t.Errorf("slackDan() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
 	}
 }

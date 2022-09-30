@@ -15,19 +15,25 @@ pricing:
     host: prices.ops.vega.xyz
     path: /prices
 wallet:
-  url: http://127.0.0.1:1789
+  url: http://127.0.0.1:1790
 token:
   ethereumAPIAddress:   ws://127.0.0.1:8545
   erc20BridgeAddress:   0x9708FF7510D4A7B9541e1699d15b53Ecb1AFDc54
   stakingBridgeAddress: 0x9135f5afd6F055e731bca2348429482eE614CFfA
   syncTimeoutSec: 5
 whale:
-  walletPubKey:
-  walletName: w00
-  walletPassphrase: 123
+  walletPubKey: abe253f5682703ac654c95ab8e2de4ecccdc000a2315610bc161dd194f32af0e
+  walletName: whale
+  walletPassphrase: pastazazube
   ownerPrivateKeys:
     993ed98f4f770d91a796faab1738551193ba45c62341d20597df70fea6704ede: a37f4c2a678aefb5037bf415a826df1540b330b7e471aa54184877ba901b9ef0
+    b4f2726571fbe8e33b442dc92ed2d7f0d810e21835b7371a7915a365f07ccd9b: a37f4c2a678aefb5037bf415a826df1540b330b7e471aa54184877ba901b9ef0
   faucetURL:
+  slack:
+    appToken:
+    botToken:
+    channelID:
+    enabled: false
 locations:
   - localhost:3007
   - localhost:3017

@@ -6,23 +6,22 @@ import (
 	"math"
 	"time"
 
-	ppconfig "code.vegaprotocol.io/priceproxy/config"
-	"code.vegaprotocol.io/protos/vega"
 	log "github.com/sirupsen/logrus"
 
 	"code.vegaprotocol.io/liqbot/config"
 	"code.vegaprotocol.io/liqbot/types/num"
+	"code.vegaprotocol.io/vega/protos/vega"
 )
 
 func (b *bot) runPriceSteering(ctx context.Context) {
 	defer b.log.Warning("PriceSteering: Stopped")
 
-	if !b.canPlaceOrders() {
+	if !b.CanPlaceOrders() {
 		b.log.WithFields(log.Fields{
 			"PriceSteerOrderScale": b.config.StrategyDetails.PriceSteerOrderScale,
 		}).Debug("PriceSteering: Cannot place orders")
 
-		if err := b.seedOrders(ctx, "PriceSteering"); err != nil {
+		if err := b.SeedOrders(ctx, "PriceSteering"); err != nil {
 			b.log.WithFields(log.Fields{"error": err.Error()}).Error("PriceSteering: Failed to seed orders")
 			return
 		}
@@ -62,7 +61,7 @@ func (b *bot) runPriceSteering(ctx context.Context) {
 }
 
 func (b *bot) steerPrice(ctx context.Context) error {
-	externalPrice, err := b.getExternalPrice()
+	externalPrice, err := b.GetExternalPrice()
 	if err != nil {
 		return fmt.Errorf("failed to get external price: %w", err)
 	}
@@ -97,39 +96,23 @@ func (b *bot) steerPrice(ctx context.Context) error {
 		b.log.WithFields(log.Fields{"error": err.Error()}).Fatal("PriceSteering: Unable to get realistic order details for price steering")
 	}
 
-	if err = b.submitOrder(
-		ctx,
-		size.Uint64(),
-		price,
-		side,
-		vega.Order_TIME_IN_FORCE_GTT,
-		vega.Order_TYPE_LIMIT,
-		"PriceSteeringOrder",
-		"PriceSteering",
+	order := &vega.Order{
+		MarketId:    b.marketID,
+		Size:        size.Uint64(),
+		Price:       price.String(),
+		Side:        side,
+		TimeInForce: vega.Order_TIME_IN_FORCE_GTT,
+		Type:        vega.Order_TYPE_LIMIT,
+		Reference:   "PriceSteeringOrder",
+	}
+
+	if err = b.SubmitOrder(
+		ctx, order, "PriceSteering",
 		int64(b.config.StrategyDetails.LimitOrderDistributionParams.GttLength)); err != nil {
 		return fmt.Errorf("failed to submit order: %w", err)
 	}
 
 	return nil
-}
-
-func (b *bot) getExternalPrice() (*num.Uint, error) {
-	externalPriceResponse, err := b.pricingEngine.GetPrice(ppconfig.PriceConfig{
-		Base:   b.config.InstrumentBase,
-		Quote:  b.config.InstrumentQuote,
-		Wander: true,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get external price: %w", err)
-	}
-
-	if externalPriceResponse.Price <= 0 {
-		return nil, fmt.Errorf("external price is zero")
-	}
-
-	externalPrice := externalPriceResponse.Price * math.Pow(10, float64(b.decimalPlaces))
-	externalPriceNum := num.NewUint(uint64(externalPrice))
-	return externalPriceNum, nil
 }
 
 // getRealisticOrderDetails uses magic to return a realistic order price and size.
@@ -157,8 +140,16 @@ func (b *bot) getRealisticOrderDetails(externalPrice *num.Uint) (*num.Uint, *num
 func (b *bot) getDiscreteThreeLevelPrice(externalPrice *num.Uint) (*num.Uint, error) {
 	// this converts something like BTCUSD 3912312345 (five decimal places)
 	// to 39123.12345 float.
+	if b.decimalPlaces == uint64(len(externalPrice.String())) {
+		return nil, fmt.Errorf("external price has fewer digits than the market decimal places")
+	}
+
 	decimalPlaces := float64(b.decimalPlaces)
+
 	m0 := num.Zero().Div(externalPrice, num.NewUint(uint64(math.Pow(10, decimalPlaces))))
+	if m0.IsZero() {
+		return nil, fmt.Errorf("external price is zero")
+	}
 	tickSize := 1.0 / math.Pow(10, decimalPlaces)
 	delta := float64(b.config.StrategyDetails.LimitOrderDistributionParams.NumTicksFromMid) * tickSize
 	numOrdersPerSec := b.config.StrategyDetails.MarketPriceSteeringRatePerSecond

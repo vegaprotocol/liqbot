@@ -2,12 +2,11 @@ package whale
 
 import (
 	"context"
-	"time"
 
-	dataapipb "code.vegaprotocol.io/protos/data-node/api/v1"
-	v1 "code.vegaprotocol.io/protos/vega/wallet/v1"
-
+	"code.vegaprotocol.io/liqbot/types"
 	"code.vegaprotocol.io/liqbot/types/num"
+	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v1"
+	v1 "code.vegaprotocol.io/vega/protos/vega/wallet/v1"
 )
 
 type dataNode interface {
@@ -22,7 +21,7 @@ type walletClient interface {
 }
 
 type erc20Service interface {
-	Stake(ctx context.Context, ownerPrivateKey, ownerAddress, vegaTokenAddress string, amount *num.Uint) (*num.Uint, error)
+	StakeToAddress(ctx context.Context, ownerPrivateKey, ownerAddress, vegaTokenAddress, vegaPubKey string, amount *num.Uint) (*num.Uint, error)
 	Deposit(ctx context.Context, ownerPrivateKey, ownerAddress, tokenAddress string, amount *num.Uint) (*num.Uint, error)
 }
 
@@ -30,6 +29,9 @@ type faucetClient interface {
 	Mint(ctx context.Context, assetID string, amount *num.Uint) error
 }
 
-type depositStream interface {
-	WaitForDepositFinalize(ctx context.Context, settlementAssetID string, amount *num.Uint, timeout time.Duration) error
+type accountService interface {
+	Init(pubKey string, pauseCh chan types.PauseSignal)
+	EnsureBalance(ctx context.Context, assetID string, targetAmount *num.Uint, from string) error
+	EnsureStake(ctx context.Context, receiverPubKey, assetID string, targetAmount *num.Uint, from string) error
+	StakeAsync(ctx context.Context, receiverPubKey, assetID string, amount *num.Uint) error
 }

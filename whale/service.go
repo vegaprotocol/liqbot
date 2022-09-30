@@ -2,259 +2,114 @@ package whale
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"fmt"
-	"log"
-	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
-
-	dataapipb "code.vegaprotocol.io/protos/data-node/api/v1"
-	"code.vegaprotocol.io/protos/vega"
-	commV1 "code.vegaprotocol.io/protos/vega/commands/v1"
-	"code.vegaprotocol.io/protos/vega/wallet/v1"
-	vtypes "code.vegaprotocol.io/vega/types"
+	log "github.com/sirupsen/logrus"
 
 	"code.vegaprotocol.io/liqbot/config"
+	"code.vegaprotocol.io/liqbot/types"
 	"code.vegaprotocol.io/liqbot/types/num"
-	"code.vegaprotocol.io/liqbot/util"
+	vtypes "code.vegaprotocol.io/vega/core/types"
+	commV1 "code.vegaprotocol.io/vega/protos/vega/commands/v1"
+	"code.vegaprotocol.io/vega/protos/vega/wallet/v1"
 )
 
 type Service struct {
+	node    dataNode
+	wallet  walletClient
+	account accountService
+
 	walletName       string
 	walletPassphrase string
 	walletPubKey     string
-	node             dataNode
-	wallet           walletClient
-	erc20            erc20Service
-	faucet           faucetClient
-	depositStream    depositStream
-	ownerPrivateKeys map[string]string
-	callTimeoutMills time.Duration
+	log              *log.Entry
 }
 
 func NewService(
 	dataNode dataNode,
 	wallet walletClient,
-	erc20 erc20Service,
-	faucet faucetClient,
-	deposits depositStream,
+	account accountService,
 	config *config.WhaleConfig,
 ) *Service {
 	return &Service{
-		node:             dataNode,
-		wallet:           wallet,
-		erc20:            erc20,
-		faucet:           faucet,
-		depositStream:    deposits,
+		node:   dataNode,
+		wallet: wallet,
+
+		account:          account,
 		walletPubKey:     config.WalletPubKey,
 		walletName:       config.WalletName,
 		walletPassphrase: config.WalletPassphrase,
-		ownerPrivateKeys: config.OwnerPrivateKeys,
-		callTimeoutMills: time.Duration(config.SyncTimeoutSec) * time.Second,
+		log: log.WithFields(log.Fields{
+			"whale": config.WalletName,
+		}),
 	}
 }
 
-func (s *Service) Start(ctx context.Context) error {
-	if err := s.wallet.LoginWallet(ctx, s.walletName, s.walletPassphrase); err != nil {
-		return fmt.Errorf("failed to login to wallet: %w", err)
+func (w *Service) Start(ctx context.Context) error {
+	w.log.Info("Starting whale service...")
+
+	pauseCh := make(chan types.PauseSignal)
+
+	go func() {
+		for p := range pauseCh {
+			w.log.Infof("Whale service paused: %v; from %s", p.Pause, p.From)
+		}
+	}()
+
+	w.account.Init(w.walletPubKey, pauseCh)
+
+	if err := w.wallet.LoginWallet(ctx, w.walletName, w.walletPassphrase); err != nil {
+		return fmt.Errorf("failed to login to wallet: %s", err)
 	}
 
-	s.node.MustDialConnection(ctx)
+	w.node.MustDialConnection(ctx)
 	return nil
 }
 
-func (s *Service) TopUp(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint) error {
-	if receiverAddress == s.walletPubKey {
-		//return fmt.Errorf("the sender and receiver address cannot be the same")
+func (w *Service) TopUpAsync(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint) error {
+	if assetID == "" {
+		return fmt.Errorf("assetID is empty for bot '%s'", receiverName)
 	}
 
-	if err := s.ensureWhaleBalance(ctx, assetID, amount); err != nil {
-		return fmt.Errorf("failed to ensure enough funds: %w", err)
+	if receiverAddress == w.walletPubKey {
+		return fmt.Errorf("whale and bot address cannot be the same")
 	}
 
-	balance, err := s.getBalance(assetID)
-	if err != nil {
-		return fmt.Errorf("failed to check for sufficient funds: %w", err)
-	}
+	go func() {
+		if err := w.account.EnsureBalance(ctx, assetID, amount, "Whale"); err != nil {
+			w.log.Errorf("Whale: failed to ensure enough funds: %s", err)
+			return
+		}
 
-	if balance.LT(amount.Int()) {
-		return fmt.Errorf("insufficient funds")
-	}
-
-	// TODO: is Vega staked token supposed to be transferred differently?
-
-	err = s.wallet.SignTx(ctx, &v1.SubmitTransactionRequest{
-		PubKey:    s.walletPubKey,
-		Propagate: true,
-		Command: &v1.SubmitTransactionRequest_Transfer{
-			Transfer: &commV1.Transfer{
-				FromAccountType: vtypes.AccountTypeGeneral,
-				To:              receiverAddress,
-				ToAccountType:   vtypes.AccountTypeGeneral,
-				Asset:           assetID,
-				Amount:          amount.String(),
-				Reference:       fmt.Sprintf("Liquidity Bot '%s' Top-Up", receiverName),
-				Kind:            &commV1.Transfer_OneOff{OneOff: &commV1.OneOffTransfer{}},
+		err := w.wallet.SignTx(ctx, &v1.SubmitTransactionRequest{
+			PubKey:    w.walletPubKey,
+			Propagate: true,
+			Command: &v1.SubmitTransactionRequest_Transfer{
+				Transfer: &commV1.Transfer{
+					FromAccountType: vtypes.AccountTypeGeneral,
+					To:              receiverAddress,
+					ToAccountType:   vtypes.AccountTypeGeneral,
+					Asset:           assetID,
+					Amount:          amount.String(),
+					Reference:       fmt.Sprintf("Liquidity Bot '%s' Top-Up", receiverName),
+					Kind:            &commV1.Transfer_OneOff{OneOff: &commV1.OneOffTransfer{}},
+				},
 			},
-		},
-	})
-	if err != nil {
-		return fmt.Errorf("failed to top-up bot '%s': %w", receiverName, err)
-	}
-
-	if err = s.depositStream.WaitForDepositFinalize(ctx, assetID, amount, s.callTimeoutMills); err != nil {
-		return fmt.Errorf("failed to finalize deposit: %w", err)
-	}
-
-	return nil
-}
-
-func (s *Service) ensureWhaleBalance(ctx context.Context, assetID string, amount *num.Uint) error {
-	balance, err := s.getBalance(assetID)
-	if err != nil {
-		return fmt.Errorf("failed to check for sufficient funds: %w", err)
-	}
-
-	if balance.GT(amount.Int()) {
-		return nil
-	}
-
-	toDeposit := amount.Mul(amount, num.NewUint(1000)) // deposit more than needed
-
-	if err = s.deposit(ctx, assetID, toDeposit); err != nil {
-		return fmt.Errorf("failed to deposit: %w", err)
-	}
-
-	return nil
-}
-
-func (s *Service) getBalance(assetID string) (*num.Int, error) {
-	// cache the balance
-	response, err := s.node.PartyAccounts(&dataapipb.PartyAccountsRequest{
-		PartyId: s.walletPubKey,
-		Asset:   assetID,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get accounts: %w", err)
-	}
-
-	balance := new(num.Uint)
-
-	for _, account := range response.Accounts {
-		if account.Type == vtypes.AccountTypeGeneral {
-			balance, err = util.ConvertUint256(account.Balance)
-			if err != nil {
-				return nil, fmt.Errorf("failed to convert account balance: %w", err)
-			}
-		}
-	}
-
-	return balance.Int(), nil
-}
-
-func (s *Service) deposit(ctx context.Context, assetID string, amount *num.Uint) error {
-	response, err := s.node.AssetByID(&dataapipb.AssetByIDRequest{
-		Id: assetID,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to get asset id: %w", err)
-	}
-
-	if erc20 := response.Asset.Details.GetErc20(); erc20 != nil {
-		return s.depositERC20(ctx, response.Asset, amount)
-	} else if builtin := response.Asset.Details.GetBuiltinAsset(); builtin != nil {
-		maxFaucet, err := util.ConvertUint256(builtin.MaxFaucetAmountMint)
+		})
 		if err != nil {
-			return fmt.Errorf("failed to convert max faucet amount: %w", err)
+			log.Errorf("Failed to top-up bot '%s': %s", receiverName, err)
 		}
-		return s.depositBuiltin(ctx, assetID, amount, maxFaucet)
-	}
-
-	return fmt.Errorf("unsupported asset type")
-}
-
-func (s *Service) depositERC20(ctx context.Context, asset *vega.Asset, amount *num.Uint) error {
-	ownerKey, err := s.getOwnerKeyForAsset(asset.Id)
-	if err != nil {
-		return fmt.Errorf("failed to get owner key: %w", err)
-	}
-
-	contractAddress := asset.Details.GetErc20().ContractAddress
-	added := new(num.Uint)
-
-	var depFn func(ctx context.Context, ownerPrivateKey string, ownerAddress string, vegaTokenAddress string, amount *num.Uint) (*num.Uint, error)
-
-	if asset.Details.Symbol == "VEGA" {
-		depFn = s.erc20.Stake
-	} else {
-		depFn = s.erc20.Deposit
-	}
-	added, err = depFn(ctx, ownerKey.privateKey, ownerKey.address, contractAddress, amount)
-	if err != nil {
-		return fmt.Errorf("failed to add erc20 token: %w", err)
-	}
-
-	// TODO: check units
-	if added.Int().LT(amount.Int()) {
-		// TODO: how to proceed?
-		return fmt.Errorf("deposited less than requested amount")
-	}
+	}()
 
 	return nil
 }
 
-func (s *Service) depositBuiltin(ctx context.Context, assetID string, amount, maxFaucet *num.Uint) error {
-	times := int(new(num.Uint).Div(amount, maxFaucet).Uint64() + 1)
+func (w *Service) StakeAsync(ctx context.Context, receiverAddress, assetID string, amount *num.Uint) error {
+	w.log.Debugf("Staking for '%s' ...", receiverAddress)
 
-	for i := 0; i < times; i++ {
-		if err := s.faucet.Mint(ctx, assetID, maxFaucet); err != nil {
-			return fmt.Errorf("failed to deposit: %w", err)
-		}
-		time.Sleep(2 * time.Second) // TODO: configure
-	}
-	return nil
-}
-
-type key struct {
-	privateKey string
-	address    string
-}
-
-func (s *Service) getOwnerKeyForAsset(assetID string) (*key, error) {
-	ownerPrivateKey, ok := s.ownerPrivateKeys[assetID]
-	if !ok {
-		return nil, fmt.Errorf("owner private key not configured for asset '%s'", assetID)
+	if err := w.account.StakeAsync(ctx, receiverAddress, assetID, amount); err != nil {
+		return err
 	}
 
-	address, err := addressFromPrivateKey(ownerPrivateKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get address from private key: %w", err)
-	}
-
-	return &key{
-		privateKey: ownerPrivateKey,
-		address:    address,
-	}, nil
-}
-
-func addressFromPrivateKey(privateKey string) (string, error) {
-	key, err := crypto.HexToECDSA(privateKey)
-	if err != nil {
-		return "", fmt.Errorf("failed to convert owner private key hash into ECDSA: %w", err)
-	}
-
-	publicKeyECDSA, ok := key.Public().(*ecdsa.PublicKey)
-	if !ok {
-		return "", fmt.Errorf("cannot assert type: publicKey is not of type *ecdsa.PublicKey")
-	}
-
-	address := crypto.PubkeyToAddress(*publicKeyECDSA).Hex()
-	return address, nil
-}
-
-func (s *Service) slackDan(_ context.Context, address, assetID string, amount *num.Uint) error {
-	// TODO: slack @Dan
-	log.Printf("slack @Dan: %s %s %s", address, assetID, amount)
 	return nil
 }

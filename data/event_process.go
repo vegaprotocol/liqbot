@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"time"
 
-	coreapipb "code.vegaprotocol.io/protos/vega/api/v1"
 	log "github.com/sirupsen/logrus"
 
 	e "code.vegaprotocol.io/liqbot/errors"
 	"code.vegaprotocol.io/liqbot/types"
+	coreapipb "code.vegaprotocol.io/vega/protos/vega/api/v1"
 )
 
 type busEventProcessor struct {
@@ -19,11 +19,24 @@ type busEventProcessor struct {
 	pauseCh chan types.PauseSignal
 }
 
-func newBusEventProcessor(node busStreamer, pauseCh chan types.PauseSignal) *busEventProcessor {
-	return &busEventProcessor{
-		node:    node,
-		log:     log.WithFields(log.Fields{"module": "EventProcessor", "event": "EventBus"}),
-		pauseCh: pauseCh,
+func newBusEventProcessor(node busStreamer, opts ...Option) *busEventProcessor {
+	b := &busEventProcessor{
+		node: node,
+		log:  log.WithFields(log.Fields{"module": "EventProcessor", "event": "EventBus"}),
+	}
+
+	for _, opt := range opts {
+		opt(b)
+	}
+
+	return b
+}
+
+type Option func(*busEventProcessor)
+
+func WithPauseCh(ch chan types.PauseSignal) Option {
+	return func(b *busEventProcessor) {
+		b.pauseCh = ch
 	}
 }
 

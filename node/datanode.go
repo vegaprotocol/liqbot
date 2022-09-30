@@ -7,11 +7,12 @@ import (
 	"sync"
 	"time"
 
-	dataapipb "code.vegaprotocol.io/protos/data-node/api/v1"
-	vegaapipb "code.vegaprotocol.io/protos/vega/api/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
+
+	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v1"
+	vegaapipb "code.vegaprotocol.io/vega/protos/vega/api/v1"
 
 	e "code.vegaprotocol.io/liqbot/errors"
 )

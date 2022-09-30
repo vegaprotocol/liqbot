@@ -50,6 +50,10 @@ func NewService(conf *config.TokenConfig, vegaPubKey string) (*Service, error) {
 }
 
 func (s *Service) Stake(ctx context.Context, ownerPrivateKey, ownerAddress, vegaTokenAddress string, amount *num.Uint) (*num.Uint, error) {
+	return s.StakeToAddress(ctx, ownerPrivateKey, ownerAddress, vegaTokenAddress, s.vegaPubKey, amount)
+}
+
+func (s *Service) StakeToAddress(ctx context.Context, ownerPrivateKey, ownerAddress, vegaTokenAddress, vegaPubKey string, amount *num.Uint) (*num.Uint, error) {
 	stakingBridge, err := s.client.NewStakingBridgeSession(ctx, ownerPrivateKey, s.stakingBridgeAddress, s.syncTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create staking bridge: %w", err)
@@ -65,7 +69,7 @@ func (s *Service) Stake(ctx context.Context, ownerPrivateKey, ownerAddress, vega
 		return nil, fmt.Errorf("failed to mint vegaToken: %w", err)
 	}
 
-	if err = s.approveAndStakeToken(vegaToken, stakingBridge, minted); err != nil {
+	if err = s.approveAndStakeToken(vegaToken, vegaPubKey, stakingBridge, minted); err != nil {
 		return nil, fmt.Errorf("failed to approve and stake token on staking bridge: %w", err)
 	}
 
@@ -132,7 +136,8 @@ func (s *Service) mintToken(ctx context.Context, token token, address common.Add
 			"address": address,
 		}).Debug("Minting new token")
 
-	if tx, err := token.MintSync(address, amount); err == nil {
+	var tx *types.Transaction
+	if tx, err = token.MintSync(address, amount); err == nil {
 		s.log.WithFields(
 			log.Fields{
 				"token":   name,
@@ -147,7 +152,15 @@ func (s *Service) mintToken(ctx context.Context, token token, address common.Add
 		return minted, nil
 	}
 
+	s.log.WithFields(log.Fields{"error": err}).Warn("Minting token failed")
+
+	s.log.Debug("Fallback to minting token using hack...")
+
 	// plan B
+
+	ctx, cancel := context.WithTimeout(ctx, 6*time.Minute) // TODO: make configurable
+	defer cancel()
+
 	minted, err := token.MintRawSync(ctx, address, amount)
 	if err != nil {
 		return nil, fmt.Errorf("failed to mint token: %w", err)
@@ -207,7 +220,7 @@ func (s *Service) approveAndDepositToken(token token, bridge *vgethereum.ERC20Br
 	return nil
 }
 
-func (s *Service) approveAndStakeToken(token token, bridge *vgethereum.StakingBridgeSession, amount *big.Int) error {
+func (s *Service) approveAndStakeToken(token token, vegaPubKey string, bridge *vgethereum.StakingBridgeSession, amount *big.Int) error {
 	name, err := token.Name()
 	if err != nil {
 		return fmt.Errorf("failed to get name of token: %w", err)
@@ -224,7 +237,7 @@ func (s *Service) approveAndStakeToken(token token, bridge *vgethereum.StakingBr
 		return fmt.Errorf("failed to approve token: %w", err)
 	}
 
-	vegaPubKeyByte32, err := vgethereum.HexStringToByte32Array(s.vegaPubKey)
+	vegaPubKeyByte32, err := vgethereum.HexStringToByte32Array(vegaPubKey)
 	if err != nil {
 		return err
 	}
@@ -233,7 +246,7 @@ func (s *Service) approveAndStakeToken(token token, bridge *vgethereum.StakingBr
 		log.Fields{
 			"token":      name,
 			"amount":     amount,
-			"vegaPubKey": s.vegaPubKey,
+			"vegaPubKey": vegaPubKey,
 		}).Debug("Staking asset")
 
 	if _, err = bridge.Stake(amount, vegaPubKeyByte32); err != nil {
@@ -244,7 +257,7 @@ func (s *Service) approveAndStakeToken(token token, bridge *vgethereum.StakingBr
 		log.Fields{
 			"token":      name,
 			"amount":     amount,
-			"vegaPubKey": s.vegaPubKey,
+			"vegaPubKey": vegaPubKey,
 		}).Debug("Token staked")
 
 	return nil

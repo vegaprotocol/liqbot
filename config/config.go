@@ -126,6 +126,14 @@ type WhaleConfig struct {
 	OwnerPrivateKeys map[string]string `yaml:"ownerPrivateKeys"`
 	FaucetURL        string            `yaml:"faucetURL"`
 	SyncTimeoutSec   int               `yaml:"syncTimeoutSec"`
+	SlackConfig      SlackConfig       `yaml:"slack"`
+}
+
+type SlackConfig struct {
+	AppToken  string `yaml:"appToken"`
+	BotToken  string `yaml:"botToken"`
+	ChannelID string `yaml:"channelID"`
+	Enabled   bool   `yaml:"enabled"`
 }
 
 // BotConfig specifies the configuration parameters for one bot, which talks to one market on one

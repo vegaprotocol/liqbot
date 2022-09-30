@@ -9,8 +9,8 @@ import (
 	reflect "reflect"
 	time "time"
 
-	v1 "code.vegaprotocol.io/protos/data-node/api/v1"
-	v10 "code.vegaprotocol.io/protos/vega/api/v1"
+	v1 "code.vegaprotocol.io/vega/protos/data-node/api/v1"
+	v10 "code.vegaprotocol.io/vega/protos/vega/api/v1"
 	gomock "github.com/golang/mock/gomock"
 )
 

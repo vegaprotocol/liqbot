@@ -13,9 +13,8 @@ import (
 
 	"github.com/golang/protobuf/jsonpb"
 
-	walletpb "code.vegaprotocol.io/protos/vega/wallet/v1"
-
 	"code.vegaprotocol.io/liqbot/types"
+	walletpb "code.vegaprotocol.io/vega/protos/vega/wallet/v1"
 )
 
 type Client struct {

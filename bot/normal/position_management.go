@@ -8,13 +8,13 @@ import (
 	"math/rand"
 	"time"
 
-	"code.vegaprotocol.io/protos/vega"
-	commandspb "code.vegaprotocol.io/protos/vega/commands/v1"
-	walletpb "code.vegaprotocol.io/protos/vega/wallet/v1"
 	log "github.com/sirupsen/logrus"
 
 	"code.vegaprotocol.io/liqbot/types/num"
 	"code.vegaprotocol.io/liqbot/util"
+	"code.vegaprotocol.io/vega/protos/vega"
+	commandspb "code.vegaprotocol.io/vega/protos/vega/commands/v1"
+	walletpb "code.vegaprotocol.io/vega/protos/vega/wallet/v1"
 )
 
 // TODO: maybe after staking, deposit back the same amount as staked.
@@ -49,7 +49,7 @@ func (b *bot) runPositionManagement(ctx context.Context) {
 			}
 
 			// Only update liquidity and position if we are not in auction
-			if !b.canPlaceOrders() {
+			if !b.CanPlaceOrders() {
 				if err := b.ensureCommitmentAmount(ctx); err != nil {
 					b.log.WithFields(log.Fields{"error": err.Error()}).Warning("PositionManagement: Failed to update commitment amount")
 				}
@@ -88,7 +88,7 @@ func (b *bot) ensureCommitmentAmount(ctx context.Context) error {
 		},
 	).Debug("PositionManagement: Supplied stake is less than target stake, increasing commitment amount...")
 
-	if err = b.ensureBalance(ctx, requiredCommitment, "PositionManagement"); err != nil {
+	if err = b.EnsureBalance(ctx, b.settlementAssetID, requiredCommitment, "PositionManagement"); err != nil {
 		return fmt.Errorf("failed to ensure balance: %w", err)
 	}
 
@@ -155,7 +155,7 @@ func (b *bot) manageDirection(ctx context.Context, previousOpenVolume int64) (in
 		return openVolume, fmt.Errorf("failed to get required commitment amount: %w", err)
 	}
 
-	if err = b.ensureBalance(ctx, commitment, "PositionManagement"); err != nil {
+	if err = b.EnsureBalance(ctx, b.settlementAssetID, commitment, "PositionManagement"); err != nil {
 		return openVolume, fmt.Errorf("failed to ensure balance: %w", err)
 	}
 
@@ -186,17 +186,17 @@ func (b *bot) managePosition(ctx context.Context) error {
 		return nil
 	}
 
-	if err := b.submitOrder(
-		ctx,
-		size,
-		num.Zero(),
-		side,
-		vega.Order_TIME_IN_FORCE_IOC,
-		vega.Order_TYPE_MARKET,
-		"PosManagement",
-		"PositionManagement",
-		0,
-	); err != nil {
+	order := &vega.Order{
+		MarketId:    b.marketID,
+		Size:        size,
+		Price:       num.Zero().String(),
+		Side:        side,
+		TimeInForce: vega.Order_TIME_IN_FORCE_GTT,
+		Type:        vega.Order_TYPE_LIMIT,
+		Reference:   "PosManagement",
+	}
+
+	if err := b.SubmitOrder(ctx, order, "PositionManagement", 0); err != nil {
 		return fmt.Errorf("failed to place order: %w", err)
 	}
 
@@ -322,7 +322,7 @@ func (b *bot) provideLiquidity(ctx context.Context) error {
 		return nil
 	}
 
-	if err = b.ensureBalance(ctx, commitment, "PositionManagement"); err != nil {
+	if err = b.EnsureBalance(ctx, b.settlementAssetID, commitment, "PositionManagement"); err != nil {
 		return fmt.Errorf("failed to ensure balance: %w", err)
 	}
 
@@ -414,11 +414,17 @@ func (b *bot) placeAuctionOrders(ctx context.Context) error {
 			side = vega.Side_SIDE_SELL
 		}
 
-		tif := vega.Order_TIME_IN_FORCE_GTT
-		orderType := vega.Order_TYPE_LIMIT
-		ref := "AuctionOrder"
+		order := &vega.Order{
+			MarketId:    b.marketID,
+			Size:        size.Uint64(),
+			Price:       price.String(),
+			Side:        side,
+			TimeInForce: vega.Order_TIME_IN_FORCE_GTT,
+			Type:        vega.Order_TYPE_LIMIT,
+			Reference:   "AuctionOrder",
+		}
 
-		if err := b.submitOrder(ctx, size.Uint64(), price, side, tif, orderType, ref, "PositionManagement", 330); err != nil {
+		if err := b.SubmitOrder(ctx, order, "PositionManagement", 330); err != nil {
 			// We failed to send an order so stop trying to send anymore
 			return fmt.Errorf("failed to send auction order: %w", err)
 		}

@@ -119,7 +119,7 @@ func generatePriceUsingDiscreteThreeLevel(m0, delta, sigma, tgtTimeHorizonYrFrac
 
 	price = m0 * y
 
-	return price, err
+	return price, nil
 }
 
 func randomChoice(probabilities []float64) uint64 {

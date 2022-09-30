@@ -3,7 +3,7 @@ package types
 import (
 	"fmt"
 
-	"code.vegaprotocol.io/protos/vega"
+	"code.vegaprotocol.io/vega/protos/vega"
 
 	"code.vegaprotocol.io/liqbot/types/num"
 	"code.vegaprotocol.io/liqbot/util"

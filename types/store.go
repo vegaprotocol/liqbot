@@ -1,34 +1,42 @@
 package types
 
-type Store struct {
-	market  cache[MarketData]
+type BalanceStore struct {
 	balance cache[Balance]
 }
 
-func NewStore() *Store {
-	return &Store{
-		market:  newCache[MarketData](),
+func NewBalanceStore() *BalanceStore {
+	return &BalanceStore{
 		balance: newCache[Balance](),
 	}
 }
 
-func (s *Store) Balance() Balance {
+func (s *BalanceStore) Balance() Balance {
 	return s.balance.get()
 }
 
-func (s *Store) Market() MarketData {
-	return s.market.get()
-}
-
-func (s *Store) OpenVolume() int64 {
-	return s.market.get().openVolume
-}
-
-func (s *Store) BalanceSet(sets ...func(*Balance)) {
+func (s *BalanceStore) BalanceSet(sets ...func(*Balance)) {
 	s.balance.set(sets...)
 }
 
-func (s *Store) MarketSet(sets ...func(*MarketData)) {
+type MarketStore struct {
+	market cache[MarketData]
+}
+
+func NewMarketStore() *MarketStore {
+	return &MarketStore{
+		market: newCache[MarketData](),
+	}
+}
+
+func (s *MarketStore) Market() MarketData {
+	return s.market.get()
+}
+
+func (s *MarketStore) OpenVolume() int64 {
+	return s.market.get().openVolume
+}
+
+func (s *MarketStore) MarketSet(sets ...func(*MarketData)) {
 	s.market.set(sets...)
 }
 
