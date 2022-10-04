@@ -16,6 +16,7 @@ import (
 	"code.vegaprotocol.io/liqbot/util"
 	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v1"
 	"code.vegaprotocol.io/vega/protos/vega"
+	v1 "code.vegaprotocol.io/vega/protos/vega/events/v1"
 )
 
 type Provider struct {
@@ -41,7 +42,6 @@ type ensureBalanceRequest struct {
 	address string
 	assetID string
 	amount  *num.Uint
-	resp    chan error
 }
 
 type slacker struct {
@@ -75,7 +75,8 @@ func NewProvider(
 			enabled:   config.SlackConfig.Enabled,
 		},
 		log: log.WithFields(log.Fields{
-			"whale": config.WalletName,
+			"component": "WhaleProvider",
+			"whaleName": config.WalletName,
 		}),
 	}
 
@@ -83,31 +84,29 @@ func NewProvider(
 		for {
 			select {
 			case req := <-p.ensureBalanceCh:
-				req.resp <- p.topUpAsync(req.ctx, req.name, req.address, req.assetID, req.amount)
+				if err := p.topUpAsync(req.ctx, req.name, req.address, req.assetID, req.amount); err != nil {
+					log.Errorf("Whale: failed to ensure enough funds: %s", err)
+				}
 			}
 		}
 	}()
 	return p
 }
 
-func (p *Provider) TopUpAsync(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint) (err error) {
-	resp := make(chan error)
+func (p *Provider) TopUpAsync(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint) (evt v1.BusEventType, err error) {
+	evt = v1.BusEventType_BUS_EVENT_TYPE_DEPOSIT // TODO: this is not always true?
 	p.ensureBalanceCh <- ensureBalanceRequest{
 		ctx:     ctx,
 		name:    receiverName,
 		address: receiverAddress,
 		assetID: assetID,
 		amount:  amount,
-		resp:    resp,
-	}
-
-	if err = <-resp; err != nil {
-		log.Errorf("Whale: failed to ensure enough funds: %s", err)
 	}
 	return
 }
 
 func (p *Provider) topUpAsync(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint) (err error) {
+	// TODO: remove deposit slack request, once deposited
 	if existDeposit, ok := p.getPendingDeposit(assetID); ok {
 		existDeposit.amount = amount.Add(amount, existDeposit.amount)
 		if p.slack.enabled {
@@ -162,12 +161,15 @@ func (p *Provider) deposit(ctx context.Context, receiverName, receiverAddress, a
 		err = p.depositERC20(ctx, response.Asset, amount)
 	} else if builtin := response.Asset.Details.GetBuiltinAsset(); builtin != nil {
 		err = p.depositBuiltin(ctx, assetID, amount, builtin)
+	} else {
+		return fmt.Errorf("unsupported asset type")
+
 	}
 	if err != nil {
 		return fmt.Errorf("failed to deposit to address '%s', name '%s': %w", receiverAddress, receiverName, err)
 	}
 
-	return fmt.Errorf("unsupported asset type")
+	return nil
 }
 
 func (p *Provider) getPendingDeposit(assetID string) (pendingDeposit, bool) {

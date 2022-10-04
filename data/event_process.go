@@ -22,7 +22,7 @@ type busEventProcessor struct {
 func newBusEventProcessor(node busStreamer, opts ...Option) *busEventProcessor {
 	b := &busEventProcessor{
 		node: node,
-		log:  log.WithFields(log.Fields{"module": "EventProcessor", "event": "EventBus"}),
+		log:  log.WithFields(log.Fields{"component": "EventProcessor", "event": "EventBus"}),
 	}
 
 	for _, opt := range opts {
@@ -45,49 +45,60 @@ func (b *busEventProcessor) processEvents(
 	name string,
 	req *coreapipb.ObserveEventBusRequest,
 	process func(*coreapipb.ObserveEventBusResponse) (bool, error),
-) {
-	defer b.log.WithFields(log.Fields{
-		"name": name,
-	}).Debug("Stopping event processor")
+) <-chan error {
+	errCh := make(chan error)
 
 	var stop bool
-	for s := b.mustGetStream(ctx, name, req); !stop; {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-			if s == nil {
+	go func() {
+		defer func() {
+			b.log.WithFields(log.Fields{
+				"name": name,
+			}).Debug("Stopping event processor")
+			close(errCh)
+		}()
+		for s := b.mustGetStream(ctx, name, req); !stop; {
+			select {
+			case <-ctx.Done():
 				return
-			}
-
-			rsp, err := s.Recv()
-			if err != nil {
-				if ctx.Err() == context.DeadlineExceeded {
+			default:
+				if s == nil {
 					return
 				}
 
-				b.log.WithFields(
-					log.Fields{
+				rsp, err := s.Recv()
+				if err != nil {
+					if ctx.Err() == context.DeadlineExceeded {
+						return
+					}
+
+					b.log.WithFields(
+						log.Fields{
+							"error": err.Error(),
+							"name":  name,
+						},
+					).Warningf("Stream closed, resubscribing...")
+
+					b.pause(true, name)
+					s = b.mustGetStream(ctx, name, req)
+					b.pause(false, name)
+					continue
+				}
+
+				stop, err = process(rsp)
+				if err != nil {
+					b.log.WithFields(log.Fields{
 						"error": err.Error(),
 						"name":  name,
-					},
-				).Warningf("Stream closed, resubscribing...")
-
-				b.pause(true, name)
-				s = b.mustGetStream(ctx, name, req)
-				b.pause(false, name)
-				continue
-			}
-
-			stop, err = process(rsp)
-			if err != nil {
-				b.log.WithFields(log.Fields{
-					"error": err.Error(),
-					"name":  name,
-				}).Warning("Unable to process event")
+					}).Warning("Unable to process event")
+					select {
+					case errCh <- err:
+					default:
+					}
+				}
 			}
 		}
-	}
+	}()
+	return errCh
 }
 
 func (b *busEventProcessor) mustGetStream(

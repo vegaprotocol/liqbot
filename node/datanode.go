@@ -146,7 +146,7 @@ func (n *DataNode) ObserveEventBus(ctx context.Context) (client vegaapipb.CoreSe
 		return
 	}
 
-	if n.conn.GetState() != connectivity.Ready {
+	if n.conn == nil || n.conn.GetState() != connectivity.Ready {
 		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
 		return
 	}

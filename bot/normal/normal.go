@@ -13,6 +13,7 @@ import (
 
 	"code.vegaprotocol.io/liqbot/config"
 	"code.vegaprotocol.io/liqbot/types"
+	"code.vegaprotocol.io/liqbot/types/num"
 	"code.vegaprotocol.io/vega/wallet/wallets"
 )
 
@@ -114,6 +115,18 @@ func (b *bot) Start() error {
 	}).Info("Market info")
 
 	ctx, cancel := context.WithCancel(ctx)
+
+	// TODO: what to use here?
+	targetAmount, overflow := num.UintFromString(b.config.StrategyDetails.CommitmentAmount, 10)
+	if overflow {
+		cancel()
+		return fmt.Errorf("failed to parse targetAmount: overflow")
+	}
+
+	if err = b.EnsureBalance(ctx, b.settlementAssetID, targetAmount, "Start"); err != nil {
+		cancel()
+		return fmt.Errorf("failed to ensure balance: %w", err)
+	}
 
 	go func() {
 		defer cancel()

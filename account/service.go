@@ -47,34 +47,41 @@ func (a *Service) EnsureBalance(ctx context.Context, assetID string, targetAmoun
 
 	a.log.WithFields(
 		log.Fields{
+			"name":         a.name,
+			"partyId":      a.pubKey,
 			"balanceTotal": balanceTotal.String(),
 		}).Debugf("%s: Total account balance", from)
 
-	if balanceTotal.GT(targetAmount) {
+	if balanceTotal.GTE(targetAmount) {
 		return nil
 	}
 
 	a.log.WithFields(
 		log.Fields{
+			"name":         a.name,
+			"partyId":      a.pubKey,
 			"balanceTotal": balanceTotal.String(),
 			"targetAmount": targetAmount.String(),
 		}).Debugf("%s: Account balance is less than target amount, depositing...", from)
 
-	if err = a.coinProvider.TopUpAsync(ctx, a.name, a.pubKey, assetID, targetAmount); err != nil {
+	evtType, err := a.coinProvider.TopUpAsync(ctx, a.name, a.pubKey, assetID, targetAmount)
+	if err != nil {
 		return fmt.Errorf("failed to top up: %w", err)
 	}
 
-	a.log.Debugf("%s: Waiting for top-up...", from)
+	a.log.WithFields(log.Fields{"name": a.name}).Debugf("%s: Waiting for top-up...", from)
 
-	if err = a.accountStream.WaitForDepositFinalise(ctx, a.pubKey, assetID, targetAmount, 0); err != nil {
+	if err = a.accountStream.WaitForTopUpToFinalise(ctx, evtType, a.pubKey, assetID, targetAmount, 0); err != nil {
 		return fmt.Errorf("failed to finalise deposit: %w", err)
 	}
+
+	a.log.WithFields(log.Fields{"name": a.name}).Debugf("%s: Top-up complete", from)
 
 	return nil
 }
 
 // TODO: DRY
-func (a *Service) EnsureStake(ctx context.Context, receiverPubKey, assetID string, targetAmount *num.Uint, from string) error {
+func (a *Service) EnsureStake(ctx context.Context, receiverName, receiverPubKey, assetID string, targetAmount *num.Uint, from string) error {
 	if receiverPubKey == "" {
 		return fmt.Errorf("receiver public key is empty")
 	}
@@ -84,10 +91,13 @@ func (a *Service) EnsureStake(ctx context.Context, receiverPubKey, assetID strin
 		return err
 	}
 
-	balanceTotal := store.Balance().Total() // TODO: should it be total balance?
+	// TODO: how the hell do we check for stake balance??
+	balanceTotal := store.Balance().Total()
 
 	a.log.WithFields(
 		log.Fields{
+			"name":         a.name,
+			"partyId":      a.pubKey,
 			"balanceTotal": balanceTotal.String(),
 		}).Debugf("%s: Total account stake balance", from)
 
@@ -97,15 +107,25 @@ func (a *Service) EnsureStake(ctx context.Context, receiverPubKey, assetID strin
 
 	a.log.WithFields(
 		log.Fields{
-			"balanceTotal": balanceTotal.String(),
-			"targetAmount": targetAmount.String(),
+			"name":           a.name,
+			"receiverName":   receiverName,
+			"receiverPubKey": receiverPubKey,
+			"partyId":        a.pubKey,
+			"balanceTotal":   balanceTotal.String(),
+			"targetAmount":   targetAmount.String(),
 		}).Debugf("%s: Account Stake balance is less than target amount, staking...", from)
 
 	if err = a.coinProvider.StakeAsync(ctx, receiverPubKey, assetID, targetAmount); err != nil {
 		return fmt.Errorf("failed to stake: %w", err)
 	}
 
-	a.log.Debugf("%s: Waiting for staking...", from)
+	a.log.WithFields(log.Fields{
+		"name":           a.name,
+		"receiverName":   receiverName,
+		"receiverPubKey": receiverPubKey,
+		"partyId":        a.pubKey,
+		"targetAmount":   targetAmount.String(),
+	}).Debugf("%s: Waiting for staking...", from)
 
 	if err = a.accountStream.WaitForStakeLinking(receiverPubKey); err != nil {
 		return fmt.Errorf("failed to finalise stake: %w", err)
@@ -130,7 +150,7 @@ func (a *Service) Balance() types.Balance {
 func (a *Service) getStore(assetID string) (_ data.BalanceStore, err error) {
 	store, ok := a.stores[assetID]
 	if !ok {
-		store, err = a.accountStream.InitBalances(assetID)
+		store, err = a.accountStream.GetBalances(assetID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialise balances for '%s': %w", assetID, err)
 		}

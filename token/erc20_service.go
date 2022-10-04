@@ -29,9 +29,10 @@ type Service struct {
 func NewService(conf *config.TokenConfig, vegaPubKey string) (*Service, error) {
 	ctx := context.Background()
 
-	var syncTimeout time.Duration
+	var syncTimeout *time.Duration
 	if conf.SyncTimeoutSec != 0 {
-		syncTimeout = time.Duration(conf.SyncTimeoutSec) * time.Second
+		syncTimeoutVal := time.Duration(conf.SyncTimeoutSec) * time.Second
+		syncTimeout = &syncTimeoutVal
 	}
 
 	client, err := vgethereum.NewClient(ctx, conf.EthereumAPIAddress)
@@ -44,8 +45,8 @@ func NewService(conf *config.TokenConfig, vegaPubKey string) (*Service, error) {
 		vegaPubKey:           vegaPubKey,
 		erc20BridgeAddress:   common.HexToAddress(conf.Erc20BridgeAddress),
 		stakingBridgeAddress: common.HexToAddress(conf.StakingBridgeAddress),
-		syncTimeout:          &syncTimeout,
-		log:                  log.WithFields(log.Fields{"service": "Token"}),
+		syncTimeout:          syncTimeout,
+		log:                  log.WithFields(log.Fields{"component": "TokenService"}),
 	}, nil
 }
 

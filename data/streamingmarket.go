@@ -19,6 +19,7 @@ import (
 )
 
 type market struct {
+	name         string
 	log          *log.Entry
 	node         DataNode
 	walletPubKey string
@@ -27,10 +28,11 @@ type market struct {
 	busEvProc    busEventer
 }
 
-func NewMarketStream(node DataNode) *market {
+func NewMarketStream(name string, node DataNode) *market {
 	return &market{
-		log:  log.WithField("module", "MarketStreamer"),
+		name: name,
 		node: node,
+		log:  log.WithField("component", "MarketStreamer"),
 	}
 }
 
@@ -55,8 +57,8 @@ func (m *market) Subscribe(marketID string) error {
 		return fmt.Errorf("failed to get open volume: %w", err)
 	}
 
-	go m.subscribeToMarketEvents()
-	go m.subscribePositions()
+	m.subscribeToMarketEvents()
+	m.subscribePositions()
 
 	return nil
 }
@@ -72,23 +74,35 @@ func (m *market) WaitForProposalID() (string, error) {
 		for _, event := range rsp.GetEvents() {
 			proposal := event.GetProposal()
 
-			if proposal.State == vega.Proposal_STATE_OPEN {
-				proposalID = proposal.Id
-
-				m.log.WithFields(log.Fields{
-					"proposalID": proposalID,
-				}).Info("Received proposal ID")
-				return true, nil // stop processing
+			if proposal.PartyId != m.walletPubKey {
+				continue
 			}
+
+			if proposal.State != vega.Proposal_STATE_OPEN {
+				return true, fmt.Errorf("failed to propose market: %s; code: %s",
+					proposal.ErrorDetails, proposal.State.String())
+			}
+
+			proposalID = proposal.Id
+
+			m.log.WithFields(log.Fields{
+				"proposalID": proposalID,
+			}).Info("Received proposal ID")
+			return true, nil
 		}
 		return false, nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*450)
 	defer cancel()
 
-	m.busEvProc.processEvents(ctx, "Proposals", req, proc)
-	return proposalID, ctx.Err()
+	errCh := m.busEvProc.processEvents(ctx, "Proposals: "+m.name, req, proc)
+	select {
+	case err := <-errCh:
+		return proposalID, err
+	case <-ctx.Done():
+		return "", fmt.Errorf("timed out waiting for proposal ID")
+	}
 }
 
 func (m *market) WaitForProposalEnacted(pID string) error {
@@ -100,22 +114,38 @@ func (m *market) WaitForProposalEnacted(pID string) error {
 		for _, event := range rsp.GetEvents() {
 			proposal := event.GetProposal()
 
-			if proposal.State == vega.Proposal_STATE_ENACTED && proposal.Id == pID {
-				m.log.WithFields(
-					log.Fields{
-						"proposalID": proposal.Id,
-					}).Debug("Proposal was enacted")
-				return true, nil // stop processing
+			if proposal.Id != pID {
+				continue
 			}
+
+			if proposal.State != vega.Proposal_STATE_ENACTED {
+				if proposal.State == vega.Proposal_STATE_OPEN {
+					continue
+				}
+			} else {
+				return true, fmt.Errorf("failed to enact market: %s; code: %s",
+					proposal.ErrorDetails, proposal.State.String())
+			}
+
+			m.log.WithFields(
+				log.Fields{
+					"proposalID": proposal.Id,
+				}).Debug("Proposal was enacted")
+			return true, nil
 		}
 		return false, nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*450)
 	defer cancel()
 
-	m.busEvProc.processEvents(ctx, "Proposals", req, proc)
-	return ctx.Err()
+	errCh := m.busEvProc.processEvents(ctx, "Proposals: "+m.name, req, proc)
+	select {
+	case err := <-errCh:
+		return err
+	case <-ctx.Done():
+		return fmt.Errorf("timed out waiting for proposal enactment")
+	}
 }
 
 func (m *market) subscribeToMarketEvents() {
@@ -140,7 +170,7 @@ func (m *market) subscribeToMarketEvents() {
 		return false, nil
 	}
 
-	m.busEvProc.processEvents(context.Background(), "MarketData", req, proc)
+	m.busEvProc.processEvents(context.Background(), "MarketData: "+m.name, req, proc)
 }
 
 func (m *market) subscribePositions() {
@@ -168,7 +198,7 @@ func (m *market) subscribePositions() {
 		return false, nil
 	}
 
-	m.busEvProc.processEvents(context.Background(), "PositionData", req, proc)
+	m.busEvProc.processEvents(context.Background(), "PositionData: "+m.name, req, proc)
 }
 
 func (m *market) initOpenVolume() error {

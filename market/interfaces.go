@@ -35,5 +35,5 @@ type tradingDataService interface {
 
 type accountService interface {
 	EnsureBalance(ctx context.Context, assetID string, targetAmount *num.Uint, from string) error
-	EnsureStake(ctx context.Context, receiverPubKey, assetID string, targetAmount *num.Uint, from string) error
+	EnsureStake(ctx context.Context, receiverName, receiverPubKey, assetID string, targetAmount *num.Uint, from string) error
 }

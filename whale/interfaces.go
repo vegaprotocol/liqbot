@@ -32,6 +32,6 @@ type faucetClient interface {
 type accountService interface {
 	Init(pubKey string, pauseCh chan types.PauseSignal)
 	EnsureBalance(ctx context.Context, assetID string, targetAmount *num.Uint, from string) error
-	EnsureStake(ctx context.Context, receiverPubKey, assetID string, targetAmount *num.Uint, from string) error
+	EnsureStake(ctx context.Context, receiverName, receiverPubKey, assetID string, targetAmount *num.Uint, from string) error
 	StakeAsync(ctx context.Context, receiverPubKey, assetID string, amount *num.Uint) error
 }

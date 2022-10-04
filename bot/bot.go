@@ -51,11 +51,11 @@ func newNormalBot(
 	dataNode.MustDialConnection(context.Background()) // blocking
 
 	botWallet := wallet.NewClient(conf.Wallet.URL)
-	depositStream := data.NewAccountStream(dataNode)
-	accountService := account.NewAccountService(botConf.Name, botConf.SettlementAssetID, depositStream, whale)
+	accountStream := data.NewAccountStream(botConf.Name, dataNode)
+	accountService := account.NewAccountService(botConf.Name, botConf.SettlementAssetID, accountStream, whale)
 
-	marketStream := data.NewMarketStream(dataNode)
-	marketService := market.NewService(marketStream, dataNode, botWallet, pricing, accountService, botConf, conf.VegaAssetID)
+	marketStream := data.NewMarketStream(botConf.Name, dataNode)
+	marketService := market.NewService(botConf.Name, marketStream, dataNode, botWallet, pricing, accountService, botConf, conf.VegaAssetID)
 
 	return normal.New(
 		botConf,

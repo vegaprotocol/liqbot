@@ -24,6 +24,7 @@ import (
 )
 
 type Service struct {
+	name          string
 	pricingEngine PricingEngine
 	marketStream  marketStream
 	node          tradingDataService
@@ -40,6 +41,7 @@ type Service struct {
 }
 
 func NewService(
+	name string,
 	marketStream marketStream,
 	node tradingDataService,
 	walletClient normal.WalletClient,
@@ -49,6 +51,7 @@ func NewService(
 	vegaAssetID string,
 ) *Service {
 	s := &Service{
+		name:          name,
 		marketStream:  marketStream,
 		node:          node,
 		walletClient:  walletClient,
@@ -165,17 +168,40 @@ func (m *Service) CreateMarket(ctx context.Context) error {
 
 	seedAmount := m.config.StrategyDetails.SeedAmount.Get()
 
+	m.log.WithFields(log.Fields{
+		"amount": seedAmount.String(),
+		"asset":  m.config.SettlementAssetID,
+		"name":   m.name,
+	}).Info("Ensuring balance for market creation")
+
 	// TODO: is it m.settlementAssetID?
 	if err := m.account.EnsureBalance(ctx, m.config.SettlementAssetID, seedAmount, "MarketCreation"); err != nil {
 		return fmt.Errorf("failed to ensure balance: %w", err)
 	}
 
-	if err := m.account.EnsureStake(ctx, m.walletPubKey, m.vegaAssetID, seedAmount, "MarketCreation"); err != nil {
+	m.log.WithFields(log.Fields{
+		"amount": seedAmount.String(),
+		"asset":  m.config.SettlementAssetID,
+		"name":   m.name,
+	}).Info("Balance ensured")
+
+	m.log.WithFields(log.Fields{
+		"amount": seedAmount.String(),
+		"asset":  m.vegaAssetID,
+		"name":   m.name,
+	}).Info("Ensuring stake for market creation")
+
+	if err := m.account.EnsureStake(ctx, m.config.Name, m.walletPubKey, m.vegaAssetID, seedAmount, "MarketCreation"); err != nil {
 		return fmt.Errorf("failed to ensure stake: %w", err)
 	}
 
-	m.log.Debug("Successfully linked stake")
-	m.log.Debug("Sending new market proposal")
+	m.log.WithFields(log.Fields{
+		"amount": seedAmount.String(),
+		"asset":  m.vegaAssetID,
+		"name":   m.name,
+	}).Info("Successfully linked stake")
+
+	m.log.Info("Sending new market proposal...")
 
 	if err := m.sendNewMarketProposal(ctx); err != nil {
 		return fmt.Errorf("failed to send new market proposal: %w", err)
@@ -212,8 +238,7 @@ func (m *Service) sendNewMarketProposal(ctx context.Context) error {
 	}
 
 	submitTxReq := &walletpb.SubmitTransactionRequest{
-		PubKey: m.walletPubKey,
-		// Propagate: true, TODO: OK to remove?
+		PubKey:  m.walletPubKey,
 		Command: cmd,
 	}
 
@@ -283,7 +308,7 @@ func (m *Service) SubmitOrder(ctx context.Context, order *vega.Order, from strin
 	m.log.WithFields(log.Fields{
 		"reference": order.Reference,
 		"size":      order.Size,
-		"side":      order.Side,
+		"side":      order.Side.String(),
 		"price":     order.Price,
 		"tif":       order.TimeInForce.String(),
 	}).Debugf("%s: Submitting order", from)
@@ -385,7 +410,7 @@ func (m *Service) getExampleMarketProposal() *v1.ProposalSubmission {
 		},
 		Reference: "ProposalReference",
 		Terms: &vega.ProposalTerms{
-			ClosingTimestamp:   secondsFromNowInSecs(10),
+			ClosingTimestamp:   secondsFromNowInSecs(15),
 			EnactmentTimestamp: secondsFromNowInSecs(15),
 			Change: &vega.ProposalTerms_NewMarket{
 				NewMarket: m.getExampleMarket(),
@@ -414,12 +439,14 @@ func (m *Service) getExampleMarket() *vega.NewMarket {
 				},
 			},
 		},
-		/*LiquidityCommitment: &vega.NewMarketCommitment{
-			Fee:              fmt.Sprint(m.config.StrategyDetails.Fee),
-			CommitmentAmount: m.config.StrategyDetails.CommitmentAmount,
-			Buys:             m.config.StrategyDetails.ShorteningShape.Buys.ToVegaLiquidityOrders(),
-			Sells:            m.config.StrategyDetails.LongeningShape.Sells.ToVegaLiquidityOrders(),
-		},*/
+		/*
+			TODO: is this needed?
+			LiquidityCommitment: &vega.NewMarketCommitment{
+				Fee:              fmt.Sprint(m.config.StrategyDetails.Fee),
+				CommitmentAmount: m.config.StrategyDetails.CommitmentAmount,
+				Buys:             m.config.StrategyDetails.ShorteningShape.Buys.ToVegaLiquidityOrders(),
+				Sells:            m.config.StrategyDetails.LongeningShape.Sells.ToVegaLiquidityOrders(),
+			},*/
 	}
 }
 

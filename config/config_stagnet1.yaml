@@ -15,38 +15,35 @@ pricing:
     host: prices.ops.vega.xyz
     path: /prices
 wallet:
-  url: https://wallet.stagnet3.vega.xyz
+  url: https://wallet.stagnet1.vega.xyz
 token:
-  ethereumAPIAddress:   wss://ropsten.infura.io/ws/v3/0b0e1795edae41f59f4c99d29ba0ae8e
-  erc20BridgeAddress:   0x947893AaA0A7b55f66990b3B4781514b691Fdd4a
-  stakingBridgeAddress: 0x7896C9491962D5839783CB6e0492ECebd34Bb35F
-  syncTimeoutSec: 100
+  ethereumAPIAddress:   wss://sepolia.infura.io/ws/v3/0b0e1795edae41f59f4c99d29ba0ae8e
+  erc20BridgeAddress:   0x8b1d701979d5A78414Ca3189b932f1440b17D705
+  stakingBridgeAddress: 0xeB17968d04281748dE3D0347030aa1a3185a4737
+  syncTimeoutSec: 1000
 whale:
-  walletPubKey: 5fec012a59da93c1b6137095cc0d3a0ecd4f1eb53b02514f6fe54694a4a52e54
-  walletName: whale
-  walletPassphrase: pastazazube
+  walletPubKey: bdb4598b5e22ac01a812d166cc3006ac70575cd6b91b5bb4de52e158e510ec23
+  walletName: whale # secret
+  walletPassphrase: pastazazube # secret
   syncTimeoutSec: 0
   ownerPrivateKeys: # assetID: privateKey
-    993ed98f4f770d91a796faab1738551193ba45c62341d20597df70fea6704ede: adef89153e4bd6b43876045efdd6818cec359340683edaec5e8588e635e8428b
-    b4f2726571fbe8e33b442dc92ed2d7f0d810e21835b7371a7915a365f07ccd9b: adef89153e4bd6b43876045efdd6818cec359340683edaec5e8588e635e8428b
+    c9fe6fc24fce121b2cc72680543a886055abb560043fda394ba5376203b7527d: # secret
+    fc7fd956078fb1fc9db5c19b88f0874c4299b2a7639ad05a47a28c0aef291b55: # secret
   faucetURL: https://faucet.stagnet3.vega.xyz
   slack:
-    appToken:
-    botToken:
-    channelID:
-    enabled: false
+    appToken: # secret
+    botToken: # secret
+    channelID: C044R3YR08H
+    enabled: true
 locations:
-  - n01.stagnet3.vega.xyz:3007
-  - n02.stagnet3.vega.xyz:3007
-  - n03.stagnet3.vega.xyz:3007
-  - n04.stagnet3.vega.xyz:3007
-  - n05.stagnet3.vega.xyz:3007
+  - n00.stagnet1.vega.xyz:3007
+  - api.stagnet1.vega.xyz:3007
 bots:
   - name: b01
     instrumentBase: BTC
     instrumentQuote: USD
-    quoteAssetID: 993ed98f4f770d91a796faab1738551193ba45c62341d20597df70fea6704ede
-    settlementAssetID: 993ed98f4f770d91a796faab1738551193ba45c62341d20597df70fea6704ede
+    quoteAssetID: c9fe6fc24fce121b2cc72680543a886055abb560043fda394ba5376203b7527d
+    settlementAssetID: c9fe6fc24fce121b2cc72680543a886055abb560043fda394ba5376203b7527d
     strategy: normal
     strategyDetails:
       expectedMarkPrice: 0

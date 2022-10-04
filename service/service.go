@@ -99,7 +99,7 @@ func getWhale(config config.Config) (*whale.Service, error) {
 
 	faucetService := token.NewFaucetService(config.Whale.FaucetURL, config.Whale.WalletPubKey)
 	whaleWallet := wallet.NewClient(config.Wallet.URL)
-	accountStream := data.NewAccountStream(dataNode)
+	accountStream := data.NewAccountStream("whale", dataNode)
 
 	tokenService, err := token.NewService(config.Token, config.Whale.WalletPubKey)
 	if err != nil {

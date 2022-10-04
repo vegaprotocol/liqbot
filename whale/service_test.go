@@ -49,7 +49,7 @@ func TestService_TopUp(t *testing.T) {
 
 	cp := NewProvider(dn, es, fc, conf)
 
-	ds := data.NewAccountStream(dn)
+	ds := data.NewAccountStream("test", dn)
 	as := account.NewAccountService("test", "asset", ds, cp)
 
 	s := NewService(dn, wc, as, conf)
@@ -66,7 +66,7 @@ func TestService_TopUp(t *testing.T) {
 
 	amount := num.NewUint(988939143512)
 
-	s.TopUpAsync(ctx, "some bot", key, asset, amount)
+	_, _ = s.TopUpAsync(ctx, "some bot", key, asset, amount)
 
 	_ = s.account.EnsureBalance(ctx, asset, amount, "test")
 }

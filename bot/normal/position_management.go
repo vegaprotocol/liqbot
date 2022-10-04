@@ -111,11 +111,6 @@ func (b *bot) getRequiredCommitment() (*num.Uint, error) {
 	suppliedStake := b.Market().SuppliedStake().Clone()
 	targetStake := b.Market().TargetStake().Clone()
 
-	b.log.WithFields(log.Fields{
-		"suppliedStake": suppliedStake.String(),
-		"targetStake":   targetStake.String(),
-	}).Debug("PositionManagement: Checking for required commitment")
-
 	if targetStake.IsZero() {
 		var err error
 		targetStake, err = util.ConvertUint256(b.config.StrategyDetails.CommitmentAmount)
@@ -123,6 +118,11 @@ func (b *bot) getRequiredCommitment() (*num.Uint, error) {
 			return nil, fmt.Errorf("failed to convert commitment amount: %w", err)
 		}
 	}
+
+	b.log.WithFields(log.Fields{
+		"suppliedStake": suppliedStake.String(),
+		"targetStake":   targetStake.String(),
+	}).Debug("PositionManagement: Checking for required commitment")
 
 	dx := suppliedStake.Int().Sub(targetStake.Int())
 
@@ -178,7 +178,7 @@ func (b *bot) managePosition(ctx context.Context) error {
 		"balanceMargin":  b.Balance().Margin().String(),
 		"openVolume":     b.Market().OpenVolume(),
 		"size":           size,
-		"side":           side,
+		"side":           side.String(),
 		"shouldPlace":    shouldPlace,
 	}).Debug("PositionManagement: Checking for position management")
 
