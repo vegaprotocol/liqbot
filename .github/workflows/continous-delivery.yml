@@ -22,8 +22,8 @@ jobs:
         uses: docker/login-action@v2
         if: ${{!github.event.repository.private}}
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          username: ${{ secrets.DOCKERHUB_USERNAME_2 }}
+          password: ${{ secrets.DOCKERHUB_TOKEN_2 }}
 
       - name: Log in to the Container registry
         uses: docker/login-action@v2
