@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"path"
-	"runtime"
 	"strings"
 	"sync"
 
@@ -76,8 +74,6 @@ func New(
 
 // Start starts the liquidity bot goroutine(s).
 func (b *bot) Start() error {
-	setupLogger(true) // TODO: pretty from config?
-
 	ctx := context.Background()
 
 	walletPubKey, err := b.setupWallet(ctx)
@@ -139,24 +135,6 @@ func (b *bot) Start() error {
 	}()
 
 	return nil
-}
-
-func setupLogger(pretty bool) {
-	log.SetReportCaller(true)
-	log.SetFormatter(&log.JSONFormatter{
-		CallerPrettyfier: func(f *runtime.Frame) (string, string) {
-			filename := path.Base(f.File)
-			function := strings.ReplaceAll(f.Function, "code.vegaprotocol.io/", "")
-			idx := strings.Index(function, ".")
-			function = fmt.Sprintf("%s/%s/%s():%d", function[:idx], filename, function[idx+1:], f.Line)
-			return function, ""
-		},
-		PrettyPrint: pretty,
-		DataKey:     "_vals",
-		FieldMap: log.FieldMap{
-			log.FieldKeyMsg: "_msg",
-		},
-	})
 }
 
 func (b *bot) pauseChannel() chan types.PauseSignal {

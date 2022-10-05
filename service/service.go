@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"path"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -74,6 +76,10 @@ func NewService(config config.Config) (s *Service, err error) {
 		bots:   make(map[string]Bot),
 	}
 
+	if err = setupLogger(config.Server); err != nil {
+		return nil, fmt.Errorf("failed to setup logger: %w", err)
+	}
+
 	pricingEngine := pricing.NewEngine(*config.Pricing)
 
 	whaleService, err := getWhale(config)
@@ -89,6 +95,47 @@ func NewService(config config.Config) (s *Service, err error) {
 	s.server = s.getServer()
 
 	return s, err
+}
+
+func setupLogger(conf *config.ServerConfig) error {
+	level, err := log.ParseLevel(conf.LogLevel)
+	if err != nil {
+		return fmt.Errorf("failed to parse log level: %w", err)
+	}
+
+	log.SetLevel(level)
+
+	var callerPrettyfier func(*runtime.Frame) (string, string)
+
+	if conf.LogLevel == "debug" {
+		log.SetReportCaller(true)
+
+		callerPrettyfier = func(f *runtime.Frame) (string, string) {
+			filename := path.Base(f.File)
+			function := strings.ReplaceAll(f.Function, "code.vegaprotocol.io/", "")
+			idx := strings.Index(function, ".")
+			function = fmt.Sprintf("%s/%s/%s():%d", function[:idx], filename, function[idx+1:], f.Line)
+			return function, ""
+		}
+	}
+
+	var formatter log.Formatter = &log.TextFormatter{
+		CallerPrettyfier: callerPrettyfier,
+	}
+
+	if conf.LogFormat == "json" || conf.LogFormat == "json_pretty" {
+		formatter = &log.JSONFormatter{
+			PrettyPrint: conf.LogFormat == "json_pretty",
+			DataKey:     "_vals",
+			FieldMap: log.FieldMap{
+				log.FieldKeyMsg: "_msg",
+			},
+			CallerPrettyfier: callerPrettyfier,
+		}
+	}
+
+	log.SetFormatter(formatter)
+	return nil
 }
 
 func getWhale(config config.Config) (*whale.Service, error) {

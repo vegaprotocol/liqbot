@@ -3,8 +3,8 @@
 server:
   env: prod  # dev, prod
   listen: ":7800"
-  logformat: text  # json, text
-  loglevel: debug  # debug, info, warning, error
+  logformat: json # json_pretty, text
+  loglevel: debug  # debug, trace, info, warning, error
 
 callTimeoutMills: 10000
 vegaAssetID: fc7fd956078fb1fc9db5c19b88f0874c4299b2a7639ad05a47a28c0aef291b55
@@ -23,13 +23,13 @@ token:
   syncTimeoutSec: 1000
 whale:
   walletPubKey: bdb4598b5e22ac01a812d166cc3006ac70575cd6b91b5bb4de52e158e510ec23
-  walletName: whale # secret
-  walletPassphrase: pastazazube # secret
+  walletName: # secret
+  walletPassphrase: # secret
   syncTimeoutSec: 0
   ownerPrivateKeys: # assetID: privateKey
     c9fe6fc24fce121b2cc72680543a886055abb560043fda394ba5376203b7527d: # secret
     fc7fd956078fb1fc9db5c19b88f0874c4299b2a7639ad05a47a28c0aef291b55: # secret
-  faucetURL: https://faucet.stagnet3.vega.xyz
+  faucetURL: https://faucet.stagnet1.vega.xyz
   slack:
     appToken: # secret
     botToken: # secret
