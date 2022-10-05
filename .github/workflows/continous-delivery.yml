@@ -4,7 +4,7 @@ name: "Continous Delivery Workflow"
   workflow_call:
 
 env:
-  GO_VERSION: "1.18.0"
+  GO_VERSION: "1.19.0"
 
 jobs:
   release-docker:
@@ -42,14 +42,14 @@ jobs:
           tags: ghcr.io/${{ github.repository }}:latest,ghcr.io/${{ github.repository }}:${{ github.sha }},ghcr.io/${{ github.repository }}:${{ github.ref_name }}
 
       # public registry builds
-      - name: Build and push
-        uses: docker/build-push-action@v3
-        if: ${{!github.event.repository.private}}
-        with:
-          context: .
-          build-args: GO_VERSION=${{env.GO_VERSION}}
-          push: true
-          tags: ${{ github.repository }}:latest,${{ github.repository }}:${{ github.sha }},${{ github.repository }}:${{ github.ref_name }}
+      #- name: Build and push
+      #  uses: docker/build-push-action@v3
+      #  if: ${{!github.event.repository.private}}
+      #  with:
+      #    context: .
+      #    build-args: GO_VERSION=${{env.GO_VERSION}}
+      #    push: true
+      #    tags: ${{ github.repository }}:latest,${{ github.repository }}:${{ github.sha }},${{ github.repository }}:${{ github.ref_name }}
 
   
   release-binary:
