@@ -36,7 +36,7 @@ func NewDataNode(hosts []string, callTimeoutMil int) *DataNode {
 }
 
 // MustDialConnection tries to establish a connection to one of the nodes from a list of locations.
-// It is idempotent, while it each call will block the caller until a connection is established.
+// It is idempotent, where each call will block the caller until a connection is established.
 func (n *DataNode) MustDialConnection(ctx context.Context) {
 	n.once.Do(func() {
 		ctx, cancel := context.WithCancel(ctx)
