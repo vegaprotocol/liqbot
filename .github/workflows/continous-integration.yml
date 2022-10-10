@@ -35,4 +35,3 @@ jobs:
         with:
           version: v1.49.0
           args: --config .golangci.toml
-          timeout: 15m
