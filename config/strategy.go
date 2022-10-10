@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	"code.vegaprotocol.io/protos/vega"
 	"github.com/hashicorp/go-multierror"
 
 	"code.vegaprotocol.io/liqbot/types"
+	"code.vegaprotocol.io/vega/protos/vega"
 )
 
 const (

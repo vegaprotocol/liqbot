@@ -5,19 +5,28 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"path"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
 
-	ppconfig "code.vegaprotocol.io/priceproxy/config"
-	ppservice "code.vegaprotocol.io/priceproxy/service"
 	"github.com/julienschmidt/httprouter"
 	log "github.com/sirupsen/logrus"
 
+	"code.vegaprotocol.io/liqbot/account"
+	ppconfig "code.vegaprotocol.io/priceproxy/config"
+	ppservice "code.vegaprotocol.io/priceproxy/service"
+
 	"code.vegaprotocol.io/liqbot/bot"
 	"code.vegaprotocol.io/liqbot/config"
+	"code.vegaprotocol.io/liqbot/data"
+	"code.vegaprotocol.io/liqbot/node"
 	"code.vegaprotocol.io/liqbot/pricing"
+	"code.vegaprotocol.io/liqbot/token"
+	"code.vegaprotocol.io/liqbot/types"
 	"code.vegaprotocol.io/liqbot/wallet"
+	"code.vegaprotocol.io/liqbot/whale"
 )
 
 // Bot is the generic bot interface.
@@ -59,24 +68,111 @@ type Service struct {
 }
 
 // NewService creates a new service instance (with optional mocks for test purposes).
-func NewService(config config.Config) (s *Service, err error) {
-	s = &Service{
+func NewService(config config.Config) (*Service, error) {
+	s := &Service{
 		Router: httprouter.New(),
 
 		config: config,
 		bots:   make(map[string]Bot),
 	}
 
-	pe := pricing.NewEngine(*config.Pricing)
+	if err := setupLogger(config.Server); err != nil {
+		return nil, fmt.Errorf("failed to setup logger: %w", err)
+	}
 
-	if err = s.initBots(pe); err != nil {
+	pricingEngine := pricing.NewEngine(*config.Pricing)
+
+	whaleService, err := getWhale(config)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = s.initBots(pricingEngine, whaleService); err != nil {
 		return nil, fmt.Errorf("failed to initialise bots: %s", err.Error())
 	}
 
 	s.addRoutes()
 	s.server = s.getServer()
 
-	return s, err
+	return s, nil
+}
+
+func setupLogger(conf *config.ServerConfig) error {
+	level, err := log.ParseLevel(conf.LogLevel)
+	if err != nil {
+		return fmt.Errorf("failed to parse log level: %w", err)
+	}
+
+	log.SetLevel(level)
+
+	var callerPrettyfier func(*runtime.Frame) (string, string)
+
+	if conf.LogLevel == "debug" {
+		log.SetReportCaller(true)
+
+		callerPrettyfier = func(f *runtime.Frame) (string, string) {
+			filename := path.Base(f.File)
+			function := strings.ReplaceAll(f.Function, "code.vegaprotocol.io/", "")
+			idx := strings.Index(function, ".")
+			function = fmt.Sprintf("%s/%s/%s():%d", function[:idx], filename, function[idx+1:], f.Line)
+			return function, ""
+		}
+	}
+
+	var formatter log.Formatter = &log.TextFormatter{
+		CallerPrettyfier: callerPrettyfier,
+	}
+
+	if conf.LogFormat == "json" || conf.LogFormat == "json_pretty" {
+		formatter = &log.JSONFormatter{
+			PrettyPrint: conf.LogFormat == "json_pretty",
+			DataKey:     "_vals",
+			FieldMap: log.FieldMap{
+				log.FieldKeyMsg: "_msg",
+			},
+			CallerPrettyfier: callerPrettyfier,
+		}
+	}
+
+	log.SetFormatter(formatter)
+	return nil
+}
+
+func getWhale(config config.Config) (*whale.Service, error) {
+	dataNode := node.NewDataNode(
+		config.Locations,
+		config.CallTimeoutMills,
+	)
+
+	faucetService := token.NewFaucetService(config.Whale.FaucetURL, config.Whale.WalletPubKey)
+	whaleWallet := wallet.NewClient(config.Wallet.URL)
+	accountStream := data.NewAccountStream("whale", dataNode)
+
+	tokenService, err := token.NewService(config.Token, config.Whale.WalletPubKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to setup token service: %w", err)
+	}
+
+	provider := whale.NewProvider(
+		dataNode,
+		tokenService,
+		faucetService,
+		config.Whale,
+	)
+
+	accountService := account.NewAccountService("whale", "", accountStream, provider)
+
+	whaleService := whale.NewService(
+		dataNode,
+		whaleWallet,
+		accountService,
+		config.Whale,
+	)
+
+	if err = whaleService.Start(context.Background()); err != nil {
+		return nil, fmt.Errorf("failed to start whale service: %w", err)
+	}
+	return whaleService, nil
 }
 
 func (s *Service) addRoutes() {
@@ -122,9 +218,9 @@ func (s *Service) Stop() {
 	}
 }
 
-func (s *Service) initBots(pricingEngine PricingEngine) error {
+func (s *Service) initBots(pricingEngine PricingEngine, whaleService types.CoinProvider) error {
 	for _, botcfg := range s.config.Bots {
-		if err := s.initBot(pricingEngine, botcfg); err != nil {
+		if err := s.initBot(pricingEngine, botcfg, whaleService); err != nil {
 			return fmt.Errorf("failed to initialise bot '%s': %w", botcfg.Name, err)
 		}
 	}
@@ -132,12 +228,10 @@ func (s *Service) initBots(pricingEngine PricingEngine) error {
 	return nil
 }
 
-func (s *Service) initBot(pricingEngine PricingEngine, botcfg config.BotConfig) error {
+func (s *Service) initBot(pricingEngine PricingEngine, botcfg config.BotConfig, whaleService types.CoinProvider) error {
 	log.WithFields(log.Fields{"strategy": botcfg.StrategyDetails.String()}).Debug("read strategy config")
 
-	wc := wallet.NewClient(s.config.Wallet.URL)
-
-	b, err := bot.New(botcfg, s.config.Locations, s.config.Token, pricingEngine, wc)
+	b, err := bot.New(botcfg, s.config, pricingEngine, whaleService)
 	if err != nil {
 		return fmt.Errorf("failed to create bot %s: %w", botcfg.Name, err)
 	}

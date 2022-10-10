@@ -6,24 +6,23 @@ import (
 	"math"
 	"time"
 
-	ppconfig "code.vegaprotocol.io/priceproxy/config"
-	"code.vegaprotocol.io/protos/vega"
 	log "github.com/sirupsen/logrus"
 
 	"code.vegaprotocol.io/liqbot/config"
 	"code.vegaprotocol.io/liqbot/types/num"
+	"code.vegaprotocol.io/vega/protos/vega"
 )
 
 func (b *bot) runPriceSteering(ctx context.Context) {
-	defer b.log.Warning("Price steering stopped")
+	defer b.log.Warning("PriceSteering: Stopped")
 
-	if !b.canPlaceOrders() {
+	if !b.CanPlaceOrders() {
 		b.log.WithFields(log.Fields{
 			"PriceSteerOrderScale": b.config.StrategyDetails.PriceSteerOrderScale,
-		}).Debug("Price steering: Cannot place orders")
+		}).Debug("PriceSteering: Cannot place orders")
 
-		if err := b.seedOrders(ctx); err != nil {
-			b.log.WithFields(log.Fields{"error": err.Error()}).Error("failed to seed orders")
+		if err := b.SeedOrders(ctx, "PriceSteering"); err != nil {
+			b.log.WithFields(log.Fields{"error": err.Error()}).Error("PriceSteering: Failed to seed orders")
 			return
 		}
 	}
@@ -33,7 +32,7 @@ func (b *bot) runPriceSteering(ctx context.Context) {
 	for {
 		select {
 		case <-b.pausePriceSteer:
-			b.log.Warning("Price steering paused")
+			b.log.Warning("PriceSteering: Paused")
 			<-b.pausePriceSteer
 			b.log.Info("Price steering resumed")
 		case <-b.stopPriceSteer:
@@ -41,7 +40,7 @@ func (b *bot) runPriceSteering(ctx context.Context) {
 		case <-ctx.Done():
 			b.log.WithFields(log.Fields{
 				"error": ctx.Err(),
-			}).Warning("Stopped by context")
+			}).Warning("PriceSteering: Stopped by context")
 			return
 		default:
 			if err := doze(time.Duration(sleepTime)*time.Millisecond, b.stopPriceSteer); err != nil {
@@ -53,7 +52,7 @@ func (b *bot) runPriceSteering(ctx context.Context) {
 				b.log.WithFields(log.Fields{
 					"error":     err.Error(),
 					"sleepTime": sleepTime,
-				}).Warning("Error during price steering")
+				}).Warning("PriceSteering: Error during price steering")
 			}
 
 			sleepTime = b.moveSteerSleepTime(sleepTime, err != nil)
@@ -62,12 +61,12 @@ func (b *bot) runPriceSteering(ctx context.Context) {
 }
 
 func (b *bot) steerPrice(ctx context.Context) error {
-	externalPrice, err := b.getExternalPrice()
+	externalPrice, err := b.GetExternalPrice()
 	if err != nil {
 		return fmt.Errorf("failed to get external price: %w", err)
 	}
 
-	staticMidPrice := b.data.StaticMidPrice()
+	staticMidPrice := b.Market().StaticMidPrice()
 	currentDiff, statIsGt := num.Zero().Delta(externalPrice, staticMidPrice)
 	currentDiffFraction := num.DecimalFromUint(currentDiff).Div(num.DecimalFromUint(externalPrice))
 	minPriceSteerFraction := num.DecimalFromInt64(int64(100)).Mul(num.DecimalFromFloat(b.config.StrategyDetails.MinPriceSteerFraction))
@@ -78,57 +77,42 @@ func (b *bot) steerPrice(ctx context.Context) error {
 	}
 
 	b.log.WithFields(log.Fields{
-		"currentPrice":          staticMidPrice,
-		"externalPrice":         externalPrice,
-		"diff":                  currentDiff,
-		"currentDiffFraction":   currentDiffFraction,
-		"minPriceSteerFraction": minPriceSteerFraction,
+		"currentPrice":          staticMidPrice.String(),
+		"externalPrice":         externalPrice.String(),
+		"diff":                  currentDiff.String(),
+		"currentDiffFraction":   currentDiffFraction.String(),
+		"minPriceSteerFraction": minPriceSteerFraction.String(),
 		"shouldMove":            map[vega.Side]string{vega.Side_SIDE_BUY: "UP", vega.Side_SIDE_SELL: "DN"}[side],
-	}).Debug("Steering info")
+	}).Debug("PriceSteering: Steering info")
 
 	if !currentDiffFraction.GreaterThan(minPriceSteerFraction) {
-		b.log.Debug("Current difference is not higher than minimum price steering fraction")
+		b.log.Debug("PriceSteering: Current difference is not higher than minimum price steering fraction")
 		return nil
 	}
 
 	// find out what price and size of the order we should place
 	price, size, err := b.getRealisticOrderDetails(externalPrice)
 	if err != nil {
-		b.log.WithFields(log.Fields{"error": err.Error()}).Fatal("Unable to get realistic order details for price steering")
+		b.log.WithFields(log.Fields{"error": err.Error()}).Fatal("PriceSteering: Unable to get realistic order details for price steering")
 	}
 
-	if err = b.submitOrder(
-		ctx,
-		size.Uint64(),
-		price,
-		side,
-		vega.Order_TIME_IN_FORCE_GTT,
-		vega.Order_TYPE_LIMIT,
-		"PriceSteeringOrder",
+	order := &vega.Order{
+		MarketId:    b.marketID,
+		Size:        size.Uint64(),
+		Price:       price.String(),
+		Side:        side,
+		TimeInForce: vega.Order_TIME_IN_FORCE_GTT,
+		Type:        vega.Order_TYPE_LIMIT,
+		Reference:   "PriceSteeringOrder",
+	}
+
+	if err = b.SubmitOrder(
+		ctx, order, "PriceSteering",
 		int64(b.config.StrategyDetails.LimitOrderDistributionParams.GttLength)); err != nil {
 		return fmt.Errorf("failed to submit order: %w", err)
 	}
 
 	return nil
-}
-
-func (b *bot) getExternalPrice() (*num.Uint, error) {
-	externalPriceResponse, err := b.pricingEngine.GetPrice(ppconfig.PriceConfig{
-		Base:   b.config.InstrumentBase,
-		Quote:  b.config.InstrumentQuote,
-		Wander: true,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get external price: %w", err)
-	}
-
-	if externalPriceResponse.Price <= 0 {
-		return nil, fmt.Errorf("external price is zero")
-	}
-
-	externalPrice := externalPriceResponse.Price * math.Pow(10, float64(b.decimalPlaces))
-	externalPriceNum := num.NewUint(uint64(externalPrice))
-	return externalPriceNum, nil
 }
 
 // getRealisticOrderDetails uses magic to return a realistic order price and size.
@@ -156,8 +140,16 @@ func (b *bot) getRealisticOrderDetails(externalPrice *num.Uint) (*num.Uint, *num
 func (b *bot) getDiscreteThreeLevelPrice(externalPrice *num.Uint) (*num.Uint, error) {
 	// this converts something like BTCUSD 3912312345 (five decimal places)
 	// to 39123.12345 float.
+	if b.decimalPlaces == uint64(len(externalPrice.String())) {
+		return nil, fmt.Errorf("external price has fewer digits than the market decimal places")
+	}
+
 	decimalPlaces := float64(b.decimalPlaces)
+
 	m0 := num.Zero().Div(externalPrice, num.NewUint(uint64(math.Pow(10, decimalPlaces))))
+	if m0.IsZero() {
+		return nil, fmt.Errorf("external price is zero")
+	}
 	tickSize := 1.0 / math.Pow(10, decimalPlaces)
 	delta := float64(b.config.StrategyDetails.LimitOrderDistributionParams.NumTicksFromMid) * tickSize
 	numOrdersPerSec := b.config.StrategyDetails.MarketPriceSteeringRatePerSecond

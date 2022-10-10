@@ -3,15 +3,16 @@ package node
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
-	dataapipb "code.vegaprotocol.io/protos/data-node/api/v1"
-	vegaapipb "code.vegaprotocol.io/protos/vega/api/v1"
-	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
+
+	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v1"
+	vegaapipb "code.vegaprotocol.io/vega/protos/vega/api/v1"
 
 	e "code.vegaprotocol.io/liqbot/errors"
 )
@@ -21,58 +22,48 @@ type DataNode struct {
 	hosts       []string // format: host:port
 	callTimeout time.Duration
 	conn        *grpc.ClientConn
-	connecting  bool
 	mu          sync.RWMutex
-	log         *log.Entry
+	wg          sync.WaitGroup
+	once        sync.Once
 }
 
 // NewDataNode returns a new node.
-func NewDataNode(hosts []string, callTimeout time.Duration) *DataNode {
+func NewDataNode(hosts []string, callTimeoutMil int) *DataNode {
 	return &DataNode{
 		hosts:       hosts,
-		callTimeout: callTimeout,
-		log:         log.WithFields(log.Fields{"service": "DataNode"}),
+		callTimeout: time.Duration(callTimeoutMil) * time.Millisecond,
 	}
 }
 
-func (n *DataNode) DialConnection(ctx context.Context) chan struct{} {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+// MustDialConnection tries to establish a connection to one of the nodes from a list of locations.
+// It is idempotent, where each call will block the caller until a connection is established.
+func (n *DataNode) MustDialConnection(ctx context.Context) {
+	n.once.Do(func() {
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
 
-	wg := &sync.WaitGroup{}
-	wg.Add(len(n.hosts))
-	waitCh := make(chan struct{})
+		n.wg.Add(len(n.hosts))
 
-	n.mu.Lock()
-	if n.connecting {
-		n.mu.Unlock()
-		return waitCh
-	}
+		for _, h := range n.hosts {
+			go func(host string) {
+				defer func() {
+					cancel()
+					n.wg.Done()
+				}()
+				n.dialNode(ctx, host)
+			}(h)
+		}
+		n.wg.Wait()
+		n.mu.Lock()
+		defer n.mu.Unlock()
 
-	n.log.WithFields(
-		log.Fields{
-			"hosts": n.hosts,
-		}).Debug("Attempting to connect to DataNode...")
+		if n.conn == nil {
+			log.Fatalf("Failed to connect to DataNode")
+		}
+	})
 
-	n.connecting = true
-	n.mu.Unlock()
-
-	for _, h := range n.hosts {
-		go func(host string) {
-			defer func() {
-				cancel()
-				wg.Done()
-			}()
-			n.dialNode(ctx, host)
-		}(h)
-	}
-
-	wg.Wait()
-	n.mu.Lock()
-	n.connecting = false
-	n.mu.Unlock()
-	close(waitCh)
-	return waitCh
+	n.wg.Wait()
+	n.once = sync.Once{}
 }
 
 func (n *DataNode) dialNode(ctx context.Context, host string) {
@@ -83,29 +74,15 @@ func (n *DataNode) dialNode(ctx context.Context, host string) {
 		grpc.WithBlock(),
 	)
 	if err != nil {
-		n.mu.RLock()
-		defer n.mu.RUnlock()
-		// another goroutine has already established a connection
-		if n.conn == nil {
-			n.log.WithFields(
-				log.Fields{
-					"error": err,
-					"host":  host,
-				}).Error("Failed to connect to data node")
+		if err != context.Canceled {
+			log.Printf("Failed to dial node '%s': %s\n", host, err)
 		}
 		return
 	}
 
 	n.mu.Lock()
-	defer n.mu.Unlock()
 	n.conn = conn
-
-	n.log.WithFields(
-		log.Fields{
-			"host":  host,
-			"state": n.conn.GetState(),
-		}).Info("Connected to data node")
-	return
+	n.mu.Unlock()
 }
 
 func (n *DataNode) Target() string {
@@ -115,27 +92,26 @@ func (n *DataNode) Target() string {
 // === CoreService ===
 
 // SubmitTransaction submits a signed v2 transaction.
-func (n *DataNode) SubmitTransaction(req *vegaapipb.SubmitTransactionRequest) (response *vegaapipb.SubmitTransactionResponse, err error) {
+func (n *DataNode) SubmitTransaction(req *vegaapipb.SubmitTransactionRequest) (*vegaapipb.SubmitTransactionResponse, error) {
 	msg := "gRPC call failed: SubmitTransaction: %w"
 	if n == nil {
-		err = fmt.Errorf(msg, e.ErrNil)
-		return
+		return nil, fmt.Errorf(msg, e.ErrNil)
 	}
 
 	if n.conn.GetState() != connectivity.Ready {
-		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
-		return
+		return nil, fmt.Errorf(msg, e.ErrConnectionNotReady)
 	}
 
 	c := vegaapipb.NewCoreServiceClient(n.conn)
 	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
 	defer cancel()
 
-	response, err = c.SubmitTransaction(ctx, req)
+	response, err := c.SubmitTransaction(ctx, req)
 	if err != nil {
-		err = fmt.Errorf(msg, e.ErrorDetail(err))
+		return nil, fmt.Errorf(msg, e.ErrorDetail(err))
 	}
-	return
+
+	return response, nil
 }
 
 // LastBlockData gets the latest blockchain data, height, hash and pow parameters.
@@ -152,180 +128,153 @@ func (n *DataNode) LastBlockData() (*vegaapipb.LastBlockHeightResponse, error) {
 	c := vegaapipb.NewCoreServiceClient(n.conn)
 	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
 	defer cancel()
+
 	var response *vegaapipb.LastBlockHeightResponse
+
 	response, err := c.LastBlockHeight(ctx, &vegaapipb.LastBlockHeightRequest{})
 	if err != nil {
 		err = fmt.Errorf(msg, e.ErrorDetail(err))
 	}
+
 	return response, err
 }
 
 // ObserveEventBus opens a stream.
-func (n *DataNode) ObserveEventBus(ctx context.Context) (client vegaapipb.CoreService_ObserveEventBusClient, err error) {
+func (n *DataNode) ObserveEventBus(ctx context.Context) (vegaapipb.CoreService_ObserveEventBusClient, error) {
 	msg := "gRPC call failed: ObserveEventBus: %w"
 	if n == nil {
-		err = fmt.Errorf(msg, e.ErrNil)
-		return
+		return nil, fmt.Errorf(msg, e.ErrNil)
 	}
 
-	if n.conn.GetState() != connectivity.Ready {
-		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
-		return
+	if n.conn == nil || n.conn.GetState() != connectivity.Ready {
+		return nil, fmt.Errorf(msg, e.ErrConnectionNotReady)
 	}
 
 	c := vegaapipb.NewCoreServiceClient(n.conn)
 	// no timeout on streams
-	client, err = c.ObserveEventBus(ctx)
+	client, err := c.ObserveEventBus(ctx)
 	if err != nil {
-		err = fmt.Errorf(msg, e.ErrorDetail(err))
-		return
+		return nil, fmt.Errorf(msg, e.ErrorDetail(err))
 	}
-	return
+
+	return client, nil
 }
 
 // === TradingDataService ===
 
 // PartyAccounts returns accounts for the given party.
-func (n *DataNode) PartyAccounts(req *dataapipb.PartyAccountsRequest) (response *dataapipb.PartyAccountsResponse, err error) {
+func (n *DataNode) PartyAccounts(req *dataapipb.PartyAccountsRequest) (*dataapipb.PartyAccountsResponse, error) {
 	msg := "gRPC call failed (data-node): PartyAccounts: %w"
 	if n == nil {
-		err = fmt.Errorf(msg, e.ErrNil)
-		return
+		return nil, fmt.Errorf(msg, e.ErrNil)
 	}
 
 	if n.conn.GetState() != connectivity.Ready {
-		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
-		return
+		return nil, fmt.Errorf(msg, e.ErrConnectionNotReady)
 	}
 
 	c := dataapipb.NewTradingDataServiceClient(n.conn)
 	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
 	defer cancel()
 
-	response, err = c.PartyAccounts(ctx, req)
+	response, err := c.PartyAccounts(ctx, req)
 	if err != nil {
-		err = fmt.Errorf(msg, e.ErrorDetail(err))
+		return nil, fmt.Errorf(msg, e.ErrorDetail(err))
 	}
-	return
+
+	return response, nil
 }
 
 // MarketDataByID returns market data for the specified market.
-func (n *DataNode) MarketDataByID(req *dataapipb.MarketDataByIDRequest) (response *dataapipb.MarketDataByIDResponse, err error) {
+func (n *DataNode) MarketDataByID(req *dataapipb.MarketDataByIDRequest) (*dataapipb.MarketDataByIDResponse, error) {
 	msg := "gRPC call failed (data-node): MarketDataByID: %w"
 	if n == nil {
-		err = fmt.Errorf(msg, e.ErrNil)
-		return
+		return nil, fmt.Errorf(msg, e.ErrNil)
 	}
 
 	if n.conn.GetState() != connectivity.Ready {
-		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
-		return
+		return nil, fmt.Errorf(msg, e.ErrConnectionNotReady)
 	}
 
 	c := dataapipb.NewTradingDataServiceClient(n.conn)
 	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
 	defer cancel()
 
-	response, err = c.MarketDataByID(ctx, req)
+	response, err := c.MarketDataByID(ctx, req)
 	if err != nil {
-		err = fmt.Errorf(msg, e.ErrorDetail(err))
+		return nil, fmt.Errorf(msg, e.ErrorDetail(err))
 	}
-	return
+
+	return response, nil
 }
 
 // Markets returns all markets.
-func (n *DataNode) Markets(req *dataapipb.MarketsRequest) (response *dataapipb.MarketsResponse, err error) {
+func (n *DataNode) Markets(req *dataapipb.MarketsRequest) (*dataapipb.MarketsResponse, error) {
 	msg := "gRPC call failed (data-node): Markets: %w"
 	if n == nil {
-		err = fmt.Errorf(msg, e.ErrNil)
-		return
+		return nil, fmt.Errorf(msg, e.ErrNil)
 	}
 
 	if n.conn.GetState() != connectivity.Ready {
-		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
-		return
+		return nil, fmt.Errorf(msg, e.ErrConnectionNotReady)
 	}
 
 	c := dataapipb.NewTradingDataServiceClient(n.conn)
 	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
 	defer cancel()
 
-	response, err = c.Markets(ctx, req)
+	response, err := c.Markets(ctx, req)
 	if err != nil {
-		err = fmt.Errorf(msg, e.ErrorDetail(err))
+		return nil, fmt.Errorf(msg, e.ErrorDetail(err))
 	}
-	return
+
+	return response, nil
 }
 
 // PositionsByParty returns positions for the given party.
-func (n *DataNode) PositionsByParty(req *dataapipb.PositionsByPartyRequest) (response *dataapipb.PositionsByPartyResponse, err error) {
+func (n *DataNode) PositionsByParty(req *dataapipb.PositionsByPartyRequest) (*dataapipb.PositionsByPartyResponse, error) {
 	msg := "gRPC call failed (data-node): PositionsByParty: %w"
 	if n == nil {
-		err = fmt.Errorf(msg, e.ErrNil)
-		return
+		return nil, fmt.Errorf(msg, e.ErrNil)
 	}
 
 	if n.conn.GetState() != connectivity.Ready {
-		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
-		return
+		return nil, fmt.Errorf(msg, e.ErrConnectionNotReady)
 	}
 
 	c := dataapipb.NewTradingDataServiceClient(n.conn)
 	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
 	defer cancel()
 
-	response, err = c.PositionsByParty(ctx, req)
+	response, err := c.PositionsByParty(ctx, req)
 	if err != nil {
-		err = fmt.Errorf(msg, e.ErrorDetail(err))
-	}
-	return
-}
-
-// PositionsSubscribe opens a stream.
-func (n *DataNode) PositionsSubscribe(req *dataapipb.PositionsSubscribeRequest) (client dataapipb.TradingDataService_PositionsSubscribeClient, err error) {
-	msg := "gRPC call failed: PositionsSubscribe: %w"
-	if n == nil {
-		err = fmt.Errorf(msg, e.ErrNil)
-		return
+		return nil, fmt.Errorf(msg, e.ErrorDetail(err))
 	}
 
-	if n.conn.GetState() != connectivity.Ready {
-		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
-		return
-	}
-
-	c := dataapipb.NewTradingDataServiceClient(n.conn)
-	// no timeout on streams
-	client, err = c.PositionsSubscribe(context.Background(), req)
-	if err != nil {
-		err = fmt.Errorf(msg, e.ErrorDetail(err))
-		return
-	}
-	return
+	return response, nil
 }
 
 // AssetByID returns the specified asset.
-func (n *DataNode) AssetByID(req *dataapipb.AssetByIDRequest) (response *dataapipb.AssetByIDResponse, err error) {
+func (n *DataNode) AssetByID(req *dataapipb.AssetByIDRequest) (*dataapipb.AssetByIDResponse, error) {
 	msg := "gRPC call failed (data-node): AssetByID: %w"
 	if n == nil {
-		err = fmt.Errorf(msg, e.ErrNil)
-		return
+		return nil, fmt.Errorf(msg, e.ErrNil)
 	}
 
 	if n.conn.GetState() != connectivity.Ready {
-		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
-		return
+		return nil, fmt.Errorf(msg, e.ErrConnectionNotReady)
 	}
 
 	c := dataapipb.NewTradingDataServiceClient(n.conn)
 	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
 	defer cancel()
 
-	response, err = c.AssetByID(ctx, req)
+	response, err := c.AssetByID(ctx, req)
 	if err != nil {
-		err = fmt.Errorf(msg, e.ErrorDetail(err))
+		return nil, fmt.Errorf(msg, e.ErrorDetail(err))
 	}
-	return
+
+	return response, nil
 }
 
 func (n *DataNode) WaitForStateChange(ctx context.Context, state connectivity.State) bool {

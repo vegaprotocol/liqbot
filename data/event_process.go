@@ -6,24 +6,37 @@ import (
 	"fmt"
 	"time"
 
-	coreapipb "code.vegaprotocol.io/protos/vega/api/v1"
 	log "github.com/sirupsen/logrus"
 
 	e "code.vegaprotocol.io/liqbot/errors"
 	"code.vegaprotocol.io/liqbot/types"
+	coreapipb "code.vegaprotocol.io/vega/protos/vega/api/v1"
 )
 
 type busEventProcessor struct {
-	node    DataNode
+	node    busStreamer
 	log     *log.Entry
 	pauseCh chan types.PauseSignal
 }
 
-func newBusEventProcessor(node DataNode, pauseCh chan types.PauseSignal) *busEventProcessor {
-	return &busEventProcessor{
-		node:    node,
-		log:     log.WithFields(log.Fields{"module": "EventProcessor", "event": "EventBus"}),
-		pauseCh: pauseCh,
+func newBusEventProcessor(node busStreamer, opts ...Option) *busEventProcessor {
+	b := &busEventProcessor{
+		node: node,
+		log:  log.WithFields(log.Fields{"component": "EventProcessor", "event": "EventBus"}),
+	}
+
+	for _, opt := range opts {
+		opt(b)
+	}
+
+	return b
+}
+
+type Option func(*busEventProcessor)
+
+func WithPauseCh(ch chan types.PauseSignal) Option {
+	return func(b *busEventProcessor) {
+		b.pauseCh = ch
 	}
 }
 
@@ -32,49 +45,60 @@ func (b *busEventProcessor) processEvents(
 	name string,
 	req *coreapipb.ObserveEventBusRequest,
 	process func(*coreapipb.ObserveEventBusResponse) (bool, error),
-) {
-	defer b.log.WithFields(log.Fields{
-		"name": name,
-	}).Debug("Stopping event processor")
+) <-chan error {
+	errCh := make(chan error)
 
 	var stop bool
-	for s := b.mustGetStream(ctx, name, req); !stop; {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-			if s == nil {
+	go func() {
+		defer func() {
+			b.log.WithFields(log.Fields{
+				"name": name,
+			}).Debug("Stopping event processor")
+			close(errCh)
+		}()
+		for s := b.mustGetStream(ctx, name, req); !stop; {
+			select {
+			case <-ctx.Done():
 				return
-			}
-
-			rsp, err := s.Recv()
-			if err != nil {
-				if ctx.Err() == context.DeadlineExceeded {
+			default:
+				if s == nil {
 					return
 				}
 
-				b.log.WithFields(
-					log.Fields{
-						"error": err,
+				rsp, err := s.Recv()
+				if err != nil {
+					if ctx.Err() == context.DeadlineExceeded {
+						return
+					}
+
+					b.log.WithFields(
+						log.Fields{
+							"error": err.Error(),
+							"name":  name,
+						},
+					).Warningf("Stream closed, resubscribing...")
+
+					b.pause(true, name)
+					s = b.mustGetStream(ctx, name, req)
+					b.pause(false, name)
+					continue
+				}
+
+				stop, err = process(rsp)
+				if err != nil {
+					b.log.WithFields(log.Fields{
+						"error": err.Error(),
 						"name":  name,
-					},
-				).Warningf("Stream closed, resubscribing...")
-
-				b.pause(true, name)
-				s = b.mustGetStream(ctx, name, req)
-				b.pause(false, name)
-				continue
-			}
-
-			stop, err = process(rsp)
-			if err != nil {
-				b.log.WithFields(log.Fields{
-					"error": err,
-					"name":  name,
-				}).Warning("Unable to process event")
+					}).Warning("Unable to process event")
+					select {
+					case errCh <- err:
+					default:
+					}
+				}
 			}
 		}
-	}
+	}()
+	return errCh
 }
 
 func (b *busEventProcessor) mustGetStream(
@@ -94,11 +118,11 @@ func (b *busEventProcessor) mustGetStream(
 		if errors.Unwrap(err).Error() == e.ErrConnectionNotReady.Error() {
 			b.log.WithFields(log.Fields{
 				"name":    name,
-				"error":   err,
+				"error":   err.Error(),
 				"attempt": attempt,
 			}).Warning("Node is not ready, reconnecting")
 
-			<-b.node.DialConnection(ctx)
+			b.node.MustDialConnection(ctx)
 
 			b.log.WithFields(log.Fields{
 				"name":    name,
@@ -115,7 +139,7 @@ func (b *busEventProcessor) mustGetStream(
 
 			b.log.WithFields(log.Fields{
 				"name":    name,
-				"error":   err,
+				"error":   err.Error(),
 				"attempt": attempt,
 			}).Errorf("Failed to subscribe to stream, retrying in %s...", sleepTime)
 
@@ -144,6 +168,9 @@ func (b *busEventProcessor) getStream(ctx context.Context, req *coreapipb.Observ
 }
 
 func (b *busEventProcessor) pause(p bool, name string) {
+	if b.pauseCh == nil {
+		return
+	}
 	select {
 	case b.pauseCh <- types.PauseSignal{From: name, Pause: p}:
 	default:

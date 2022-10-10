@@ -1,3 +1,4 @@
+// TODO: shared libs?
 package num
 
 import (
@@ -132,6 +133,11 @@ func (u Uint) BigInt() *big.Int {
 	return u.u.ToBig()
 }
 
+// Int ...
+func (u Uint) Int() *Int {
+	return IntFromUint(&u, true)
+}
+
 // Float64 ...
 func (u Uint) Float64() float64 {
 	d := DecimalFromUint(&u)
@@ -154,6 +160,9 @@ func (u *Uint) Add(x, y *Uint) *Uint {
 // so x.AddSum(y, z) is equivalent to x + y + z.
 func (u *Uint) AddSum(vals ...*Uint) *Uint {
 	for _, x := range vals {
+		if x == nil {
+			continue
+		}
 		u.u.Add(&u.u, &x.u)
 	}
 	return u

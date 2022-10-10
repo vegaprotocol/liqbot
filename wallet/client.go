@@ -1,3 +1,4 @@
+// TODO: move to a shared lib?
 package wallet
 
 import (
@@ -7,14 +8,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"strings"
 
-	walletpb "code.vegaprotocol.io/protos/vega/wallet/v1"
 	"github.com/golang/protobuf/jsonpb"
 
 	"code.vegaprotocol.io/liqbot/types"
+	walletpb "code.vegaprotocol.io/vega/protos/vega/wallet/v1"
 )
 
 type Client struct {
@@ -23,6 +23,7 @@ type Client struct {
 	token     string
 	name      string
 	pass      string
+	pubKey    string // TODO: setup wallet and set this
 }
 
 func NewClient(walletURL string) *Client {
@@ -114,7 +115,7 @@ func (c *Client) LoginWallet(ctx context.Context, name, passphrase string) error
 
 	defer func() { _ = resp.Body.Close() }()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("failed to read response body: %s", err)
 	}
@@ -141,7 +142,7 @@ type keyPairResponse struct {
 	Key *types.Key `json:"key"`
 }
 
-func (c Client) GenerateKeyPair(ctx context.Context, passphrase string, meta []types.Meta) (*types.Key, error) {
+func (c *Client) GenerateKeyPair(ctx context.Context, passphrase string, meta []types.Meta) (*types.Key, error) {
 	postBody, _ := json.Marshal(struct {
 		Passphrase string       `json:"passphrase"`
 		Meta       []types.Meta `json:"meta"`
@@ -168,7 +169,7 @@ func (c Client) GenerateKeyPair(ctx context.Context, passphrase string, meta []t
 
 	defer func() { _ = resp.Body.Close() }()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %s", err)
 	}
@@ -211,7 +212,7 @@ func (c *Client) ListPublicKeys(ctx context.Context) ([]string, error) {
 
 	defer func() { _ = resp.Body.Close() }()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %s", err)
 	}
@@ -241,7 +242,12 @@ type SignTxRequest struct {
 	Propagate bool   `json:"propagate"`
 }
 
+// TODO: make a wallet service that would run commands instead of tx requests.
 func (c *Client) SignTx(ctx context.Context, request *walletpb.SubmitTransactionRequest) error {
+	if c.pubKey != "" {
+		request.PubKey = c.pubKey
+	}
+
 	m := jsonpb.Marshaler{Indent: "    "}
 
 	request.Propagate = true
@@ -270,7 +276,7 @@ func (c *Client) SignTx(ctx context.Context, request *walletpb.SubmitTransaction
 
 	defer func() { _ = resp.Body.Close() }()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("failed to read response body: %s", err)
 	}

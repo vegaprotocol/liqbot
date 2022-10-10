@@ -3,30 +3,13 @@ package normal
 import (
 	"context"
 
-	ppconfig "code.vegaprotocol.io/priceproxy/config"
-	ppservice "code.vegaprotocol.io/priceproxy/service"
-	dataapipb "code.vegaprotocol.io/protos/data-node/api/v1"
-	"code.vegaprotocol.io/protos/vega"
-	"code.vegaprotocol.io/protos/vega/wallet/v1"
-
 	"code.vegaprotocol.io/liqbot/types"
 	"code.vegaprotocol.io/liqbot/types/num"
+	"code.vegaprotocol.io/vega/protos/vega"
+	"code.vegaprotocol.io/vega/protos/vega/wallet/v1"
 )
 
-// TradingDataService implements the gRPC service of the same name.
-type tradingDataService interface {
-	Target() string
-	Markets(req *dataapipb.MarketsRequest) (*dataapipb.MarketsResponse, error)       // BOT
-	AssetByID(req *dataapipb.AssetByIDRequest) (*dataapipb.AssetByIDResponse, error) // BOT
-}
-
-// PricingEngine is the source of price information from the price proxy.
-//
-//go:generate go run github.com/golang/mock/mockgen -destination mocks/pricingengine_mock.go -package mocks code.vegaprotocol.io/liqbot/bot/normal PricingEngine
-type PricingEngine interface {
-	GetPrice(pricecfg ppconfig.PriceConfig) (ppservice.PriceResponse, error)
-}
-
+// TODO: move all account related stuff to an account service.
 type WalletClient interface {
 	CreateWallet(ctx context.Context, name, passphrase string) error
 	LoginWallet(ctx context.Context, name, passphrase string) error
@@ -35,26 +18,30 @@ type WalletClient interface {
 	SignTx(ctx context.Context, req *v1.SubmitTransactionRequest) error
 }
 
-type dataStore interface {
+/*
+// MarketService should provide on-demand, up-to-date market data for the bot, as well as
+// allow the bot to send liquidity provision, amendment and cancellation, and place orders.
+
+	type MarketService interface {
+		Data() types.MarketData // TODO: include current external price (no caching because it keeps changing).
+		ProvideLiquidity(ctx context.Context, buys, sells []*vega.LiquidityOrder) error
+		FlipDirection(ctx context.Context, buys, sells []*vega.LiquidityOrder) error
+		Order(ctx context.Context, price *num.Uint, size uint64, side vega.Side, tif vega.Order_TimeInForce, orderType vega.Order_Type, reference string) error
+	}
+*/
+type marketService interface {
+	Init(pubKey string, pauseCh chan types.PauseSignal) error
+	Start(marketID string) error
+	Market() types.MarketData
+	CanPlaceOrders() bool
+	SubmitOrder(ctx context.Context, order *vega.Order, from string, secondsFromNow int64) error
+	SeedOrders(ctx context.Context, from string) error
+	SetupMarket(ctx context.Context) (*vega.Market, error)
+	GetExternalPrice() (*num.Uint, error)
+}
+
+type accountService interface {
+	Init(pubKey string, pauseCh chan types.PauseSignal)
 	Balance() types.Balance
-	TradingMode() vega.Market_TradingMode
-	StaticMidPrice() *num.Uint
-	TargetStake() *num.Uint
-	SuppliedStake() *num.Uint
-	MarkPrice() *num.Uint
-	OpenVolume() int64
-}
-type marketStream interface {
-	WaitForStakeLinking() error
-	WaitForProposalID() (string, error)
-	WaitForProposalEnacted(pID string) error
-}
-
-type dataStream interface {
-	WaitForDepositFinalize(amount *num.Uint) error
-}
-
-type tokenService interface {
-	Stake(ctx context.Context, amount *num.Uint) error
-	Deposit(ctx context.Context, amount *num.Uint) error
+	EnsureBalance(ctx context.Context, assetID string, targetAmount *num.Uint, from string) error
 }

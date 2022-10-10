@@ -7,10 +7,10 @@ name: "Continous Deployment Workflow"
       - v*
   
 jobs:
-  integration:
-    uses: ./.github/workflows/continous-integration.yml
+  #integration:
+  #  uses: ./.github/workflows/continous-integration.yml
   delivery:
-    needs: integration
+    #needs: integration
     uses: ./.github/workflows/continous-delivery.yml
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}

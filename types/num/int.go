@@ -10,11 +10,16 @@ type Int struct {
 
 // IntFromUint ...
 func IntFromUint(u *Uint, s bool) *Int {
-	copy := &Int{
+	cp := &Int{
 		s: s,
 		U: u.Clone(),
 	}
-	return copy
+	return cp
+}
+
+// Uint returns a copy of the underlying Uint.
+func (i *Int) Uint() *Uint {
+	return i.U.Clone()
 }
 
 // IsNegative tests if the stored value is negative
@@ -189,10 +194,4 @@ func NewInt(val int64) *Int {
 		U: NewUint(uint64(val)),
 		s: true,
 	}
-}
-
-// NewIntFromUint creates a new Int with the value of the
-// uint passed as a parameter.
-func NewIntFromUint(val *Uint) *Int {
-	return &Int{U: val, s: true}
 }
