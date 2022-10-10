@@ -19,7 +19,7 @@ type PricingEngine interface {
 	GetPrice(pricecfg ppconfig.PriceConfig) (ppservice.PriceResponse, error)
 }
 
-// TODO: this could be improved: pubKey could be specified in config,
+// TODO: this could be improved: pubKey could be specified in config.
 type marketStream interface {
 	Init(pubKey string, pauseCh chan types.PauseSignal) (data.MarketStore, error)
 	Subscribe(marketID string) error

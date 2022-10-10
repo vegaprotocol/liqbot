@@ -166,6 +166,7 @@ func SetBond(bond *num.Uint) func(*Balance) {
 	}
 }
 
+// nolint:nonamedreturns
 func fromPtr[T any](ptr *T) (t T) {
 	if ptr == nil {
 		return

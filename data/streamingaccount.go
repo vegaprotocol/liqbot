@@ -26,7 +26,6 @@ type account struct {
 	busEvProc     busEventer
 
 	mu              sync.Mutex
-	once            sync.Once
 	waitingDeposits map[string]*num.Uint
 }
 
@@ -293,7 +292,6 @@ func (a *account) WaitForStakeLinking(pubKey string) error {
 				} else {
 					return true, fmt.Errorf("stake linking failed: %s", stake.Status.String())
 				}
-
 			}
 			a.log.WithFields(log.Fields{
 				"name":    a.name,

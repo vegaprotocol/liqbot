@@ -99,7 +99,7 @@ func discreteThreeLevelProbabilities(V []float64, muHat float64, sigmaHat float6
 // generatePriceUsingDiscreteThreeLevel is a method for calculating price levels
 // input is a float price (so divide uint64 price  by 10^{num of decimals})
 // it returns a float price which you want to multiply by 10^{num of decimals} and then round.
-func generatePriceUsingDiscreteThreeLevel(m0, delta, sigma, tgtTimeHorizonYrFrac, n float64) (price float64, err error) {
+func generatePriceUsingDiscreteThreeLevel(m0, delta, sigma, tgtTimeHorizonYrFrac, n float64) (float64, error) {
 	muHat := -0.5 * sigma * sigma * tgtTimeHorizonYrFrac
 	sigmaHat := math.Sqrt(n*tgtTimeHorizonYrFrac) * sigma
 	v := make([]float64, 3)
@@ -117,7 +117,7 @@ func generatePriceUsingDiscreteThreeLevel(m0, delta, sigma, tgtTimeHorizonYrFrac
 	shockX := v[randomChoice(probabilities)]
 	y := math.Exp(shockX / n)
 
-	price = m0 * y
+	price := m0 * y
 
 	return price, nil
 }

@@ -68,15 +68,15 @@ type Service struct {
 }
 
 // NewService creates a new service instance (with optional mocks for test purposes).
-func NewService(config config.Config) (s *Service, err error) {
-	s = &Service{
+func NewService(config config.Config) (*Service, error) {
+	s := &Service{
 		Router: httprouter.New(),
 
 		config: config,
 		bots:   make(map[string]Bot),
 	}
 
-	if err = setupLogger(config.Server); err != nil {
+	if err := setupLogger(config.Server); err != nil {
 		return nil, fmt.Errorf("failed to setup logger: %w", err)
 	}
 
@@ -94,7 +94,7 @@ func NewService(config config.Config) (s *Service, err error) {
 	s.addRoutes()
 	s.server = s.getServer()
 
-	return s, err
+	return s, nil
 }
 
 func setupLogger(conf *config.ServerConfig) error {

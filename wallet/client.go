@@ -242,7 +242,7 @@ type SignTxRequest struct {
 	Propagate bool   `json:"propagate"`
 }
 
-// TODO: make a wallet service that would run commands instead of tx requests
+// TODO: make a wallet service that would run commands instead of tx requests.
 func (c *Client) SignTx(ctx context.Context, request *walletpb.SubmitTransactionRequest) error {
 	if c.pubKey != "" {
 		request.PubKey = c.pubKey

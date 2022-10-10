@@ -32,7 +32,7 @@ func NewEngine(cfg config.PricingConfig) *Engine {
 }
 
 // GetPrice fetches a live/recent price from the price proxy.
-func (e *Engine) GetPrice(pricecfg ppconfig.PriceConfig) (pi ppservice.PriceResponse, err error) {
+func (e *Engine) GetPrice(pricecfg ppconfig.PriceConfig) (ppservice.PriceResponse, error) {
 	v := url.Values{}
 	if pricecfg.Source != "" {
 		v.Set("source", pricecfg.Source)
@@ -49,33 +49,28 @@ func (e *Engine) GetPrice(pricecfg ppconfig.PriceConfig) (pi ppservice.PriceResp
 	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, fullURL, nil)
 
 	var resp *http.Response
-	resp, err = e.client.Do(req)
+	resp, err := e.client.Do(req)
 	if err != nil {
-		err = fmt.Errorf("failed to perform HTTP request: %w", err)
-		return
+		return ppservice.PriceResponse{}, fmt.Errorf("failed to perform HTTP request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	content, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		err = fmt.Errorf("failed to read HTTP response body: %w", err)
-		return
+		return ppservice.PriceResponse{}, fmt.Errorf("failed to read HTTP response body: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		err = fmt.Errorf("bad response: HTTP %d %s", resp.StatusCode, string(content))
-		return
+		return ppservice.PriceResponse{}, fmt.Errorf("bad response: HTTP %d %s", resp.StatusCode, string(content))
 	}
 
 	var response ppservice.PricesResponse
 	if err = json.Unmarshal(content, &response); err != nil {
-		err = fmt.Errorf("failed to parse HTTP response as JSON: %w", err)
-		return
+		return ppservice.PriceResponse{}, fmt.Errorf("failed to parse HTTP response as JSON: %w", err)
 	}
 
 	if len(response.Prices) == 0 {
-		err = errors.New("zero-length price list from Price Proxy")
-		return
+		return ppservice.PriceResponse{}, errors.New("zero-length price list from Price Proxy")
 	}
 
 	return *response.Prices[0], nil

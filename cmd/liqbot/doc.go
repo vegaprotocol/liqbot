@@ -2,6 +2,6 @@
 // provide liquidity. Each bot connects to one Vega node and submits orders to
 // one market.
 //
-//     $ make install
-//     $ $GOPATH/bin/liqbot -config=config.yml
+//	$ make install
+//	$ $GOPATH/bin/liqbot -config=config.yml
 package main

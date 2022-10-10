@@ -81,20 +81,16 @@ func NewProvider(
 	}
 
 	go func() {
-		for {
-			select {
-			case req := <-p.ensureBalanceCh:
-				if err := p.topUpAsync(req.ctx, req.name, req.address, req.assetID, req.amount); err != nil {
-					log.Errorf("Whale: failed to ensure enough funds: %s", err)
-				}
+		for req := range p.ensureBalanceCh {
+			if err := p.topUpAsync(req.ctx, req.name, req.address, req.assetID, req.amount); err != nil {
+				log.Errorf("Whale: failed to ensure enough funds: %s", err)
 			}
 		}
 	}()
 	return p
 }
 
-func (p *Provider) TopUpAsync(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint) (evt v1.BusEventType, err error) {
-	evt = v1.BusEventType_BUS_EVENT_TYPE_DEPOSIT // TODO: this is not always true?
+func (p *Provider) TopUpAsync(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint) (v1.BusEventType, error) {
 	p.ensureBalanceCh <- ensureBalanceRequest{
 		ctx:     ctx,
 		name:    receiverName,
@@ -102,10 +98,11 @@ func (p *Provider) TopUpAsync(ctx context.Context, receiverName, receiverAddress
 		assetID: assetID,
 		amount:  amount,
 	}
-	return
+	// TODO: this is not always true?
+	return v1.BusEventType_BUS_EVENT_TYPE_DEPOSIT, nil
 }
 
-func (p *Provider) topUpAsync(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint) (err error) {
+func (p *Provider) topUpAsync(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint) error {
 	// TODO: remove deposit slack request, once deposited
 	if existDeposit, ok := p.getPendingDeposit(assetID); ok {
 		existDeposit.amount = amount.Add(amount, existDeposit.amount)
@@ -117,11 +114,12 @@ func (p *Provider) topUpAsync(ctx context.Context, receiverName, receiverAddress
 			existDeposit.timestamp = newTimestamp
 		}
 		p.setPendingDeposit(assetID, existDeposit)
-		return
+		return nil
 	}
 
-	if err = p.deposit(ctx, "Whale", p.walletPubKey, assetID, amount); err == nil {
-		return
+	err := p.deposit(ctx, "Whale", p.walletPubKey, assetID, amount)
+	if err == nil {
+		return nil
 	}
 
 	p.log.WithFields(
@@ -143,10 +141,10 @@ func (p *Provider) topUpAsync(ctx context.Context, receiverName, receiverAddress
 	deposit.timestamp, err = p.slackDan(ctx, assetID, amount)
 	if err != nil {
 		p.log.Errorf("Failed to slack Dan: %s", err)
-		return
+		return err
 	}
 	p.setPendingDeposit(assetID, deposit)
-	return
+	return nil
 }
 
 func (p *Provider) deposit(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint) error {
@@ -163,7 +161,6 @@ func (p *Provider) deposit(ctx context.Context, receiverName, receiverAddress, a
 		err = p.depositBuiltin(ctx, assetID, amount, builtin)
 	} else {
 		return fmt.Errorf("unsupported asset type")
-
 	}
 	if err != nil {
 		return fmt.Errorf("failed to deposit to address '%s', name '%s': %w", receiverAddress, receiverName, err)
@@ -216,9 +213,8 @@ func (p *Provider) StakeAsync(ctx context.Context, receiverAddress, assetID stri
 	}
 
 	contractAddress := asset.Details.GetErc20().ContractAddress
-	added := new(num.Uint)
 
-	added, err = p.erc20.StakeToAddress(ctx, ownerKey.privateKey, ownerKey.address, contractAddress, receiverAddress, amount)
+	added, err := p.erc20.StakeToAddress(ctx, ownerKey.privateKey, ownerKey.address, contractAddress, receiverAddress, amount)
 	if err != nil {
 		return fmt.Errorf("failed to stake Vega token for '%s': %w", receiverAddress, err)
 	}
@@ -238,9 +234,8 @@ func (p *Provider) depositERC20(ctx context.Context, asset *vega.Asset, amount *
 	}
 
 	contractAddress := asset.Details.GetErc20().ContractAddress
-	added := new(num.Uint)
 
-	added, err = p.erc20.Deposit(ctx, ownerKey.privateKey, ownerKey.address, contractAddress, amount)
+	added, err := p.erc20.Deposit(ctx, ownerKey.privateKey, ownerKey.address, contractAddress, amount)
 	if err != nil {
 		return fmt.Errorf("failed to add erc20 token: %w", err)
 	}

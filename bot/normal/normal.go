@@ -140,11 +140,8 @@ func (b *bot) Start() error {
 func (b *bot) pauseChannel() chan types.PauseSignal {
 	in := make(chan types.PauseSignal)
 	go func() {
-		for {
-			select {
-			case p := <-in:
-				b.Pause(p)
-			}
+		for p := range in {
+			b.Pause(p)
 		}
 	}()
 	return in

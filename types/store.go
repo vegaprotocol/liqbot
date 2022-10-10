@@ -55,7 +55,9 @@ func (c cache[T]) set(f ...func(*T)) {
 	c.setCh <- f
 }
 
-func newCache[T any]() (c cache[T]) {
+func newCache[T any]() cache[T] {
+	var c cache[T]
+
 	c.getCh = make(chan chan T)
 	c.setCh = make(chan []func(*T))
 
@@ -73,5 +75,5 @@ func newCache[T any]() (c cache[T]) {
 		}
 	}()
 
-	return
+	return c
 }

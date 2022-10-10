@@ -39,6 +39,10 @@ func (f FaucetService) Mint(ctx context.Context, assetID string, amount *num.Uin
 	reqBody := bytes.NewBuffer(postBody)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, reqBody)
+	if err != nil {
+		return err
+	}
+
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)

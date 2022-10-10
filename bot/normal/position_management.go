@@ -459,8 +459,6 @@ func (b *bot) calculateOrderSizes(obligation *num.Uint, liquidityOrders []*vega.
 		}
 
 		order := vega.Order{
-			//MarketId: b.marketID,
-			//PartyId:     b.walletPubKey,
 			Side:        vega.Side_SIDE_BUY,
 			Remaining:   size.Uint64(),
 			Size:        size.Uint64(),

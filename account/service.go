@@ -80,7 +80,6 @@ func (a *Service) EnsureBalance(ctx context.Context, assetID string, targetAmoun
 	return nil
 }
 
-// TODO: DRY
 func (a *Service) EnsureStake(ctx context.Context, receiverName, receiverPubKey, assetID string, targetAmount *num.Uint, from string) error {
 	if receiverPubKey == "" {
 		return fmt.Errorf("receiver public key is empty")
@@ -147,7 +146,9 @@ func (a *Service) Balance() types.Balance {
 	return store.Balance()
 }
 
-func (a *Service) getStore(assetID string) (_ data.BalanceStore, err error) {
+func (a *Service) getStore(assetID string) (data.BalanceStore, error) {
+	var err error
+
 	store, ok := a.stores[assetID]
 	if !ok {
 		store, err = a.accountStream.GetBalances(assetID)

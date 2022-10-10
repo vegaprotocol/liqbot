@@ -153,7 +153,6 @@ func (m *Service) FindMarket() (*vega.Market, error) {
 			continue
 		}
 
-		//m.settlementAssetID = market.TradableInstrument.Instrument.GetFuture().SettlementAsset
 		m.log = m.log.WithFields(log.Fields{"marketID": mkt.Id})
 		m.decimalPlaces = mkt.DecimalPlaces
 
