@@ -12,6 +12,8 @@ import (
 )
 
 func TestService_mintToken(t *testing.T) {
+	t.Skip()
+
 	conf := &config.TokenConfig{
 		EthereumAPIAddress: "wss://ropsten.infura.io/ws/v3/0b0e1795edae41f59f4c99d29ba0ae8e",
 	}
