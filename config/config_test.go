@@ -45,7 +45,8 @@ func TestCheckConfig(t *testing.T) {
 	assert.True(t, strings.HasPrefix(err.Error(), errors.ErrMissingEmptyConfigSection.Error()))
 
 	botConfig := config.BotConfig{
-		Name: "test",
+		Name:                "test",
+		DataSubmitterPubKey: "0xDEADBEEF",
 		StrategyDetails: config.Strategy{
 			PosManagementSleepMilliseconds:   101,
 			MarketPriceSteeringRatePerSecond: 1,
