@@ -456,7 +456,7 @@ func (m *Service) getExampleProduct() *vega.InstrumentConfiguration_Future {
 		Future: &vega.FutureProduct{
 			SettlementAsset: m.config.SettlementAssetID,
 			QuoteName:       fmt.Sprintf("%s%s", m.config.InstrumentBase, m.config.InstrumentQuote),
-			OracleSpecForSettlementPrice: &oraclesv1.OracleSpecConfiguration{
+			OracleSpecForSettlementData: &oraclesv1.OracleSpecConfiguration{
 				PubKeys: []string{m.config.DataSubmitterPubKey},
 				Filters: []*oraclesv1.Filter{
 					{
@@ -481,7 +481,7 @@ func (m *Service) getExampleProduct() *vega.InstrumentConfiguration_Future {
 				},
 			},
 			OracleSpecBinding: &vega.OracleSpecToFutureBinding{
-				SettlementPriceProperty:    "prices.ETH.value",
+				SettlementDataProperty:     "prices.ETH.value",
 				TradingTerminationProperty: "trading.termination",
 			},
 		},
