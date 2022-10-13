@@ -428,13 +428,15 @@ func (m *Service) getExampleMarket() *vega.NewMarket {
 			},
 			DecimalPlaces: 5,
 			Metadata:      []string{"base:" + m.config.InstrumentBase, "quote:" + m.config.InstrumentQuote, "class:fx/crypto", "monthly", "sector:crypto"},
-			RiskParameters: &vega.NewMarketConfiguration_Simple{
-				Simple: &vega.SimpleModelParams{
-					FactorLong:           0.15,
-					FactorShort:          0.25,
-					MaxMoveUp:            10,
-					MinMoveDown:          -5,
-					ProbabilityOfTrading: 0.1,
+			RiskParameters: &vega.NewMarketConfiguration_LogNormal{
+				LogNormal: &vega.LogNormalRiskModel{
+					RiskAversionParameter: 0.01,
+					Tau:                   0.0001140771161,
+					Params: &vega.LogNormalModelParams{
+						Mu:    0,
+						R:     0.016,
+						Sigma: 0.5,
+					},
 				},
 			},
 		},
@@ -455,7 +457,7 @@ func (m *Service) getExampleProduct() *vega.InstrumentConfiguration_Future {
 			SettlementAsset: m.config.SettlementAssetID,
 			QuoteName:       fmt.Sprintf("%s%s", m.config.InstrumentBase, m.config.InstrumentQuote),
 			OracleSpecForSettlementPrice: &oraclesv1.OracleSpecConfiguration{
-				PubKeys: []string{"0xDEADBEEF"},
+				PubKeys: []string{m.config.DataSubmitterPubKey},
 				Filters: []*oraclesv1.Filter{
 					{
 						Key: &oraclesv1.PropertyKey{
@@ -467,7 +469,7 @@ func (m *Service) getExampleProduct() *vega.InstrumentConfiguration_Future {
 				},
 			},
 			OracleSpecForTradingTermination: &oraclesv1.OracleSpecConfiguration{
-				PubKeys: []string{"0xDEADBEEF"},
+				PubKeys: []string{m.config.DataSubmitterPubKey},
 				Filters: []*oraclesv1.Filter{
 					{
 						Key: &oraclesv1.PropertyKey{

@@ -61,6 +61,9 @@ func (cfg *Config) CheckConfig() error {
 		if err := bot.StrategyDetails.validateStrategyConfig(); err != nil {
 			return fmt.Errorf("failed to validate strategy config for bot '%s': %s", bot.Name, err)
 		}
+		if len(bot.DataSubmitterPubKey) == 0 {
+			return fmt.Errorf("%s: %s", errors.ErrMissingEmptyConfigSection.Error(), "bots.dataSubmitterPubKey")
+		}
 	}
 
 	return nil
@@ -157,6 +160,9 @@ type BotConfig struct {
 
 	// SettlementAssetID is the asset used for settlement.
 	SettlementAssetID string `yaml:"settlementAssetID"`
+
+	// DataSubmitterPubKey is a vega pub key of a party that can set settlement price and terminate market.
+	DataSubmitterPubKey string `yaml:"dataSubmitterPubKey"`
 
 	// StrategyDetails contains the parameters needed by the strategy algorithm.
 	StrategyDetails Strategy `yaml:"strategyDetails"`
