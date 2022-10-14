@@ -45,12 +45,28 @@ func TestCheckConfig(t *testing.T) {
 	assert.True(t, strings.HasPrefix(err.Error(), errors.ErrMissingEmptyConfigSection.Error()))
 
 	botConfig := config.BotConfig{
-		Name:                "test",
-		DataSubmitterPubKey: "0xDEADBEEF",
+		Name: "test",
 		StrategyDetails: config.Strategy{
 			PosManagementSleepMilliseconds:   101,
 			MarketPriceSteeringRatePerSecond: 1,
 			PriceSteerOrderScale:             12,
+		},
+		InstrumentBase:    "AAPL",
+		InstrumentQuote:   "USD",
+		SettlementAssetID: "c9fe6fc24fce121b2cc72680543a886055abb560043fda394ba5376203b7527d",
+		MarketProposalConfig: config.MarketProposalConfig{
+			DataSubmitterPubKey: "0xDEADBEEF",
+			InstrumentCode:      "AAPL.MF21",
+			Name:                "Apple Monthly (Feb 2024)",
+			Title:               "New USD market",
+			Description:         "New USD market",
+			DecimalPlaces:       18,
+			Metadata: []string{
+				"class:equities/single-stock-futures",
+				"sector:tech",
+				"listing_venue:NASDAQ",
+				"country:US",
+			},
 		},
 	}
 	cfg.Bots = append(cfg.Bots, botConfig)

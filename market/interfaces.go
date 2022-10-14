@@ -31,6 +31,7 @@ type tradingDataService interface {
 	MustDialConnection(ctx context.Context)
 	Target() string
 	Markets(req *dataapipb.MarketsRequest) (*dataapipb.MarketsResponse, error) // TODO: bot should probably not have to worry about finding markets
+	GetAllNetworkParameters() (*types.NetworkParameters, error)
 }
 
 type accountService interface {

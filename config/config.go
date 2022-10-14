@@ -61,8 +61,20 @@ func (cfg *Config) CheckConfig() error {
 		if err := bot.StrategyDetails.validateStrategyConfig(); err != nil {
 			return fmt.Errorf("failed to validate strategy config for bot '%s': %s", bot.Name, err)
 		}
-		if len(bot.DataSubmitterPubKey) == 0 {
-			return fmt.Errorf("%s: %s", errors.ErrMissingEmptyConfigSection.Error(), "bots.dataSubmitterPubKey")
+		if len(bot.MarketProposalConfig.DataSubmitterPubKey) == 0 {
+			return fmt.Errorf("%s: %s", errors.ErrMissingEmptyConfigSection.Error(), "bots.marketProposalConfig.dataSubmitterPubKey")
+		}
+		if len(bot.MarketProposalConfig.InstrumentCode) == 0 {
+			return fmt.Errorf("%s: %s", errors.ErrMissingEmptyConfigSection.Error(), "bots.marketProposalConfig.instrumentCode")
+		}
+		if len(bot.MarketProposalConfig.Name) == 0 {
+			return fmt.Errorf("%s: %s", errors.ErrMissingEmptyConfigSection.Error(), "bots.marketProposalConfig.name")
+		}
+		if len(bot.MarketProposalConfig.Title) == 0 {
+			return fmt.Errorf("%s: %s", errors.ErrMissingEmptyConfigSection.Error(), "bots.marketProposalConfig.title")
+		}
+		if len(bot.MarketProposalConfig.Description) == 0 {
+			return fmt.Errorf("%s: %s", errors.ErrMissingEmptyConfigSection.Error(), "bots.marketProposalConfig.description")
 		}
 	}
 
@@ -161,8 +173,7 @@ type BotConfig struct {
 	// SettlementAssetID is the asset used for settlement.
 	SettlementAssetID string `yaml:"settlementAssetID"`
 
-	// DataSubmitterPubKey is a vega pub key of a party that can set settlement price and terminate market.
-	DataSubmitterPubKey string `yaml:"dataSubmitterPubKey"`
+	MarketProposalConfig MarketProposalConfig `yaml:"marketProposalConfig"`
 
 	// StrategyDetails contains the parameters needed by the strategy algorithm.
 	StrategyDetails Strategy `yaml:"strategyDetails"`
@@ -178,4 +189,17 @@ type TokenConfig struct {
 	Erc20BridgeAddress   string `yaml:"erc20BridgeAddress"`
 	StakingBridgeAddress string `yaml:"stakingBridgeAddress"`
 	SyncTimeoutSec       int    `yaml:"syncTimeoutSec"`
+}
+
+type MarketProposalConfig struct {
+	// DataSubmitterPubKey is a vega pub key of a party that can set settlement price and terminate market.
+	DataSubmitterPubKey string `yaml:"dataSubmitterPubKey"`
+
+	InstrumentCode string `yaml:"instrumentCode"`
+
+	Name          string   `yaml:"name"`
+	Title         string   `yaml:"title"`
+	Description   string   `yaml:"description"`
+	DecimalPlaces uint64   `yaml:"decimalPlaces"`
+	Metadata      []string `yaml:"metadata"`
 }

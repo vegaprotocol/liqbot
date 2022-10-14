@@ -12,9 +12,11 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v1"
+	dataapipbv2 "code.vegaprotocol.io/vega/protos/data-node/api/v2"
 	vegaapipb "code.vegaprotocol.io/vega/protos/vega/api/v1"
 
 	e "code.vegaprotocol.io/liqbot/errors"
+	"code.vegaprotocol.io/liqbot/types"
 )
 
 // DataNode stores state for a Vega Data node.
@@ -279,4 +281,39 @@ func (n *DataNode) AssetByID(req *dataapipb.AssetByIDRequest) (*dataapipb.AssetB
 
 func (n *DataNode) WaitForStateChange(ctx context.Context, state connectivity.State) bool {
 	return n.conn.WaitForStateChange(ctx, state)
+}
+
+// All Network Parameters
+func (n *DataNode) ListNetworkParameters(req *dataapipbv2.ListNetworkParametersRequest) (*dataapipbv2.ListNetworkParametersResponse, error) {
+	msg := "gRPC call failed (data-node v2): ListNetworkParameters: %w"
+	if n == nil {
+		return nil, fmt.Errorf(msg, e.ErrNil)
+	}
+
+	if n.conn.GetState() != connectivity.Ready {
+		return nil, fmt.Errorf(msg, e.ErrConnectionNotReady)
+	}
+
+	c := dataapipbv2.NewTradingDataServiceClient(n.conn)
+	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
+	defer cancel()
+
+	response, err := c.ListNetworkParameters(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf(msg, e.ErrorDetail(err))
+	}
+
+	return response, nil
+}
+
+func (n *DataNode) GetAllNetworkParameters() (*types.NetworkParameters, error) {
+	res, err := n.ListNetworkParameters(&dataapipbv2.ListNetworkParametersRequest{})
+	if err != nil {
+		return nil, err
+	}
+	networkParams := map[string]string{}
+	for _, edge := range res.NetworkParameters.Edges {
+		networkParams[edge.Node.Key] = edge.Node.Value
+	}
+	return types.NewNetworkParameters(networkParams)
 }

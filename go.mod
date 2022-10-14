@@ -50,6 +50,7 @@ require (
 	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.9.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
+	github.com/inhies/go-bytesize v0.0.0-20220417184213-4913239db9cf // indirect
 	github.com/jmhodges/levigo v1.0.0 // indirect
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20220317090546-adb2f9614b17 // indirect
 	github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5 // indirect
@@ -67,6 +68,9 @@ require (
 	github.com/tyler-smith/go-bip39 v1.1.0 // indirect
 	github.com/vegaprotocol/go-slip10 v0.1.0 // indirect
 	go.etcd.io/bbolt v1.3.6 // indirect
+	go.uber.org/atomic v1.9.0 // indirect
+	go.uber.org/multierr v1.8.0 // indirect
+	go.uber.org/zap v1.21.0 // indirect
 	golang.org/x/crypto v0.0.0-20220722155217-630584e8d5aa // indirect
 	golang.org/x/exp v0.0.0-20220426173459-3bcf042a4bf5 // indirect
 	golang.org/x/net v0.0.0-20220726230323-06994584191e // indirect
