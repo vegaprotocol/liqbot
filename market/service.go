@@ -250,7 +250,7 @@ func (m *Service) sendNewMarketProposal(ctx context.Context) error {
 		InstrumentCode:        m.config.MarketProposalConfig.InstrumentCode,
 		DataSubmitterPubKey:   m.config.MarketProposalConfig.DataSubmitterPubKey,
 		SettlementVegaAssetId: m.config.SettlementAssetID,
-		DecimalPlaces:         m.config.MarketProposalConfig.DecimalPlaces,
+		DecimalPlaces:         *m.config.MarketProposalConfig.DecimalPlaces,
 		ExtraMetadata:         m.config.MarketProposalConfig.Metadata,
 		ClosingTime:           time.Now().Add(time.Second * 20).Add(proposalParams.MinClose),
 		EnactmentTime:         time.Now().Add(time.Second * 30).Add(proposalParams.MinClose).Add(proposalParams.MinEnact),

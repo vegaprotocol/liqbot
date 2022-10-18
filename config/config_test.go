@@ -43,6 +43,7 @@ func TestCheckConfig(t *testing.T) {
 	cfg.Bots = []config.BotConfig{}
 	err = cfg.CheckConfig()
 	assert.True(t, strings.HasPrefix(err.Error(), errors.ErrMissingEmptyConfigSection.Error()))
+	decimalPlaces := uint64(18)
 
 	botConfig := config.BotConfig{
 		Name: "test",
@@ -60,7 +61,7 @@ func TestCheckConfig(t *testing.T) {
 			Name:                "Apple Monthly (Feb 2024)",
 			Title:               "New USD market",
 			Description:         "New USD market",
-			DecimalPlaces:       18,
+			DecimalPlaces:       &decimalPlaces,
 			Metadata: []string{
 				"class:equities/single-stock-futures",
 				"sector:tech",

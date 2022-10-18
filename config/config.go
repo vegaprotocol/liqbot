@@ -76,6 +76,9 @@ func (cfg *Config) CheckConfig() error {
 		if len(bot.MarketProposalConfig.Description) == 0 {
 			return fmt.Errorf("%s: %s", errors.ErrMissingEmptyConfigSection.Error(), "bots.marketProposalConfig.description")
 		}
+		if bot.MarketProposalConfig.DecimalPlaces == nil {
+			return fmt.Errorf("%s: %s", errors.ErrMissingEmptyConfigSection.Error(), "bots.marketProposalConfig.decimalPlaces")
+		}
 	}
 
 	return nil
@@ -200,6 +203,6 @@ type MarketProposalConfig struct {
 	Name          string   `yaml:"name"`
 	Title         string   `yaml:"title"`
 	Description   string   `yaml:"description"`
-	DecimalPlaces uint64   `yaml:"decimalPlaces"`
+	DecimalPlaces *uint64  `yaml:"decimalPlaces,omitempty"`
 	Metadata      []string `yaml:"metadata"`
 }
