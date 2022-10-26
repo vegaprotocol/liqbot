@@ -18,7 +18,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Commitsar conventional commits check
-        uses: aevea/commitsar@v0.18.0
+        uses: aevea/commitsar@v0.20.1
 
   verify-linked-issue:
     if: |
