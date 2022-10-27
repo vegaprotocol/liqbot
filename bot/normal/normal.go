@@ -15,14 +15,15 @@ import (
 
 	ppconfig "code.vegaprotocol.io/priceproxy/config"
 	ppservice "code.vegaprotocol.io/priceproxy/service"
-	dataapipb "code.vegaprotocol.io/protos/data-node/api/v1"
-	"code.vegaprotocol.io/protos/vega"
-	vegaapipb "code.vegaprotocol.io/protos/vega/api/v1"
-	commandspb "code.vegaprotocol.io/protos/vega/commands/v1"
-	walletpb "code.vegaprotocol.io/protos/vega/wallet/v1"
 	vgcrypto "code.vegaprotocol.io/shared/libs/crypto"
-	"code.vegaprotocol.io/vegawallet/wallet"
-	"code.vegaprotocol.io/vegawallet/wallets"
+	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v1"
+	dataapipbv2 "code.vegaprotocol.io/vega/protos/data-node/api/v2"
+	"code.vegaprotocol.io/vega/protos/vega"
+	vegaapipb "code.vegaprotocol.io/vega/protos/vega/api/v1"
+	commandspb "code.vegaprotocol.io/vega/protos/vega/commands/v1"
+	walletpb "code.vegaprotocol.io/vega/protos/vega/wallet/v1"
+	"code.vegaprotocol.io/vega/wallet/wallet"
+	"code.vegaprotocol.io/vega/wallet/wallets"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -108,7 +109,7 @@ type TradingDataService interface {
 	// rpc TradesSubscribe(TradesSubscribeRequest) returns (stream TradesSubscribeResponse);
 	// rpc TransferResponsesSubscribe(TransferResponsesSubscribeRequest) returns (stream TransferResponsesSubscribeResponse);
 	// rpc GetNodeSignaturesAggregate(GetNodeSignaturesAggregateRequest) returns (GetNodeSignaturesAggregateResponse);
-	AssetByID(req *dataapipb.AssetByIDRequest) (response *dataapipb.AssetByIDResponse, err error)
+	ListAssets(req *dataapipbv2.ListAssetsRequest) (response *dataapipbv2.ListAssetsResponse, err error)
 	// rpc Assets(AssetsRequest) returns (AssetsResponse);
 	// rpc EstimateFee(EstimateFeeRequest) returns (EstimateFeeResponse);
 	// rpc EstimateMargin(EstimateMarginRequest) returns (EstimateMarginResponse);
@@ -136,6 +137,7 @@ type TradingDataService interface {
 // }
 
 // DataNode is a Vega Data node
+//
 //go:generate go run github.com/golang/mock/mockgen -destination mocks/datanode_mock.go -package mocks code.vegaprotocol.io/liqbot/bot/normal DataNode
 type DataNode interface {
 	GetAddress() (url.URL, error)
@@ -144,6 +146,7 @@ type DataNode interface {
 }
 
 // PricingEngine is the source of price information from the price proxy.
+//
 //go:generate go run github.com/golang/mock/mockgen -destination mocks/pricingengine_mock.go -package mocks code.vegaprotocol.io/liqbot/bot/normal PricingEngine
 type PricingEngine interface {
 	GetPrice(pricecfg ppconfig.PriceConfig) (pi ppservice.PriceResponse, err error)
@@ -278,11 +281,18 @@ func (b *Bot) Start() error {
 	}).Info("Fetched market info")
 
 	// Use the settlementAssetID to lookup the settlement ethereum address
-	assetResponse, err := b.node.AssetByID(&dataapipb.AssetByIDRequest{Id: b.settlementAssetID})
+	assetResponse, err := b.node.ListAssets(&dataapipbv2.ListAssetsRequest{AssetId: &b.settlementAssetID})
 	if err != nil {
-		return fmt.Errorf("unable to look up asset details for %s", b.settlementAssetID)
+		return fmt.Errorf("unable to look up asset details for %s: %w", b.settlementAssetID, err)
 	}
-	erc20 := assetResponse.Asset.Details.GetErc20()
+
+	if assetResponse == nil || assetResponse.Assets == nil || assetResponse.Assets.Edges == nil ||
+		len(assetResponse.Assets.Edges) < 1 || assetResponse.Assets.Edges[0].Node == nil ||
+		assetResponse.Assets.Edges[0].Node.Details == nil || assetResponse.Assets.Edges[0].Node.Details.GetErc20() == nil {
+		return fmt.Errorf("asset %s not found", b.settlementAssetID)
+	}
+	erc20 := assetResponse.Assets.Edges[0].Node.Details.GetErc20()
+
 	if erc20 != nil {
 		b.settlementAssetAddress = erc20.ContractAddress
 	} else {
@@ -524,7 +534,7 @@ func (b *Bot) signSubmitTx(
 		}
 	}
 
-	signedTx, err := b.walletServer.SignTx(b.config.Name, submitTxReq, blockData.Height)
+	signedTx, err := b.walletServer.SignTx(b.config.Name, submitTxReq, blockData.Height, "vega-devnet1-202210271910")
 	if err != nil {
 		return fmt.Errorf(msg, fmt.Errorf("failed to sign tx: %w", err))
 	}
@@ -1002,7 +1012,7 @@ func (b *Bot) setupWallet() (mnemonic string, err error) {
 		}
 		if len(keys) == 0 {
 			var key wallet.KeyPair
-			key, err = b.walletServer.GenerateKeyPair(b.config.Name, b.walletPassphrase, []wallet.Meta{})
+			key, err = b.walletServer.GenerateKeyPair(b.config.Name, b.walletPassphrase, []wallet.Metadata{})
 			if err != nil {
 				return "", fmt.Errorf("failed to generate keypair: %w", err)
 			}

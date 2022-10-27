@@ -9,8 +9,10 @@ import (
 	e "code.vegaprotocol.io/liqbot/errors"
 	"code.vegaprotocol.io/liqbot/helpers"
 
-	dataapipb "code.vegaprotocol.io/protos/data-node/api/v1"
-	vegaapipb "code.vegaprotocol.io/protos/vega/api/v1"
+	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v1"
+	dataapipbv2 "code.vegaprotocol.io/vega/protos/data-node/api/v2"
+
+	vegaapipb "code.vegaprotocol.io/vega/protos/vega/api/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 )
@@ -333,8 +335,8 @@ func (n *DataNode) PositionsSubscribe(req *dataapipb.PositionsSubscribeRequest) 
 // rpc GetNodeSignaturesAggregate(GetNodeSignaturesAggregateRequest) returns (GetNodeSignaturesAggregateResponse);
 
 // AssetByID returns the specified asset.
-func (n *DataNode) AssetByID(req *dataapipb.AssetByIDRequest) (response *dataapipb.AssetByIDResponse, err error) {
-	msg := "gRPC call failed (data-node): AssetByID: %w"
+func (n *DataNode) ListAssets(req *dataapipbv2.ListAssetsRequest) (response *dataapipbv2.ListAssetsResponse, err error) {
+	msg := "gRPC call failed (data-node): ListAssets: %w"
 	if n == nil {
 		err = fmt.Errorf(msg, e.ErrNil)
 		return
@@ -345,11 +347,13 @@ func (n *DataNode) AssetByID(req *dataapipb.AssetByIDRequest) (response *dataapi
 		return
 	}
 
-	c := dataapipb.NewTradingDataServiceClient(n.conn)
+	c := dataapipbv2.NewTradingDataServiceClient(n.conn)
+
+	// c := dataapipb.NewTradingDataServiceClient(n.conn)
 	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
 	defer cancel()
 
-	response, err = c.AssetByID(ctx, req)
+	response, err = c.ListAssets(ctx, req)
 	if err != nil {
 		err = fmt.Errorf(msg, helpers.ErrorDetail(err))
 	}
