@@ -10,7 +10,6 @@ import (
 	"code.vegaprotocol.io/liqbot/helpers"
 
 	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v1"
-	dataapipbv2 "code.vegaprotocol.io/vega/protos/data-node/api/v2"
 
 	vegaapipb "code.vegaprotocol.io/vega/protos/vega/api/v1"
 	"google.golang.org/grpc"
@@ -335,7 +334,7 @@ func (n *DataNode) PositionsSubscribe(req *dataapipb.PositionsSubscribeRequest) 
 // rpc GetNodeSignaturesAggregate(GetNodeSignaturesAggregateRequest) returns (GetNodeSignaturesAggregateResponse);
 
 // AssetByID returns the specified asset.
-func (n *DataNode) ListAssets(req *dataapipbv2.ListAssetsRequest) (response *dataapipbv2.ListAssetsResponse, err error) {
+func (n *DataNode) AssetByID(req *dataapipb.AssetByIDRequest) (response *dataapipb.AssetByIDResponse, err error) {
 	msg := "gRPC call failed (data-node): ListAssets: %w"
 	if n == nil {
 		err = fmt.Errorf(msg, e.ErrNil)
@@ -347,17 +346,36 @@ func (n *DataNode) ListAssets(req *dataapipbv2.ListAssetsRequest) (response *dat
 		return
 	}
 
-	c := dataapipbv2.NewTradingDataServiceClient(n.conn)
-
-	// c := dataapipb.NewTradingDataServiceClient(n.conn)
+	c := dataapipb.NewTradingDataServiceClient(n.conn)
 	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
 	defer cancel()
 
-	response, err = c.ListAssets(ctx, req)
+	response, err = c.AssetByID(ctx, req)
 	if err != nil {
 		err = fmt.Errorf(msg, helpers.ErrorDetail(err))
 	}
 	return
+}
+
+func (n *DataNode) Statistics(*vegaapipb.StatisticsRequest) (*vegaapipb.StatisticsResponse, error) {
+	if n == nil {
+		return nil, fmt.Errorf("data node instance is nil: %w", e.ErrNil)
+	}
+
+	if n.conn.GetState() != connectivity.Ready {
+		return nil, fmt.Errorf("grpc connection for data node is not ready: %w", e.ErrConnectionNotReady)
+	}
+
+	c := vegaapipb.NewCoreServiceClient(n.conn)
+	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
+	defer cancel()
+
+	response, err := c.Statistics(ctx, &vegaapipb.StatisticsRequest{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get node statistics: %w", err)
+	}
+
+	return response, nil
 }
 
 // rpc Assets(AssetsRequest) returns (AssetsResponse);

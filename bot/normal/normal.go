@@ -17,7 +17,6 @@ import (
 	ppservice "code.vegaprotocol.io/priceproxy/service"
 	vgcrypto "code.vegaprotocol.io/shared/libs/crypto"
 	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v1"
-	dataapipbv2 "code.vegaprotocol.io/vega/protos/data-node/api/v2"
 	"code.vegaprotocol.io/vega/protos/vega"
 	vegaapipb "code.vegaprotocol.io/vega/protos/vega/api/v1"
 	commandspb "code.vegaprotocol.io/vega/protos/vega/commands/v1"
@@ -31,7 +30,7 @@ import (
 type CoreService interface {
 	SubmitTransaction(req *vegaapipb.SubmitTransactionRequest) (response *vegaapipb.SubmitTransactionResponse, err error)
 	// rpc PropagateChainEvent(PropagateChainEventRequest) returns (PropagateChainEventResponse);
-	// rpc Statistics(StatisticsRequest) returns (StatisticsResponse);
+	Statistics(*vegaapipb.StatisticsRequest) (*vegaapipb.StatisticsResponse, error)
 	LastBlockData() (*vegaapipb.LastBlockHeightResponse, error)
 	GetVegaTime() (t time.Time, err error)
 	ObserveEventBus() (client vegaapipb.CoreService_ObserveEventBusClient, err error)
@@ -109,7 +108,7 @@ type TradingDataService interface {
 	// rpc TradesSubscribe(TradesSubscribeRequest) returns (stream TradesSubscribeResponse);
 	// rpc TransferResponsesSubscribe(TransferResponsesSubscribeRequest) returns (stream TransferResponsesSubscribeResponse);
 	// rpc GetNodeSignaturesAggregate(GetNodeSignaturesAggregateRequest) returns (GetNodeSignaturesAggregateResponse);
-	ListAssets(req *dataapipbv2.ListAssetsRequest) (response *dataapipbv2.ListAssetsResponse, err error)
+	AssetByID(req *dataapipb.AssetByIDRequest) (response *dataapipb.AssetByIDResponse, err error)
 	// rpc Assets(AssetsRequest) returns (AssetsResponse);
 	// rpc EstimateFee(EstimateFeeRequest) returns (EstimateFeeResponse);
 	// rpc EstimateMargin(EstimateMarginRequest) returns (EstimateMarginResponse);
@@ -281,18 +280,18 @@ func (b *Bot) Start() error {
 	}).Info("Fetched market info")
 
 	// Use the settlementAssetID to lookup the settlement ethereum address
-	assetResponse, err := b.node.ListAssets(&dataapipbv2.ListAssetsRequest{AssetId: &b.settlementAssetID})
+	assetResponse, err := b.node.AssetByID(&dataapipb.AssetByIDRequest{Id: b.settlementAssetID})
 	if err != nil {
 		return fmt.Errorf("unable to look up asset details for %s: %w", b.settlementAssetID, err)
 	}
 
-	if assetResponse == nil || assetResponse.Assets == nil || assetResponse.Assets.Edges == nil ||
-		len(assetResponse.Assets.Edges) < 1 || assetResponse.Assets.Edges[0].Node == nil ||
-		assetResponse.Assets.Edges[0].Node.Details == nil || assetResponse.Assets.Edges[0].Node.Details.GetErc20() == nil {
-		return fmt.Errorf("asset %s not found", b.settlementAssetID)
-	}
-	erc20 := assetResponse.Assets.Edges[0].Node.Details.GetErc20()
-
+	// if assetResponse == nil || assetResponse.Assets == nil || assetResponse.Assets.Edges == nil ||
+	// 	len(assetResponse.Assets.Edges) < 1 || assetResponse.Assets.Edges[0].Node == nil ||
+	// 	assetResponse.Assets.Edges[0].Node.Details == nil || assetResponse.Assets.Edges[0].Node.Details.GetErc20() == nil {
+	// 	return fmt.Errorf("asset %s not found", b.settlementAssetID)
+	// }
+	// erc20 := assetResponse.Assets.Edges[0].Node.Details.GetErc20()
+	erc20 := assetResponse.Asset.Details.GetErc20()
 	if erc20 != nil {
 		b.settlementAssetAddress = erc20.ContractAddress
 	} else {
@@ -534,7 +533,15 @@ func (b *Bot) signSubmitTx(
 		}
 	}
 
-	signedTx, err := b.walletServer.SignTx(b.config.Name, submitTxReq, blockData.Height, "vega-devnet1-202210271910")
+	statistics, err := b.node.Statistics(&vegaapipb.StatisticsRequest{})
+	if err != nil {
+		return fmt.Errorf("failed to get statistics for vega node: %w", err)
+	}
+	if statistics.Statistics == nil {
+		return fmt.Errorf("empty reponse returned for vega node statistics")
+	}
+
+	signedTx, err := b.walletServer.SignTx(b.config.Name, submitTxReq, blockData.Height, statistics.Statistics.ChainId)
 	if err != nil {
 		return fmt.Errorf(msg, fmt.Errorf("failed to sign tx: %w", err))
 	}
