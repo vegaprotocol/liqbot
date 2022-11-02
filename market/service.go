@@ -13,8 +13,8 @@ import (
 	"code.vegaprotocol.io/liqbot/config"
 	"code.vegaprotocol.io/liqbot/data"
 	"code.vegaprotocol.io/liqbot/types"
-	"code.vegaprotocol.io/liqbot/types/num"
 	ppconfig "code.vegaprotocol.io/priceproxy/config"
+	"code.vegaprotocol.io/shared/libs/num"
 	v12 "code.vegaprotocol.io/vega/protos/data-node/api/v1"
 	"code.vegaprotocol.io/vega/protos/vega"
 	commandspb "code.vegaprotocol.io/vega/protos/vega/commands/v1"
@@ -78,9 +78,9 @@ func (m *Service) Init(pubKey string, pauseCh chan types.PauseSignal) error {
 	return nil
 }
 
-func (m *Service) Start(marketID string) error {
+func (m *Service) Start(ctx context.Context, marketID string) error {
 	m.log.Info("Starting market service")
-	if err := m.marketStream.Subscribe(marketID); err != nil {
+	if err := m.marketStream.Subscribe(ctx, marketID); err != nil {
 		return fmt.Errorf("failed to subscribe to market stream: %w", err)
 	}
 	m.marketID = marketID
@@ -96,7 +96,7 @@ func (m *Service) Market() types.MarketData {
 }
 
 func (m *Service) SetupMarket(ctx context.Context) (*vega.Market, error) {
-	market, err := m.FindMarket()
+	market, err := m.FindMarket(ctx)
 	if err == nil {
 		m.log.WithField("market", market).Info("Found market")
 		return market, nil
@@ -108,7 +108,7 @@ func (m *Service) SetupMarket(ctx context.Context) (*vega.Market, error) {
 		return nil, fmt.Errorf("failed to create market: %w", err)
 	}
 
-	market, err = m.FindMarket()
+	market, err = m.FindMarket(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find market after creation: %w", err)
 	}
@@ -116,8 +116,8 @@ func (m *Service) SetupMarket(ctx context.Context) (*vega.Market, error) {
 	return market, nil
 }
 
-func (m *Service) FindMarket() (*vega.Market, error) {
-	marketsResponse, err := m.node.Markets(&v12.MarketsRequest{})
+func (m *Service) FindMarket(ctx context.Context) (*vega.Market, error) {
+	marketsResponse, err := m.node.Markets(ctx, &v12.MarketsRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get markets: %w", err)
 	}
@@ -173,8 +173,7 @@ func (m *Service) CreateMarket(ctx context.Context) error {
 		"name":   m.name,
 	}).Info("Ensuring balance for market creation")
 
-	// TODO: is it m.settlementAssetID?
-	if err := m.account.EnsureBalance(ctx, m.config.SettlementAssetID, seedAmount, "MarketCreation"); err != nil {
+	if err := m.account.EnsureBalance(ctx, m.config.SettlementAssetID, types.General, seedAmount, "MarketCreation"); err != nil {
 		return fmt.Errorf("failed to ensure balance: %w", err)
 	}
 
@@ -279,14 +278,14 @@ func (m *Service) CanPlaceOrders() bool {
 
 // TODO: make retryable.
 func (m *Service) SubmitOrder(ctx context.Context, order *vega.Order, from string, secondsFromNow int64) error {
-	// TODO: is it ok to ensure balance here?
-
 	price, overflow := num.UintFromString(order.Price, 10)
 	if overflow {
 		return fmt.Errorf("failed to parse price: overflow")
 	}
 
-	if err := m.account.EnsureBalance(ctx, m.config.SettlementAssetID, price, from); err != nil {
+	price.Mul(price, num.NewUint(order.Size))
+
+	if err := m.account.EnsureBalance(ctx, m.config.SettlementAssetID, types.General, price, from); err != nil {
 		return fmt.Errorf("failed to ensure balance: %w", err)
 	}
 
@@ -304,14 +303,6 @@ func (m *Service) SubmitOrder(ctx context.Context, order *vega.Order, from strin
 		},
 	}
 
-	m.log.WithFields(log.Fields{
-		"reference": order.Reference,
-		"size":      order.Size,
-		"side":      order.Side.String(),
-		"price":     order.Price,
-		"tif":       order.TimeInForce.String(),
-	}).Debugf("%s: Submitting order", from)
-
 	if order.TimeInForce == vega.Order_TIME_IN_FORCE_GTT {
 		cmd.OrderSubmission.ExpiresAt = time.Now().UnixNano() + (secondsFromNow * 1000000000)
 	}
@@ -319,6 +310,16 @@ func (m *Service) SubmitOrder(ctx context.Context, order *vega.Order, from strin
 	if order.Type != vega.Order_TYPE_MARKET {
 		cmd.OrderSubmission.Price = order.Price
 	}
+
+	m.log.WithFields(log.Fields{
+		"expiresAt": cmd.OrderSubmission.ExpiresAt,
+		"types":     order.Type.String(),
+		"reference": order.Reference,
+		"size":      order.Size,
+		"side":      order.Side.String(),
+		"price":     order.Price,
+		"tif":       order.TimeInForce.String(),
+	}).Debugf("%s: Submitting order", from)
 
 	submitTxReq := &walletpb.SubmitTransactionRequest{
 		PubKey:  m.walletPubKey,
@@ -438,14 +439,6 @@ func (m *Service) getExampleMarket() *vega.NewMarket {
 				},
 			},
 		},
-		/*
-			TODO: is this needed?
-			LiquidityCommitment: &vega.NewMarketCommitment{
-				Fee:              fmt.Sprint(m.config.StrategyDetails.Fee),
-				CommitmentAmount: m.config.StrategyDetails.CommitmentAmount,
-				Buys:             m.config.StrategyDetails.ShorteningShape.Buys.ToVegaLiquidityOrders(),
-				Sells:            m.config.StrategyDetails.LongeningShape.Sells.ToVegaLiquidityOrders(),
-			},*/
 	}
 }
 
@@ -454,7 +447,7 @@ func (m *Service) getExampleProduct() *vega.InstrumentConfiguration_Future {
 		Future: &vega.FutureProduct{
 			SettlementAsset: m.config.SettlementAssetID,
 			QuoteName:       fmt.Sprintf("%s%s", m.config.InstrumentBase, m.config.InstrumentQuote),
-			OracleSpecForSettlementPrice: &oraclesv1.OracleSpecConfiguration{
+			OracleSpecForSettlementData: &oraclesv1.OracleSpecConfiguration{
 				PubKeys: []string{"0xDEADBEEF"},
 				Filters: []*oraclesv1.Filter{
 					{
@@ -479,7 +472,7 @@ func (m *Service) getExampleProduct() *vega.InstrumentConfiguration_Future {
 				},
 			},
 			OracleSpecBinding: &vega.OracleSpecToFutureBinding{
-				SettlementPriceProperty:    "prices.ETH.value",
+				SettlementDataProperty:     "prices.ETH.value",
 				TradingTerminationProperty: "trading.termination",
 			},
 		},

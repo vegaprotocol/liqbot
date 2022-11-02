@@ -3,7 +3,7 @@ package types
 import (
 	"testing"
 
-	"code.vegaprotocol.io/liqbot/types/num"
+	"code.vegaprotocol.io/shared/libs/num"
 	vt "code.vegaprotocol.io/vega/core/types"
 )
 
@@ -20,17 +20,17 @@ func Test_newBalanceCache(t *testing.T) {
 		SetBond(bond),
 	)
 
-	if !c.get().General().EQ(general) {
-		t.Errorf("expected %v, got %v", general, c.get().General())
+	if !General(c.get()).EQ(general) {
+		t.Errorf("expected %v, got %v", general, General(c.get()))
 	}
-	if !c.get().Margin().EQ(margin) {
-		t.Errorf("expected %v, got %v", margin, c.get().Margin())
+	if !Margin(c.get()).EQ(margin) {
+		t.Errorf("expected %v, got %v", margin, Margin(c.get()))
 	}
-	if !c.get().Bond().EQ(bond) {
-		t.Errorf("expected %v, got %v", bond, c.get().Bond())
+	if !Bond(c.get()).EQ(bond) {
+		t.Errorf("expected %v, got %v", bond, Bond(c.get()))
 	}
-	if !c.get().Total().EQ(num.Sum(general, margin, bond)) {
-		t.Errorf("expected %v, got %v", num.Sum(general, margin, bond), c.get().Total())
+	if !GeneralAndBond(c.get()).EQ(num.Sum(general, bond)) {
+		t.Errorf("expected %v, got %v", num.Sum(general, bond), GeneralAndBond(c.get()))
 	}
 }
 

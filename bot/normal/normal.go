@@ -11,7 +11,7 @@ import (
 
 	"code.vegaprotocol.io/liqbot/config"
 	"code.vegaprotocol.io/liqbot/types"
-	"code.vegaprotocol.io/liqbot/types/num"
+	wtypes "code.vegaprotocol.io/shared/libs/wallet/types"
 	"code.vegaprotocol.io/vega/wallet/wallets"
 )
 
@@ -37,14 +37,6 @@ type bot struct {
 	botPaused         bool
 	mu                sync.Mutex
 }
-
-// TODO: there could be a service that would be in charge of managing the account, balance of the account, creating markets
-// and simplifying the process of placing orders.
-// The bot should only have to worry decision making about what orders to place and when, given the current market state.
-// The service should be responsible for the following:
-// - creating markets (if necessary)
-// - placing orders, as produced by the bot
-// - managing the account balance
 
 // New returns a new instance of bot.
 func New(
@@ -99,7 +91,7 @@ func (b *bot) Start() error {
 	b.marketID = market.Id
 	b.decimalPlaces = market.DecimalPlaces
 
-	if err = b.marketService.Start(market.Id); err != nil {
+	if err = b.marketService.Start(ctx, market.Id); err != nil {
 		return fmt.Errorf("failed to start market service: %w", err)
 	}
 
@@ -111,18 +103,6 @@ func (b *bot) Start() error {
 	}).Info("Market info")
 
 	ctx, cancel := context.WithCancel(ctx)
-
-	// TODO: what to use here?
-	targetAmount, overflow := num.UintFromString(b.config.StrategyDetails.CommitmentAmount, 10)
-	if overflow {
-		cancel()
-		return fmt.Errorf("failed to parse targetAmount: overflow")
-	}
-
-	if err = b.EnsureBalance(ctx, b.settlementAssetID, targetAmount, "Start"); err != nil {
-		cancel()
-		return fmt.Errorf("failed to ensure balance: %w", err)
-	}
 
 	go func() {
 		defer cancel()
@@ -202,10 +182,11 @@ func (b *bot) setupWallet(ctx context.Context) (string, error) {
 
 	if err := b.walletClient.LoginWallet(ctx, b.config.Name, walletPassphrase); err != nil {
 		if strings.Contains(err.Error(), wallets.ErrWalletDoesNotExists.Error()) {
-			if err = b.walletClient.CreateWallet(ctx, b.config.Name, walletPassphrase); err != nil {
+			mnemonic, err := b.walletClient.CreateWallet(ctx, b.config.Name, walletPassphrase)
+			if err != nil {
 				return "", fmt.Errorf("failed to create wallet: %w", err)
 			}
-			b.log.Info("Created and logged into wallet")
+			b.log.WithFields(log.Fields{"mnemonic": mnemonic}).Info("Created and logged into wallet")
 		} else {
 			return "", fmt.Errorf("failed to log into wallet: %w", err)
 		}
@@ -221,7 +202,7 @@ func (b *bot) setupWallet(ctx context.Context) (string, error) {
 	var walletPubKey string
 
 	if len(publicKeys) == 0 {
-		key, err := b.walletClient.GenerateKeyPair(ctx, walletPassphrase, []types.Meta{})
+		key, err := b.walletClient.GenerateKeyPair(ctx, walletPassphrase, []wtypes.Meta{})
 		if err != nil {
 			return "", fmt.Errorf("failed to generate keypair: %w", err)
 		}

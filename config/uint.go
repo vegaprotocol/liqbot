@@ -3,7 +3,7 @@ package config
 import (
 	"fmt"
 
-	"code.vegaprotocol.io/liqbot/types/num"
+	"code.vegaprotocol.io/shared/libs/num"
 )
 
 // Uint is for storing a num.Uint as a string in a config file.

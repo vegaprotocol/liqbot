@@ -2,15 +2,19 @@ package whale
 
 import (
 	"context"
+	"net/url"
 	"testing"
 
 	"code.vegaprotocol.io/liqbot/account"
 	"code.vegaprotocol.io/liqbot/config"
 	"code.vegaprotocol.io/liqbot/data"
-	"code.vegaprotocol.io/liqbot/node"
-	"code.vegaprotocol.io/liqbot/token"
-	"code.vegaprotocol.io/liqbot/types/num"
-	"code.vegaprotocol.io/liqbot/wallet"
+	"code.vegaprotocol.io/liqbot/types"
+	"code.vegaprotocol.io/shared/libs/erc20"
+	sconfig "code.vegaprotocol.io/shared/libs/erc20/config"
+	"code.vegaprotocol.io/shared/libs/faucet"
+	"code.vegaprotocol.io/shared/libs/node"
+	"code.vegaprotocol.io/shared/libs/num"
+	"code.vegaprotocol.io/shared/libs/wallet"
 )
 
 func TestService_TopUp(t *testing.T) {
@@ -22,12 +26,12 @@ func TestService_TopUp(t *testing.T) {
 
 	dn := node.NewDataNode([]string{"localhost:3027"}, 10000)
 	wc := wallet.NewClient("http://localhost:1789")
-	es, err := token.NewService(&config.TokenConfig{
+	es, err := erc20.NewService((*sconfig.TokenConfig)(&config.TokenConfig{
 		EthereumAPIAddress:   "ws://127.0.0.1:8545",
 		Erc20BridgeAddress:   "0x9708FF7510D4A7B9541e1699d15b53Ecb1AFDc54",
 		StakingBridgeAddress: "0x9135f5afd6F055e731bca2348429482eE614CFfA",
 		SyncTimeoutSec:       100,
-	}, wKey)
+	}), wKey)
 	if err != nil {
 		t.Errorf("could not create erc20 service = %s", err)
 		return
@@ -45,14 +49,20 @@ func TestService_TopUp(t *testing.T) {
 		SyncTimeoutSec:   100,
 	}
 
-	fc := token.NewFaucetService("http://localhost:1790", wKey)
+	addr, err := url.Parse("http://localhost:1790")
+	if err != nil {
+		t.Errorf("could not parse url = %s", err)
+		return
+	}
+
+	fc := faucet.New(*addr)
 
 	cp := NewProvider(dn, es, fc, conf)
 
 	ds := data.NewAccountStream("test", dn)
 	as := account.NewAccountService("test", "asset", ds, cp)
 
-	s := NewService(dn, wc, as, conf)
+	s := NewService(dn, wc, as, fc, conf)
 
 	ctx := context.Background()
 
@@ -68,7 +78,7 @@ func TestService_TopUp(t *testing.T) {
 
 	_, _ = s.TopUpAsync(ctx, "some bot", key, asset, amount)
 
-	_ = s.account.EnsureBalance(ctx, asset, amount, "test")
+	_ = s.account.EnsureBalance(ctx, asset, types.General, amount, "test")
 }
 
 func TestService_slackDan(t *testing.T) {

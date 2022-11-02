@@ -9,7 +9,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"code.vegaprotocol.io/liqbot/config"
-	"code.vegaprotocol.io/liqbot/types/num"
+	"code.vegaprotocol.io/shared/libs/num"
 	"code.vegaprotocol.io/vega/protos/vega"
 )
 

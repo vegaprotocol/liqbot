@@ -9,8 +9,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"code.vegaprotocol.io/liqbot/types"
-	"code.vegaprotocol.io/liqbot/types/num"
-	"code.vegaprotocol.io/liqbot/util"
+	"code.vegaprotocol.io/shared/libs/num"
 	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v1"
 	"code.vegaprotocol.io/vega/protos/vega"
 	coreapipb "code.vegaprotocol.io/vega/protos/vega/api/v1"
@@ -48,12 +47,12 @@ func (a *account) Init(pubKey string, pauseCh chan types.PauseSignal) {
 	a.subscribeToAccountEvents()
 }
 
-func (a *account) GetBalances(assetID string) (BalanceStore, error) {
+func (a *account) GetBalances(ctx context.Context, assetID string) (BalanceStore, error) {
 	if store, ok := a.balanceStores.get(assetID); ok {
 		return store, nil
 	}
 
-	response, err := a.node.PartyAccounts(&dataapipb.PartyAccountsRequest{
+	response, err := a.node.PartyAccounts(ctx, &dataapipb.PartyAccountsRequest{
 		PartyId: a.walletPubKey,
 		Asset:   assetID,
 	})
@@ -93,6 +92,22 @@ func (a *account) GetBalances(assetID string) (BalanceStore, error) {
 	return store, nil
 }
 
+func (a *account) GetStake(ctx context.Context) (*num.Uint, error) {
+	partyStakeResp, err := a.node.PartyStake(ctx, &dataapipb.PartyStakeRequest{
+		Party: a.walletPubKey,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	stake, overflow := num.UintFromString(partyStakeResp.CurrentStakeAvailable, 10)
+	if overflow {
+		return nil, fmt.Errorf("failed to convert stake to uint: %w", err)
+	}
+
+	return stake, nil
+}
+
 func (a *account) subscribeToAccountEvents() {
 	req := &coreapipb.ObserveEventBusRequest{
 		Type: []eventspb.BusEventType{
@@ -126,7 +141,7 @@ func (a *account) subscribeToAccountEvents() {
 }
 
 func (a *account) setBalanceByType(account *vega.Account, store BalanceStore) error {
-	balance, err := util.ConvertUint256(account.Balance)
+	balance, err := num.ConvertUint256(account.Balance)
 	if err != nil {
 		return fmt.Errorf("failed to convert account balance: %w", err)
 	}
@@ -274,7 +289,7 @@ func (a *account) deleteWaitingDeposit(assetID string) {
 	delete(a.waitingDeposits, assetID)
 }
 
-func (a *account) WaitForStakeLinking(pubKey string) error {
+func (a *account) WaitForStakeLinking(ctx context.Context, pubKey string) error {
 	req := &coreapipb.ObserveEventBusRequest{
 		Type: []eventspb.BusEventType{eventspb.BusEventType_BUS_EVENT_TYPE_STAKE_LINKING},
 	}

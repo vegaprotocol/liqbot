@@ -4,17 +4,18 @@ import (
 	"context"
 
 	"code.vegaprotocol.io/liqbot/types"
-	"code.vegaprotocol.io/liqbot/types/num"
+	"code.vegaprotocol.io/shared/libs/num"
+	wtypes "code.vegaprotocol.io/shared/libs/wallet/types"
 	"code.vegaprotocol.io/vega/protos/vega"
 	"code.vegaprotocol.io/vega/protos/vega/wallet/v1"
 )
 
 // TODO: move all account related stuff to an account service.
 type WalletClient interface {
-	CreateWallet(ctx context.Context, name, passphrase string) error
+	CreateWallet(ctx context.Context, name, passphrase string) (string, error)
 	LoginWallet(ctx context.Context, name, passphrase string) error
 	ListPublicKeys(ctx context.Context) ([]string, error)
-	GenerateKeyPair(ctx context.Context, passphrase string, meta []types.Meta) (*types.Key, error)
+	GenerateKeyPair(ctx context.Context, passphrase string, meta []wtypes.Meta) (*wtypes.Key, error)
 	SignTx(ctx context.Context, req *v1.SubmitTransactionRequest) error
 }
 
@@ -31,7 +32,7 @@ type WalletClient interface {
 */
 type marketService interface {
 	Init(pubKey string, pauseCh chan types.PauseSignal) error
-	Start(marketID string) error
+	Start(ctx context.Context, marketID string) error
 	Market() types.MarketData
 	CanPlaceOrders() bool
 	SubmitOrder(ctx context.Context, order *vega.Order, from string, secondsFromNow int64) error
@@ -42,6 +43,6 @@ type marketService interface {
 
 type accountService interface {
 	Init(pubKey string, pauseCh chan types.PauseSignal)
-	Balance() types.Balance
-	EnsureBalance(ctx context.Context, assetID string, targetAmount *num.Uint, from string) error
+	Balance(ctx context.Context) types.Balance
+	EnsureBalance(ctx context.Context, assetID string, balanceFn func(types.Balance) *num.Uint, targetAmount *num.Uint, from string) error
 }

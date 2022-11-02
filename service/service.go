@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"path"
 	"runtime"
 	"strings"
@@ -15,18 +16,19 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"code.vegaprotocol.io/liqbot/account"
-	ppconfig "code.vegaprotocol.io/priceproxy/config"
-	ppservice "code.vegaprotocol.io/priceproxy/service"
-
 	"code.vegaprotocol.io/liqbot/bot"
 	"code.vegaprotocol.io/liqbot/config"
 	"code.vegaprotocol.io/liqbot/data"
-	"code.vegaprotocol.io/liqbot/node"
 	"code.vegaprotocol.io/liqbot/pricing"
-	"code.vegaprotocol.io/liqbot/token"
 	"code.vegaprotocol.io/liqbot/types"
-	"code.vegaprotocol.io/liqbot/wallet"
 	"code.vegaprotocol.io/liqbot/whale"
+	ppconfig "code.vegaprotocol.io/priceproxy/config"
+	ppservice "code.vegaprotocol.io/priceproxy/service"
+	"code.vegaprotocol.io/shared/libs/erc20"
+	sconfig "code.vegaprotocol.io/shared/libs/erc20/config"
+	"code.vegaprotocol.io/shared/libs/faucet"
+	"code.vegaprotocol.io/shared/libs/node"
+	"code.vegaprotocol.io/shared/libs/wallet"
 )
 
 // Bot is the generic bot interface.
@@ -144,11 +146,16 @@ func getWhale(config config.Config) (*whale.Service, error) {
 		config.CallTimeoutMills,
 	)
 
-	faucetService := token.NewFaucetService(config.Whale.FaucetURL, config.Whale.WalletPubKey)
+	faucetURL, err := url.Parse(config.Whale.FaucetURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse faucet URL: %w", err)
+	}
+
+	faucetService := faucet.New(*faucetURL)
 	whaleWallet := wallet.NewClient(config.Wallet.URL)
 	accountStream := data.NewAccountStream("whale", dataNode)
 
-	tokenService, err := token.NewService(config.Token, config.Whale.WalletPubKey)
+	tokenService, err := erc20.NewService((*sconfig.TokenConfig)(config.Token), config.Whale.WalletPubKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup token service: %w", err)
 	}
@@ -166,6 +173,7 @@ func getWhale(config config.Config) (*whale.Service, error) {
 		dataNode,
 		whaleWallet,
 		accountService,
+		faucetService,
 		config.Whale,
 	)
 

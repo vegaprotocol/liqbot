@@ -12,8 +12,7 @@ import (
 	"github.com/slack-go/slack"
 
 	"code.vegaprotocol.io/liqbot/config"
-	"code.vegaprotocol.io/liqbot/types/num"
-	"code.vegaprotocol.io/liqbot/util"
+	"code.vegaprotocol.io/shared/libs/num"
 	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v1"
 	"code.vegaprotocol.io/vega/protos/vega"
 	v1 "code.vegaprotocol.io/vega/protos/vega/events/v1"
@@ -148,7 +147,7 @@ func (p *Provider) topUpAsync(ctx context.Context, receiverName, receiverAddress
 }
 
 func (p *Provider) deposit(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint) error {
-	response, err := p.node.AssetByID(&dataapipb.AssetByIDRequest{
+	response, err := p.node.AssetByID(ctx, &dataapipb.AssetByIDRequest{
 		Id: assetID,
 	})
 	if err != nil {
@@ -157,8 +156,6 @@ func (p *Provider) deposit(ctx context.Context, receiverName, receiverAddress, a
 
 	if erc20 := response.Asset.Details.GetErc20(); erc20 != nil {
 		err = p.depositERC20(ctx, response.Asset, amount)
-	} else if builtin := response.Asset.Details.GetBuiltinAsset(); builtin != nil {
-		err = p.depositBuiltin(ctx, assetID, amount, builtin)
 	} else {
 		return fmt.Errorf("unsupported asset type")
 	}
@@ -194,7 +191,7 @@ func (p *Provider) setPendingDeposit(assetID string, pending pendingDeposit) {
 }
 
 func (p *Provider) StakeAsync(ctx context.Context, receiverAddress, assetID string, amount *num.Uint) error {
-	response, err := p.node.AssetByID(&dataapipb.AssetByIDRequest{
+	response, err := p.node.AssetByID(ctx, &dataapipb.AssetByIDRequest{
 		Id: assetID,
 	})
 	if err != nil {
@@ -245,25 +242,6 @@ func (p *Provider) depositERC20(ctx context.Context, asset *vega.Asset, amount *
 		return fmt.Errorf("deposited less than requested amount")
 	}
 
-	return nil
-}
-
-func (p *Provider) depositBuiltin(ctx context.Context, assetID string, amount *num.Uint, builtin *vega.BuiltinAsset) error {
-	maxFaucet, err := util.ConvertUint256(builtin.MaxFaucetAmountMint)
-	if err != nil {
-		return fmt.Errorf("failed to convert max faucet amount: %w", err)
-	}
-
-	times := int(new(num.Uint).Div(amount, maxFaucet).Uint64() + 1)
-
-	// TODO: limit the time here!
-
-	for i := 0; i < times; i++ {
-		if err := p.faucet.Mint(ctx, assetID, maxFaucet); err != nil {
-			return fmt.Errorf("failed to deposit: %w", err)
-		}
-		time.Sleep(2 * time.Second) // TODO: configure
-	}
 	return nil
 }
 

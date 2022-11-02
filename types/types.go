@@ -3,10 +3,8 @@ package types
 import (
 	"fmt"
 
+	"code.vegaprotocol.io/shared/libs/num"
 	"code.vegaprotocol.io/vega/protos/vega"
-
-	"code.vegaprotocol.io/liqbot/types/num"
-	"code.vegaprotocol.io/liqbot/util"
 )
 
 type MarketData struct {
@@ -20,7 +18,11 @@ type MarketData struct {
 
 func SetMarketData(m *MarketData) func(md *MarketData) {
 	return func(md *MarketData) {
-		*md = *m
+		md.staticMidPrice = m.staticMidPrice.Clone()
+		md.markPrice = m.markPrice.Clone()
+		md.targetStake = m.targetStake.Clone()
+		md.suppliedStake = m.suppliedStake.Clone()
+		md.tradingMode = m.tradingMode
 	}
 }
 
@@ -85,22 +87,22 @@ func (md MarketData) OpenVolume() int64 {
 }
 
 func FromVegaMD(marketData *vega.MarketData) (*MarketData, error) {
-	staticMidPrice, err := util.ConvertUint256(marketData.StaticMidPrice)
+	staticMidPrice, err := num.ConvertUint256(marketData.StaticMidPrice)
 	if err != nil {
 		return nil, fmt.Errorf("invalid static mid price: %s", err)
 	}
 
-	markPrice, err := util.ConvertUint256(marketData.MarkPrice)
+	markPrice, err := num.ConvertUint256(marketData.MarkPrice)
 	if err != nil {
 		return nil, fmt.Errorf("invalid mark price: %s", err)
 	}
 
-	targetStake, err := util.ConvertUint256(marketData.TargetStake)
+	targetStake, err := num.ConvertUint256(marketData.TargetStake)
 	if err != nil {
 		return nil, fmt.Errorf("invalid target stake: %s", err)
 	}
 
-	suppliedStake, err := util.ConvertUint256(marketData.SuppliedStake)
+	suppliedStake, err := num.ConvertUint256(marketData.SuppliedStake)
 	if err != nil {
 		return nil, fmt.Errorf("invalid supplied stake: %s", err)
 	}
@@ -120,19 +122,19 @@ type Balance struct {
 	bond    num.Uint
 }
 
-func (b Balance) Total() *num.Uint {
-	return num.Sum(&b.general, &b.margin, &b.bond)
+func GeneralAndBond(b Balance) *num.Uint {
+	return num.Sum(&b.general, &b.bond)
 }
 
-func (b Balance) General() *num.Uint {
+func General(b Balance) *num.Uint {
 	return &b.general
 }
 
-func (b Balance) Margin() *num.Uint {
+func Margin(b Balance) *num.Uint {
 	return &b.margin
 }
 
-func (b Balance) Bond() *num.Uint {
+func Bond(b Balance) *num.Uint {
 	return &b.bond
 }
 

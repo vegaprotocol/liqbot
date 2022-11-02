@@ -10,12 +10,13 @@ import (
 
 // DataNode is a Vega Data node
 //
-//go:generate go run github.com/golang/mock/mockgen -destination mocks/datanode_mock.go -package mocks code.vegaprotocol.io/liqbot/market DataNode
+//go:generate go run github.com/golang/mock/mockgen -destination mocks/datanode_mock.go -package mocks code.vegaprotocol.io/liqbot/data DataNode
 type DataNode interface {
 	busStreamer
-	PartyAccounts(req *dataapipb.PartyAccountsRequest) (response *dataapipb.PartyAccountsResponse, err error)
-	MarketDataByID(req *dataapipb.MarketDataByIDRequest) (response *dataapipb.MarketDataByIDResponse, err error)
-	PositionsByParty(req *dataapipb.PositionsByPartyRequest) (response *dataapipb.PositionsByPartyResponse, err error)
+	PartyAccounts(ctx context.Context, req *dataapipb.PartyAccountsRequest) (response *dataapipb.PartyAccountsResponse, err error)
+	PartyStake(ctx context.Context, req *dataapipb.PartyStakeRequest) (response *dataapipb.PartyStakeResponse, err error)
+	MarketDataByID(ctx context.Context, req *dataapipb.MarketDataByIDRequest) (response *dataapipb.MarketDataByIDResponse, err error)
+	PositionsByParty(ctx context.Context, req *dataapipb.PositionsByPartyRequest) (response *dataapipb.PositionsByPartyResponse, err error)
 }
 
 type busStreamer interface {

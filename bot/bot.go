@@ -12,9 +12,9 @@ import (
 	"code.vegaprotocol.io/liqbot/config"
 	"code.vegaprotocol.io/liqbot/data"
 	"code.vegaprotocol.io/liqbot/market"
-	"code.vegaprotocol.io/liqbot/node"
 	"code.vegaprotocol.io/liqbot/types"
-	"code.vegaprotocol.io/liqbot/wallet"
+	"code.vegaprotocol.io/shared/libs/node"
+	"code.vegaprotocol.io/shared/libs/wallet"
 )
 
 // New returns a new Bot instance.

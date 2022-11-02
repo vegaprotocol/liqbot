@@ -8,8 +8,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	e "code.vegaprotocol.io/liqbot/errors"
 	"code.vegaprotocol.io/liqbot/types"
+	e "code.vegaprotocol.io/shared/libs/errors"
 	coreapipb "code.vegaprotocol.io/vega/protos/vega/api/v1"
 )
 
