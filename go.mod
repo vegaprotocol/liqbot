@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	code.vegaprotocol.io/priceproxy v0.1.0
-	code.vegaprotocol.io/shared v0.0.0-20221004112011-87b09333cb77
+	code.vegaprotocol.io/shared v0.0.0-20221102170841-f2005ae37fe9
 	code.vegaprotocol.io/vega v0.58.1-0.20221018160916-e5debe36ecb1
 	github.com/ethereum/go-ethereum v1.10.21
 	github.com/golang/mock v1.6.1-0.20220512030613-73266f9366fc
@@ -18,7 +18,7 @@ require (
 	gonum.org/v1/gonum v0.9.1
 )
 
-replace code.vegaprotocol.io/shared => ../shared
+require github.com/pkg/errors v0.9.1
 
 require (
 	github.com/BurntSushi/toml v1.2.0 // indirect
@@ -52,7 +52,6 @@ require (
 	github.com/jmhodges/levigo v1.0.0 // indirect
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20220317090546-adb2f9614b17 // indirect
 	github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5 // indirect
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rjeczalik/notify v0.9.1 // indirect
 	github.com/sasha-s/go-deadlock v0.2.1-0.20190427202633-1595213edefa // indirect

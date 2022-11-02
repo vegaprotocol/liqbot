@@ -2,6 +2,8 @@ cloud.google.com/go v0.26.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMT
 cloud.google.com/go v0.34.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
 code.vegaprotocol.io/priceproxy v0.1.0 h1:PibvUIcTXS/MOIJKJwGXhJbDwg9ZPLItcIlfMvt1YO4=
 code.vegaprotocol.io/priceproxy v0.1.0/go.mod h1:W/CpimpwdplSLOnO1gEz2+VLQIV5I9FsDOST+1NDJ5A=
+code.vegaprotocol.io/shared v0.0.0-20221102170841-f2005ae37fe9 h1:62BOnyhyQALirRrXtNOkD6WQlqbXjeKsQJeat7kNdvI=
+code.vegaprotocol.io/shared v0.0.0-20221102170841-f2005ae37fe9/go.mod h1:4SblAsws9DJfWrOLI2sKokgAiHMMGMho8f8Rp3jUM7o=
 code.vegaprotocol.io/vega v0.58.1-0.20221018160916-e5debe36ecb1 h1:zqPMCOusWpPDPsm8f25fLIxv9cU95nFsIfdvYWTv0KQ=
 code.vegaprotocol.io/vega v0.58.1-0.20221018160916-e5debe36ecb1/go.mod h1:G9A0haG9Qf0GNd6oza8UeDxF9hDVHRwM+1OkUcZnfac=
 dmitri.shuralyov.com/gpu/mtl v0.0.0-20190408044501-666a987793e9/go.mod h1:H6x//7gZCb22OMCxBHrMx7a5I7Hp++hsVxbQ4BYO7hU=
