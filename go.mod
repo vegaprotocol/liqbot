@@ -1,6 +1,6 @@
 module code.vegaprotocol.io/liqbot
 
-go 1.18
+go 1.19
 
 require (
 	code.vegaprotocol.io/priceproxy v0.1.0
