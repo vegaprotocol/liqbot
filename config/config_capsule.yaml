@@ -28,6 +28,7 @@ whale:
     993ed98f4f770d91a796faab1738551193ba45c62341d20597df70fea6704ede: a37f4c2a678aefb5037bf415a826df1540b330b7e471aa54184877ba901b9ef0
     b4f2726571fbe8e33b442dc92ed2d7f0d810e21835b7371a7915a365f07ccd9b: a37f4c2a678aefb5037bf415a826df1540b330b7e471aa54184877ba901b9ef0
   faucetURL: http://localhost:1790
+  faucetRateLimit: 2s
   slack:
     appToken:
     botToken:

@@ -232,7 +232,7 @@ func (w *Service) depositBuiltin(ctx context.Context, assetID, pubKey string, am
 
 		totalMinted.Add(totalMinted, maxFaucet)
 
-		time.Sleep(2 * time.Second) // TODO: configure
+		time.Sleep(w.walletConfig.FaucetRateLimit)
 		w.log.Infof("Minted %s out of %s for %s", totalMinted, amount, assetID)
 	}
 
