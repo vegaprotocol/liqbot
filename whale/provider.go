@@ -13,7 +13,7 @@ import (
 
 	"code.vegaprotocol.io/liqbot/config"
 	"code.vegaprotocol.io/shared/libs/num"
-	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v1"
+	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v2"
 	"code.vegaprotocol.io/vega/protos/vega"
 	v1 "code.vegaprotocol.io/vega/protos/vega/events/v1"
 )
@@ -30,7 +30,7 @@ type Provider struct {
 
 	ensureBalanceCh chan ensureBalanceRequest
 
-	walletPubKey string
+	walletConfig *config.WhaleConfig
 	callTimeout  time.Duration
 	log          *log.Entry
 }
@@ -65,7 +65,7 @@ func NewProvider(
 		erc20:            erc20,
 		faucet:           faucet,
 		ownerPrivateKeys: config.OwnerPrivateKeys,
-		walletPubKey:     config.WalletPubKey,
+		walletConfig:     config,
 		ensureBalanceCh:  make(chan ensureBalanceRequest),
 		callTimeout:      time.Duration(config.SyncTimeoutSec) * time.Second,
 		slack: slacker{
@@ -116,7 +116,7 @@ func (p *Provider) topUpAsync(ctx context.Context, receiverName, receiverAddress
 		return nil
 	}
 
-	err := p.deposit(ctx, "Whale", p.walletPubKey, assetID, amount)
+	err := p.deposit(ctx, "Whale", p.walletConfig.WalletPubKey, assetID, amount)
 	if err == nil {
 		return nil
 	}
@@ -147,15 +147,15 @@ func (p *Provider) topUpAsync(ctx context.Context, receiverName, receiverAddress
 }
 
 func (p *Provider) deposit(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint) error {
-	response, err := p.node.AssetByID(ctx, &dataapipb.AssetByIDRequest{
-		Id: assetID,
+	asset, err := p.node.AssetByID(ctx, &dataapipb.GetAssetRequest{
+		AssetId: assetID,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to get asset id: %w", err)
 	}
 
-	if erc20 := response.Asset.Details.GetErc20(); erc20 != nil {
-		err = p.depositERC20(ctx, response.Asset, amount)
+	if erc20 := asset.Details.GetErc20(); erc20 != nil {
+		err = p.depositERC20(ctx, asset, amount)
 	} else {
 		return fmt.Errorf("unsupported asset type")
 	}
@@ -191,18 +191,16 @@ func (p *Provider) setPendingDeposit(assetID string, pending pendingDeposit) {
 }
 
 func (p *Provider) StakeAsync(ctx context.Context, receiverAddress, assetID string, amount *num.Uint) error {
-	response, err := p.node.AssetByID(ctx, &dataapipb.AssetByIDRequest{
-		Id: assetID,
+	asset, err := p.node.AssetByID(ctx, &dataapipb.GetAssetRequest{
+		AssetId: assetID,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to get asset id: %w", err)
 	}
-	erc20 := response.Asset.Details.GetErc20()
+	erc20 := asset.Details.GetErc20()
 	if erc20 == nil {
 		return fmt.Errorf("asset is not erc20")
 	}
-
-	asset := response.Asset
 
 	ownerKey, err := p.getOwnerKeyForAsset(asset.Id)
 	if err != nil {
@@ -211,7 +209,7 @@ func (p *Provider) StakeAsync(ctx context.Context, receiverAddress, assetID stri
 
 	contractAddress := asset.Details.GetErc20().ContractAddress
 
-	added, err := p.erc20.StakeToAddress(ctx, ownerKey.privateKey, ownerKey.address, contractAddress, receiverAddress, amount)
+	added, err := p.erc20.Stake(ctx, ownerKey.privateKey, ownerKey.address, contractAddress, receiverAddress, amount)
 	if err != nil {
 		return fmt.Errorf("failed to stake Vega token for '%s': %w", receiverAddress, err)
 	}
@@ -232,7 +230,14 @@ func (p *Provider) depositERC20(ctx context.Context, asset *vega.Asset, amount *
 
 	contractAddress := asset.Details.GetErc20().ContractAddress
 
-	added, err := p.erc20.Deposit(ctx, ownerKey.privateKey, ownerKey.address, contractAddress, amount)
+	added, err := p.erc20.Deposit(
+		ctx,
+		ownerKey.privateKey,
+		ownerKey.address,
+		contractAddress,
+		p.walletConfig.WalletPubKey,
+		amount,
+	)
 	if err != nil {
 		return fmt.Errorf("failed to add erc20 token: %w", err)
 	}
@@ -285,9 +290,11 @@ func addressFromPrivateKey(privateKey string) (string, error) {
 const msgTemplate = `Hi @here! Whale wallet account with pub key %s needs %s coins of assetID %s, so that it can feed the hungry bots.`
 
 func (p *Provider) slackDan(ctx context.Context, assetID string, amount *num.Uint) (string, error) {
-	p.log.Debugf("Slack post @hungry-bots: wallet pub key: %s; asset id: %s; amount: %s", p.walletPubKey, assetID, amount.String())
+	walletPubKey := p.walletConfig.WalletPubKey
 
-	message := fmt.Sprintf(msgTemplate, p.walletPubKey, amount.String(), assetID)
+	p.log.Debugf("Slack post @hungry-bots: wallet pub key: %s; asset id: %s; amount: %s", walletPubKey, assetID, amount.String())
+
+	message := fmt.Sprintf(msgTemplate, walletPubKey, amount.String(), assetID)
 
 	respChannel, respTimestamp, err := p.slack.PostMessageContext(
 		ctx,
@@ -311,9 +318,11 @@ func (p *Provider) slackDan(ctx context.Context, assetID string, amount *num.Uin
 }
 
 func (p *Provider) updateDan(ctx context.Context, assetID, oldTimestamp string, amount *num.Uint) (string, error) {
-	p.log.Debugf("Slack update @hungry-bots: wallet pub key: %s; asset id: %s; amount: %s", p.walletPubKey, assetID, amount.String())
+	walletPubKey := p.walletConfig.WalletPubKey
 
-	message := fmt.Sprintf(msgTemplate, p.walletPubKey, amount.String(), assetID)
+	p.log.Debugf("Slack update @hungry-bots: wallet pub key: %s; asset id: %s; amount: %s", walletPubKey, assetID, amount.String())
+
+	message := fmt.Sprintf(msgTemplate, walletPubKey, amount.String(), assetID)
 
 	respChannel, respTimestamp, _, err := p.slack.UpdateMessageContext(
 		ctx,

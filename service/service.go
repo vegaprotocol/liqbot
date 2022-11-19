@@ -155,7 +155,7 @@ func getWhale(config config.Config) (*whale.Service, error) {
 	whaleWallet := wallet.NewClient(config.Wallet.URL)
 	accountStream := data.NewAccountStream("whale", dataNode)
 
-	tokenService, err := erc20.NewService((*sconfig.TokenConfig)(config.Token), config.Whale.WalletPubKey)
+	tokenService, err := erc20.NewService((*sconfig.TokenConfig)(config.Token))
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup token service: %w", err)
 	}

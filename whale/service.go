@@ -14,7 +14,7 @@ import (
 	"code.vegaprotocol.io/shared/libs/num"
 	wtypes "code.vegaprotocol.io/shared/libs/wallet/types"
 	vtypes "code.vegaprotocol.io/vega/core/types"
-	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v1"
+	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v2"
 	"code.vegaprotocol.io/vega/protos/vega"
 	commV1 "code.vegaprotocol.io/vega/protos/vega/commands/v1"
 	v12 "code.vegaprotocol.io/vega/protos/vega/events/v1"
@@ -30,7 +30,7 @@ type Service struct {
 
 	walletName       string
 	walletPassphrase string
-	walletPubKey     string
+	walletConfig     *config.WhaleConfig
 	log              *log.Entry
 }
 
@@ -47,7 +47,7 @@ func NewService(
 		faucet: faucet,
 
 		account:          account,
-		walletPubKey:     config.WalletPubKey,
+		walletConfig:     config,
 		walletName:       config.WalletName,
 		walletPassphrase: config.WalletPassphrase,
 		log: log.WithFields(log.Fields{
@@ -76,7 +76,7 @@ func (w *Service) Start(ctx context.Context) error {
 	w.node.MustDialConnection(ctx)
 	w.log.Info("Connected to a node")
 
-	w.account.Init(w.walletPubKey, pauseCh)
+	w.account.Init(w.walletConfig.WalletPubKey, pauseCh)
 	return nil
 }
 
@@ -89,20 +89,20 @@ func (w *Service) TopUpAsync(ctx context.Context, receiverName, receiverAddress,
 		return evt, fmt.Errorf("assetID is empty for bot '%s'", receiverName)
 	}
 
-	if receiverAddress == w.walletPubKey {
+	if receiverAddress == w.walletConfig.WalletPubKey {
 		return evt, fmt.Errorf("whale and bot address cannot be the same")
 	}
 
 	ensureAmount := num.Zero().Mul(amount, num.NewUint(30))
 
-	response, err := w.node.AssetByID(ctx, &dataapipb.AssetByIDRequest{
-		Id: assetID,
+	asset, err := w.node.AssetByID(ctx, &dataapipb.GetAssetRequest{
+		AssetId: assetID,
 	})
 	if err != nil {
 		return v12.BusEventType_BUS_EVENT_TYPE_UNSPECIFIED, fmt.Errorf("failed to get asset by id: %w", err)
 	}
 
-	if builtin := response.Asset.Details.GetBuiltinAsset(); builtin != nil {
+	if builtin := asset.Details.GetBuiltinAsset(); builtin != nil {
 		if err := w.depositBuiltin(ctx, assetID, receiverAddress, ensureAmount, builtin); err != nil {
 			return v12.BusEventType_BUS_EVENT_TYPE_UNSPECIFIED, errors.Wrap(err, "failed to deposit builtin")
 		}
@@ -133,7 +133,7 @@ func (w *Service) TopUpAsync(ctx context.Context, receiverName, receiverAddress,
 			}).Debugf("Whale balance ensured, sending funds...")
 
 		err := w.wallet.SignTx(ctx, &v1.SubmitTransactionRequest{
-			PubKey:    w.walletPubKey,
+			PubKey:    w.walletConfig.WalletPubKey,
 			Propagate: true,
 			Command: &v1.SubmitTransactionRequest_Transfer{
 				Transfer: &commV1.Transfer{
@@ -179,24 +179,26 @@ func (w *Service) setupWallet(ctx context.Context) error {
 
 	w.log.Info("Logged into wallet")
 
-	publicKeys, err := w.wallet.ListPublicKeys(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to list public keys: %w", err)
-	}
-
-	if len(publicKeys) == 0 {
-		key, err := w.wallet.GenerateKeyPair(ctx, w.walletPassphrase, []wtypes.Meta{})
+	if w.walletConfig.WalletPubKey == "" {
+		publicKeys, err := w.wallet.ListPublicKeys(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to generate keypair: %w", err)
+			return fmt.Errorf("failed to list public keys: %w", err)
 		}
-		w.walletPubKey = key.Pub
-		w.log.WithFields(log.Fields{"pubKey": w.walletPubKey}).Debug("Created keypair")
-	} else {
-		w.walletPubKey = publicKeys[0]
-		w.log.WithFields(log.Fields{"pubKey": w.walletPubKey}).Debug("Using existing keypair")
+
+		if len(publicKeys) == 0 {
+			key, err := w.wallet.GenerateKeyPair(ctx, w.walletPassphrase, []wtypes.Meta{})
+			if err != nil {
+				return fmt.Errorf("failed to generate keypair: %w", err)
+			}
+			w.walletConfig.WalletPubKey = key.Pub
+			w.log.WithFields(log.Fields{"pubKey": w.walletConfig.WalletPubKey}).Debug("Created keypair")
+		} else {
+			w.walletConfig.WalletPubKey = publicKeys[0]
+			w.log.WithFields(log.Fields{"pubKey": w.walletConfig.WalletPubKey}).Debug("Using existing keypair")
+		}
 	}
 
-	w.log = w.log.WithFields(log.Fields{"pubkey": w.walletPubKey})
+	w.log = w.log.WithFields(log.Fields{"pubkey": w.walletConfig.WalletPubKey})
 
 	return nil
 }

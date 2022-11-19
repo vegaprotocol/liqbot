@@ -147,11 +147,6 @@ func (b *busEventProcessor) mustGetStream(
 		}
 	}
 
-	b.log.WithFields(log.Fields{
-		"name":    name,
-		"attempt": attempt,
-	}).Debug("Stream subscribed")
-
 	return s
 }
 

@@ -15,11 +15,11 @@ import (
 	"code.vegaprotocol.io/liqbot/types"
 	ppconfig "code.vegaprotocol.io/priceproxy/config"
 	"code.vegaprotocol.io/shared/libs/num"
-	v12 "code.vegaprotocol.io/vega/protos/data-node/api/v1"
+	v12 "code.vegaprotocol.io/vega/protos/data-node/api/v2"
 	"code.vegaprotocol.io/vega/protos/vega"
 	commandspb "code.vegaprotocol.io/vega/protos/vega/commands/v1"
 	v1 "code.vegaprotocol.io/vega/protos/vega/commands/v1"
-	oraclesv1 "code.vegaprotocol.io/vega/protos/vega/oracles/v1"
+	oraclesv1 "code.vegaprotocol.io/vega/protos/vega/data/v1"
 	walletpb "code.vegaprotocol.io/vega/protos/vega/wallet/v1"
 )
 
@@ -117,12 +117,12 @@ func (m *Service) SetupMarket(ctx context.Context) (*vega.Market, error) {
 }
 
 func (m *Service) FindMarket(ctx context.Context) (*vega.Market, error) {
-	marketsResponse, err := m.node.Markets(ctx, &v12.MarketsRequest{})
+	marketsResponse, err := m.node.Markets(ctx, &v12.ListMarketsRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get markets: %w", err)
 	}
 
-	for _, mkt := range marketsResponse.Markets {
+	for _, mkt := range marketsResponse {
 		instrument := mkt.TradableInstrument.GetInstrument()
 		if instrument == nil {
 			continue
@@ -447,31 +447,63 @@ func (m *Service) getExampleProduct() *vega.InstrumentConfiguration_Future {
 		Future: &vega.FutureProduct{
 			SettlementAsset: m.config.SettlementAssetID,
 			QuoteName:       fmt.Sprintf("%s%s", m.config.InstrumentBase, m.config.InstrumentQuote),
-			OracleSpecForSettlementData: &oraclesv1.OracleSpecConfiguration{
-				PubKeys: []string{"0xDEADBEEF"},
-				Filters: []*oraclesv1.Filter{
-					{
-						Key: &oraclesv1.PropertyKey{
-							Name: "prices.ETH.value",
-							Type: oraclesv1.PropertyKey_TYPE_INTEGER,
+			DataSourceSpecForSettlementData: &vega.DataSourceDefinition{
+				SourceType: &vega.DataSourceDefinition_External{
+					External: &vega.DataSourceDefinitionExternal{
+						SourceType: &vega.DataSourceDefinitionExternal_Oracle{
+							Oracle: &vega.DataSourceSpecConfiguration{
+								Filters: []*oraclesv1.Filter{
+									{
+										Key: &oraclesv1.PropertyKey{
+											Name: "prices.ETH.value",
+											Type: oraclesv1.PropertyKey_TYPE_INTEGER,
+										},
+										Conditions: []*oraclesv1.Condition{},
+									},
+								},
+								Signers: []*oraclesv1.Signer{
+									{
+										Signer: &oraclesv1.Signer_PubKey{
+											PubKey: &oraclesv1.PubKey{
+												Key: "0xDEADBEEF",
+											},
+										},
+									},
+								},
+							},
 						},
-						Conditions: []*oraclesv1.Condition{},
 					},
 				},
 			},
-			OracleSpecForTradingTermination: &oraclesv1.OracleSpecConfiguration{
-				PubKeys: []string{"0xDEADBEEF"},
-				Filters: []*oraclesv1.Filter{
-					{
-						Key: &oraclesv1.PropertyKey{
-							Name: "trading.termination",
-							Type: oraclesv1.PropertyKey_TYPE_BOOLEAN,
+			DataSourceSpecForTradingTermination: &vega.DataSourceDefinition{
+				SourceType: &vega.DataSourceDefinition_External{
+					External: &vega.DataSourceDefinitionExternal{
+						SourceType: &vega.DataSourceDefinitionExternal_Oracle{
+							Oracle: &vega.DataSourceSpecConfiguration{
+								Filters: []*oraclesv1.Filter{
+									{
+										Key: &oraclesv1.PropertyKey{
+											Name: "trading.termination",
+											Type: oraclesv1.PropertyKey_TYPE_BOOLEAN,
+										},
+										Conditions: []*oraclesv1.Condition{},
+									},
+								},
+								Signers: []*oraclesv1.Signer{
+									{
+										Signer: &oraclesv1.Signer_PubKey{
+											PubKey: &oraclesv1.PubKey{
+												Key: "0xDEADBEEF",
+											},
+										},
+									},
+								},
+							},
 						},
-						Conditions: []*oraclesv1.Condition{},
 					},
 				},
 			},
-			OracleSpecBinding: &vega.OracleSpecToFutureBinding{
+			DataSourceSpecBinding: &vega.DataSourceSpecToFutureBinding{
 				SettlementDataProperty:     "prices.ETH.value",
 				TradingTerminationProperty: "trading.termination",
 			},

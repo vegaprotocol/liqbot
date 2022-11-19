@@ -4,7 +4,8 @@ import (
 	"context"
 
 	"code.vegaprotocol.io/liqbot/types"
-	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v1"
+	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v2"
+	"code.vegaprotocol.io/vega/protos/vega"
 	vegaapipb "code.vegaprotocol.io/vega/protos/vega/api/v1"
 )
 
@@ -13,10 +14,10 @@ import (
 //go:generate go run github.com/golang/mock/mockgen -destination mocks/datanode_mock.go -package mocks code.vegaprotocol.io/liqbot/data DataNode
 type DataNode interface {
 	busStreamer
-	PartyAccounts(ctx context.Context, req *dataapipb.PartyAccountsRequest) (response *dataapipb.PartyAccountsResponse, err error)
-	PartyStake(ctx context.Context, req *dataapipb.PartyStakeRequest) (response *dataapipb.PartyStakeResponse, err error)
-	MarketDataByID(ctx context.Context, req *dataapipb.MarketDataByIDRequest) (response *dataapipb.MarketDataByIDResponse, err error)
-	PositionsByParty(ctx context.Context, req *dataapipb.PositionsByPartyRequest) (response *dataapipb.PositionsByPartyResponse, err error)
+	PartyAccounts(ctx context.Context, req *dataapipb.ListAccountsRequest) ([]*dataapipb.AccountBalance, error)
+	PartyStake(ctx context.Context, req *dataapipb.GetStakeRequest) (response *dataapipb.GetStakeResponse, err error)
+	MarketDataByID(ctx context.Context, req *dataapipb.GetLatestMarketDataRequest) (*vega.MarketData, error)
+	PositionsByParty(ctx context.Context, req *dataapipb.ListPositionsRequest) ([]*vega.Position, error)
 }
 
 type busStreamer interface {

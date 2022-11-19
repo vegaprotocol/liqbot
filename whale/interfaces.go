@@ -6,13 +6,13 @@ import (
 	"code.vegaprotocol.io/liqbot/types"
 	"code.vegaprotocol.io/shared/libs/num"
 	wtypes "code.vegaprotocol.io/shared/libs/wallet/types"
-	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v1"
+	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v2"
+	"code.vegaprotocol.io/vega/protos/vega"
 	v1 "code.vegaprotocol.io/vega/protos/vega/wallet/v1"
 )
 
 type dataNode interface {
-	AssetByID(ctx context.Context, req *dataapipb.AssetByIDRequest) (*dataapipb.AssetByIDResponse, error)
-	PartyAccounts(ctx context.Context, req *dataapipb.PartyAccountsRequest) (response *dataapipb.PartyAccountsResponse, err error)
+	AssetByID(ctx context.Context, req *dataapipb.GetAssetRequest) (*vega.Asset, error)
 	MustDialConnection(ctx context.Context)
 }
 
@@ -25,8 +25,8 @@ type walletClient interface {
 }
 
 type erc20Service interface {
-	StakeToAddress(ctx context.Context, ownerPrivateKey, ownerAddress, vegaTokenAddress, vegaPubKey string, amount *num.Uint) (*num.Uint, error)
-	Deposit(ctx context.Context, ownerPrivateKey, ownerAddress, tokenAddress string, amount *num.Uint) (*num.Uint, error)
+	Stake(ctx context.Context, ownerPrivateKey, ownerAddress, vegaTokenAddress, vegaPubKey string, amount *num.Uint) (*num.Uint, error)
+	Deposit(ctx context.Context, ownerPrivateKey, ownerAddress, tokenAddress, vegaPubKey string, amount *num.Uint) (*num.Uint, error)
 }
 
 type faucetClient interface {

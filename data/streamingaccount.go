@@ -10,7 +10,7 @@ import (
 
 	"code.vegaprotocol.io/liqbot/types"
 	"code.vegaprotocol.io/shared/libs/num"
-	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v1"
+	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v2"
 	"code.vegaprotocol.io/vega/protos/vega"
 	coreapipb "code.vegaprotocol.io/vega/protos/vega/api/v1"
 	eventspb "code.vegaprotocol.io/vega/protos/vega/events/v1"
@@ -52,15 +52,17 @@ func (a *account) GetBalances(ctx context.Context, assetID string) (BalanceStore
 		return store, nil
 	}
 
-	response, err := a.node.PartyAccounts(ctx, &dataapipb.PartyAccountsRequest{
-		PartyId: a.walletPubKey,
-		Asset:   assetID,
+	accounts, err := a.node.PartyAccounts(ctx, &dataapipb.ListAccountsRequest{
+		Filter: &dataapipb.AccountFilter{
+			PartyIds: []string{a.walletPubKey},
+			AssetId:  assetID,
+		},
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	if len(response.Accounts) == 0 {
+	if len(accounts) == 0 {
 		a.log.WithFields(log.Fields{
 			"name":    a.name,
 			"partyId": a.walletPubKey,
@@ -70,7 +72,7 @@ func (a *account) GetBalances(ctx context.Context, assetID string) (BalanceStore
 	store := types.NewBalanceStore()
 	a.balanceStores.set(assetID, store)
 
-	for _, acc := range response.Accounts {
+	for _, acc := range accounts {
 		a.log.WithFields(log.Fields{
 			"name":        a.name,
 			"partyId":     a.walletPubKey,
@@ -79,7 +81,7 @@ func (a *account) GetBalances(ctx context.Context, assetID string) (BalanceStore
 			"assetID":     acc.Asset,
 		}).Debug("Setting initial account balance")
 
-		if err = a.setBalanceByType(acc, store); err != nil {
+		if err = a.setBalanceByType(acc.Type, acc.Balance, store); err != nil {
 			a.log.WithFields(
 				log.Fields{
 					"error":       err.Error(),
@@ -93,8 +95,8 @@ func (a *account) GetBalances(ctx context.Context, assetID string) (BalanceStore
 }
 
 func (a *account) GetStake(ctx context.Context) (*num.Uint, error) {
-	partyStakeResp, err := a.node.PartyStake(ctx, &dataapipb.PartyStakeRequest{
-		Party: a.walletPubKey,
+	partyStakeResp, err := a.node.PartyStake(ctx, &dataapipb.GetStakeRequest{
+		PartyId: a.walletPubKey,
 	})
 	if err != nil {
 		return nil, err
@@ -125,7 +127,7 @@ func (a *account) subscribeToAccountEvents() {
 				continue
 			}
 
-			if err := a.setBalanceByType(acct, store); err != nil {
+			if err := a.setBalanceByType(acct.Type, acct.Balance, store); err != nil {
 				a.log.WithFields(
 					log.Fields{
 						"error":       err.Error(),
@@ -140,13 +142,13 @@ func (a *account) subscribeToAccountEvents() {
 	a.busEvProc.processEvents(context.Background(), "AccountData: "+a.name, req, proc)
 }
 
-func (a *account) setBalanceByType(account *vega.Account, store BalanceStore) error {
-	balance, err := num.ConvertUint256(account.Balance)
+func (a *account) setBalanceByType(accountType vega.AccountType, balanceStr string, store BalanceStore) error {
+	balance, err := num.ConvertUint256(balanceStr)
 	if err != nil {
 		return fmt.Errorf("failed to convert account balance: %w", err)
 	}
 
-	store.BalanceSet(types.SetBalanceByType(account.Type, balance))
+	store.BalanceSet(types.SetBalanceByType(accountType, balance))
 	return nil
 }
 

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"code.vegaprotocol.io/vega/core/events"
-	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v1"
+	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v2"
 	"code.vegaprotocol.io/vega/protos/vega"
 
 	log "github.com/sirupsen/logrus"
@@ -222,7 +222,7 @@ func (m *market) initOpenVolume(ctx context.Context) error {
 
 // getPositions get this bot's positions.
 func (m *market) getPositions(ctx context.Context) ([]*vega.Position, error) {
-	response, err := m.node.PositionsByParty(ctx, &dataapipb.PositionsByPartyRequest{
+	response, err := m.node.PositionsByParty(ctx, &dataapipb.ListPositionsRequest{
 		PartyId:  m.walletPubKey,
 		MarketId: m.marketID,
 	})
@@ -230,17 +230,17 @@ func (m *market) getPositions(ctx context.Context) ([]*vega.Position, error) {
 		return nil, err
 	}
 
-	return response.Positions, nil
+	return response, nil
 }
 
 // initMarketData gets the latest info about the market.
 func (m *market) initMarketData(ctx context.Context) error {
-	response, err := m.node.MarketDataByID(ctx, &dataapipb.MarketDataByIDRequest{MarketId: m.marketID})
+	response, err := m.node.MarketDataByID(ctx, &dataapipb.GetLatestMarketDataRequest{MarketId: m.marketID})
 	if err != nil {
 		return fmt.Errorf("failed to get market market (ID:%s): %w", m.marketID, err)
 	}
 
-	md, err := types.FromVegaMD(response.MarketData)
+	md, err := types.FromVegaMD(response)
 	if err != nil {
 		return fmt.Errorf("failed to convert market market: %w", err)
 	}

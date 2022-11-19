@@ -8,7 +8,8 @@ import (
 	ppconfig "code.vegaprotocol.io/priceproxy/config"
 	ppservice "code.vegaprotocol.io/priceproxy/service"
 	"code.vegaprotocol.io/shared/libs/num"
-	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v1"
+	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v2"
+	"code.vegaprotocol.io/vega/protos/vega"
 )
 
 // TODO: PricingEngine response data could be cached in the data service, along with other external data sources.
@@ -30,7 +31,7 @@ type marketStream interface {
 type tradingDataService interface {
 	MustDialConnection(ctx context.Context)
 	Target() string
-	Markets(ctx context.Context, req *dataapipb.MarketsRequest) (*dataapipb.MarketsResponse, error) // TODO: bot should probably not have to worry about finding markets
+	Markets(ctx context.Context, req *dataapipb.ListMarketsRequest) ([]*vega.Market, error) // TODO: bot should probably not have to worry about finding markets
 }
 
 type accountService interface {

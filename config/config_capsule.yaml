@@ -3,7 +3,7 @@
 server:
   env: prod  # dev, prod
   listen: ":7800"
-  logformat: text  # json, text
+  logformat: json_pretty  # json, text
   loglevel: debug  # debug, info, warning, error
 
 callTimeoutMills: 10000
@@ -22,7 +22,6 @@ token:
   stakingBridgeAddress: 0x9135f5afd6F055e731bca2348429482eE614CFfA
   syncTimeoutSec: 100
 whale:
-  walletPubKey: abe253f5682703ac654c95ab8e2de4ecccdc000a2315610bc161dd194f32af0e
   walletName: whale
   walletPassphrase: pastazazube
   ownerPrivateKeys:
