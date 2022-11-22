@@ -48,12 +48,11 @@ func (b *bot) runPositionManagement(ctx context.Context) {
 				return
 			}
 
-			// Only update liquidity and position if we are not in auction
-			if !b.CanPlaceOrders() {
-				if err := b.ensureCommitmentAmount(ctx); err != nil {
-					b.log.WithFields(log.Fields{"error": err.Error()}).Warning("PositionManagement: Failed to update commitment amount")
-				}
+			if err := b.ensureCommitmentAmount(ctx); err != nil {
+				b.log.WithFields(log.Fields{"error": err.Error()}).Warning("PositionManagement: Failed to update commitment amount")
+			}
 
+			if !b.CanPlaceOrders() {
 				if err = b.placeAuctionOrders(ctx); err != nil {
 					b.log.WithFields(log.Fields{"error": err.Error()}).Warning("PositionManagement: Failed to place auction orders")
 				}
@@ -301,14 +300,6 @@ func (b *bot) checkPosition() (uint64, vega.Side, bool) {
 }
 
 func (b *bot) provideLiquidity(ctx context.Context) error {
-	// We always cache off with longening shapes
-	buyShape, sellShape, _ := b.getShape()
-	// At the cache of each loop, wait for positive general account balance. This is in case the network has
-	// been restarted.
-	if err := b.checkInitialMargin(ctx, buyShape, sellShape); err != nil {
-		return fmt.Errorf("failed initial margin check: %w", err)
-	}
-
 	commitment, err := b.getRequiredCommitment()
 	if err != nil {
 		return fmt.Errorf("failed to get required commitment: %w", err)
@@ -320,6 +311,14 @@ func (b *bot) provideLiquidity(ctx context.Context) error {
 
 	if err = b.EnsureBalance(ctx, b.settlementAssetID, types.GeneralAndBond, commitment, "PositionManagement"); err != nil {
 		return fmt.Errorf("failed to ensure balance: %w", err)
+	}
+
+	// We always cache off with longening shapes
+	buyShape, sellShape, _ := b.getShape()
+	// At the cache of each loop, wait for positive general account balance. This is in case the network has
+	// been restarted.
+	if err := b.checkInitialMargin(ctx, buyShape, sellShape); err != nil {
+		return fmt.Errorf("failed initial margin check: %w", err)
 	}
 
 	// Submit LP order to market.

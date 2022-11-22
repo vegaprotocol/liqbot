@@ -3,7 +3,6 @@ package whale
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -17,9 +16,7 @@ import (
 	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v2"
 	"code.vegaprotocol.io/vega/protos/vega"
 	commV1 "code.vegaprotocol.io/vega/protos/vega/commands/v1"
-	v12 "code.vegaprotocol.io/vega/protos/vega/events/v1"
 	"code.vegaprotocol.io/vega/protos/vega/wallet/v1"
-	"code.vegaprotocol.io/vega/wallet/wallets"
 )
 
 type Service struct {
@@ -80,17 +77,15 @@ func (w *Service) Start(ctx context.Context) error {
 	return nil
 }
 
-func (w *Service) TopUpAsync(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint) (v12.BusEventType, error) {
+func (w *Service) TopUpAsync(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint) error {
 	w.log.Debugf("Top up for '%s' ...", receiverName)
 
-	evt := v12.BusEventType_BUS_EVENT_TYPE_TRANSFER
-
 	if assetID == "" {
-		return evt, fmt.Errorf("assetID is empty for bot '%s'", receiverName)
+		return fmt.Errorf("assetID is empty for bot '%s'", receiverName)
 	}
 
 	if receiverAddress == w.walletConfig.WalletPubKey {
-		return evt, fmt.Errorf("whale and bot address cannot be the same")
+		return fmt.Errorf("whale and bot address cannot be the same")
 	}
 
 	ensureAmount := num.Zero().Mul(amount, num.NewUint(30))
@@ -99,14 +94,14 @@ func (w *Service) TopUpAsync(ctx context.Context, receiverName, receiverAddress,
 		AssetId: assetID,
 	})
 	if err != nil {
-		return v12.BusEventType_BUS_EVENT_TYPE_UNSPECIFIED, fmt.Errorf("failed to get asset by id: %w", err)
+		return fmt.Errorf("failed to get asset by id: %w", err)
 	}
 
 	if builtin := asset.Details.GetBuiltinAsset(); builtin != nil {
 		if err := w.depositBuiltin(ctx, assetID, receiverAddress, ensureAmount, builtin); err != nil {
-			return v12.BusEventType_BUS_EVENT_TYPE_UNSPECIFIED, errors.Wrap(err, "failed to deposit builtin")
+			return errors.Wrap(err, "failed to deposit builtin")
 		}
-		return v12.BusEventType_BUS_EVENT_TYPE_UNSPECIFIED, nil
+		return nil
 	}
 
 	go func() {
@@ -161,12 +156,12 @@ func (w *Service) TopUpAsync(ctx context.Context, receiverName, receiverAddress,
 			}).Debugf("Top-up sent")
 	}()
 
-	return evt, nil
+	return nil
 }
 
 func (w *Service) setupWallet(ctx context.Context) error {
 	if err := w.wallet.LoginWallet(ctx, w.walletName, w.walletPassphrase); err != nil {
-		if strings.Contains(err.Error(), wallets.ErrWalletDoesNotExists.Error()) {
+		if err.Error() == `{"error":"wallet does not exist"}` {
 			mnemonic, err := w.wallet.CreateWallet(ctx, w.walletName, w.walletPassphrase)
 			if err != nil {
 				return fmt.Errorf("failed to create wallet: %w", err)

@@ -15,7 +15,6 @@ import (
 	"code.vegaprotocol.io/shared/libs/num"
 	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v2"
 	"code.vegaprotocol.io/vega/protos/vega"
-	v1 "code.vegaprotocol.io/vega/protos/vega/events/v1"
 )
 
 type Provider struct {
@@ -89,7 +88,7 @@ func NewProvider(
 	return p
 }
 
-func (p *Provider) TopUpAsync(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint) (v1.BusEventType, error) {
+func (p *Provider) TopUpAsync(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint) error {
 	p.ensureBalanceCh <- ensureBalanceRequest{
 		ctx:     ctx,
 		name:    receiverName,
@@ -97,8 +96,8 @@ func (p *Provider) TopUpAsync(ctx context.Context, receiverName, receiverAddress
 		assetID: assetID,
 		amount:  amount,
 	}
-	// TODO: this is not always true?
-	return v1.BusEventType_BUS_EVENT_TYPE_DEPOSIT, nil
+
+	return nil
 }
 
 func (p *Provider) topUpAsync(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint) error {

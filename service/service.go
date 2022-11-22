@@ -180,6 +180,7 @@ func getWhale(config config.Config) (*whale.Service, error) {
 	if err = whaleService.Start(context.Background()); err != nil {
 		return nil, fmt.Errorf("failed to start whale service: %w", err)
 	}
+
 	return whaleService, nil
 }
 

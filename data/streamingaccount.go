@@ -7,6 +7,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/exp/slices"
 
 	"code.vegaprotocol.io/liqbot/types"
 	"code.vegaprotocol.io/shared/libs/num"
@@ -155,7 +156,6 @@ func (a *account) setBalanceByType(accountType vega.AccountType, balanceStr stri
 // WaitForTopUpToFinalise is a blocking call that waits for the top-up finalise event to be received.
 func (a *account) WaitForTopUpToFinalise(
 	ctx context.Context,
-	evtType eventspb.BusEventType,
 	walletPubKey,
 	assetID string,
 	expectAmount *num.Uint,
@@ -169,45 +169,49 @@ func (a *account) WaitForTopUpToFinalise(
 	}
 
 	req := &coreapipb.ObserveEventBusRequest{
-		Type: []eventspb.BusEventType{evtType},
+		Type: []eventspb.BusEventType{
+			eventspb.BusEventType_BUS_EVENT_TYPE_DEPOSIT,
+			eventspb.BusEventType_BUS_EVENT_TYPE_TRANSFER,
+			eventspb.BusEventType_BUS_EVENT_TYPE_ACCOUNT,
+		},
 	}
 
 	proc := func(rsp *coreapipb.ObserveEventBusResponse) (bool, error) {
 		for _, event := range rsp.Events {
 			var (
-				status  int32
-				partyId string
-				asset   string
-				amount  string
+				status   string
+				partyId  string
+				asset    string
+				balance  string
+				okStatus []string
 			)
-			switch evtType {
+			switch event.Type {
 			case eventspb.BusEventType_BUS_EVENT_TYPE_DEPOSIT:
 				depEvt := event.GetDeposit()
-				if depEvt.Status != vega.Deposit_STATUS_FINALIZED {
-					if depEvt.Status == vega.Deposit_STATUS_OPEN {
-						continue
-					} else {
-						return true, fmt.Errorf("transfer %s failed: %s", depEvt.Id, depEvt.Status.String())
-					}
-				}
-				status = int32(depEvt.Status)
+				status = depEvt.Status.String()
 				partyId = depEvt.PartyId
 				asset = depEvt.Asset
-				amount = depEvt.Amount
+				okStatus = []string{
+					vega.Deposit_STATUS_FINALIZED.String(),
+					vega.Deposit_STATUS_OPEN.String(),
+				}
 			case eventspb.BusEventType_BUS_EVENT_TYPE_TRANSFER:
 				depEvt := event.GetTransfer()
-				if depEvt.Status != eventspb.Transfer_STATUS_DONE {
-					if depEvt.Status == eventspb.Transfer_STATUS_PENDING {
-						continue
-					} else {
-						return true, fmt.Errorf("transfer %s failed: %s", depEvt.Id, depEvt.Status.String())
-					}
-				}
-
-				status = int32(depEvt.Status)
+				status = depEvt.Status.String()
 				partyId = depEvt.To
 				asset = depEvt.Asset
-				amount = depEvt.Amount
+				okStatus = []string{
+					eventspb.Transfer_STATUS_DONE.String(),
+					eventspb.Transfer_STATUS_PENDING.String(),
+				}
+			case eventspb.BusEventType_BUS_EVENT_TYPE_ACCOUNT:
+				accEvt := event.GetAccount()
+				partyId = accEvt.Owner
+				asset = accEvt.Asset
+				// we only care about the balance of the general account
+				if accEvt.Type == vega.AccountType_ACCOUNT_TYPE_GENERAL {
+					balance = accEvt.GetBalance()
+				}
 			}
 
 			// filter out any that are for different assets, or not finalized
@@ -215,17 +219,27 @@ func (a *account) WaitForTopUpToFinalise(
 				continue
 			}
 
+			// if it's a deposit or transfer event, check if it failed
+			if status != "" && !slices.Contains(okStatus, status) {
+				return true, fmt.Errorf("transfer %s failed: %s", event.Id, status)
+			}
+
 			a.log.WithFields(log.Fields{
 				"account.name":  a.name,
 				"event.partyID": partyId,
 				"event.assetID": asset,
-				"event.amount":  amount,
+				"event.balance": balance,
 				"event.status":  status,
 			}).Debugf("Received %s event", event.Type.String())
 
-			gotAmount, overflow := num.UintFromString(amount, 10)
-			if overflow {
-				return false, fmt.Errorf("failed to parse top-up expectAmount %s", amount)
+			// only check the deposited amount for account events
+			if event.Type != eventspb.BusEventType_BUS_EVENT_TYPE_ACCOUNT {
+				continue
+			}
+
+			gotAmount, err := num.ConvertUint256(balance)
+			if err != nil {
+				return false, fmt.Errorf("failed to parse top-up expectAmount %s: %w", balance, err)
 			}
 
 			expect, ok := a.getWaitingDeposit(assetID)
@@ -238,7 +252,7 @@ func (a *account) WaitForTopUpToFinalise(
 				a.log.WithFields(log.Fields{
 					"name":    a.name,
 					"partyId": walletPubKey,
-					"amount":  gotAmount.String(),
+					"balance": gotAmount.String(),
 				}).Info("TopUp finalised")
 				a.deleteWaitingDeposit(assetID)
 				return true, nil
@@ -248,7 +262,8 @@ func (a *account) WaitForTopUpToFinalise(
 					"partyId":      a.walletPubKey,
 					"gotAmount":    gotAmount.String(),
 					"targetAmount": expect.String(),
-				}).Info("Received funds, but amount is less than expected")
+				}).Info("Received funds, but balance is less than expected")
+				// if we received fewer funds than expected, keep waiting (e.g. faucet tops-up in multiple iterations)
 			}
 		}
 		return false, nil

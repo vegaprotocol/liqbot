@@ -9,7 +9,6 @@ import (
 	"code.vegaprotocol.io/liqbot/data"
 	"code.vegaprotocol.io/liqbot/types"
 	"code.vegaprotocol.io/shared/libs/num"
-	v1 "code.vegaprotocol.io/vega/protos/vega/events/v1"
 )
 
 type Service struct {
@@ -69,21 +68,15 @@ func (a *Service) EnsureBalance(ctx context.Context, assetID string, balanceFn f
 			"targetAmount": targetAmount.String(),
 		}).Debugf("%s: Account balance is less than target amount, depositing...", from)
 
-	evtType, err := a.coinProvider.TopUpAsync(ctx, a.name, a.pubKey, assetID, targetAmount)
-	if err != nil {
+	if err := a.coinProvider.TopUpAsync(ctx, a.name, a.pubKey, assetID, targetAmount); err != nil {
 		return fmt.Errorf("failed to top up: %w", err)
 	}
 
 	defer a.log.WithFields(log.Fields{"name": a.name}).Debugf("%s: Top-up complete", from)
 
-	// TODO: this is a hack to finalise the top-up of built-in assets
-	if evtType == v1.BusEventType_BUS_EVENT_TYPE_UNSPECIFIED {
-		return nil
-	}
-
 	a.log.WithFields(log.Fields{"name": a.name}).Debugf("%s: Waiting for top-up...", from)
 
-	if err = a.accountStream.WaitForTopUpToFinalise(ctx, evtType, a.pubKey, assetID, targetAmount, 0); err != nil {
+	if err = a.accountStream.WaitForTopUpToFinalise(ctx, a.pubKey, assetID, targetAmount, 0); err != nil {
 		return fmt.Errorf("failed to finalise deposit: %w", err)
 	}
 

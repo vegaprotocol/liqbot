@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	code.vegaprotocol.io/priceproxy v0.1.0
-	code.vegaprotocol.io/shared v0.0.0-20221119005946-b4e805981909
+	code.vegaprotocol.io/shared v0.0.0-20221122114140-26dc6e791589
 	code.vegaprotocol.io/vega v0.62.2-0.20221118120458-4df3cf151062
 	github.com/ethereum/go-ethereum v1.10.21
 	github.com/golang/mock v1.6.1-0.20220512030613-73266f9366fc
@@ -18,13 +18,15 @@ require (
 	gonum.org/v1/gonum v0.12.0
 )
 
-require github.com/pkg/errors v0.9.1
+require (
+	github.com/pkg/errors v0.9.1
+	golang.org/x/exp v0.0.0-20220722155223-a9213eeb770e
+)
 
 require (
 	github.com/BurntSushi/toml v1.2.1 // indirect
 	github.com/DataDog/zstd v1.4.1 // indirect
 	github.com/StackExchange/wmi v1.2.1 // indirect
-	github.com/adrg/xdg v0.4.0 // indirect
 	github.com/btcsuite/btcd v0.22.1 // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.2.0 // indirect
 	github.com/cespare/xxhash v1.1.0 // indirect
@@ -50,7 +52,6 @@ require (
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/holiman/uint256 v1.2.0 // indirect
 	github.com/jmhodges/levigo v1.0.0 // indirect
-	github.com/oasisprotocol/curve25519-voi v0.0.0-20220317090546-adb2f9614b17 // indirect
 	github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rjeczalik/notify v0.9.1 // indirect
@@ -62,11 +63,8 @@ require (
 	github.com/tendermint/tm-db v0.6.7 // indirect
 	github.com/tklauser/go-sysconf v0.3.10 // indirect
 	github.com/tklauser/numcpus v0.4.0 // indirect
-	github.com/tyler-smith/go-bip39 v1.1.0 // indirect
-	github.com/vegaprotocol/go-slip10 v0.1.0 // indirect
 	go.etcd.io/bbolt v1.3.6 // indirect
 	golang.org/x/crypto v0.1.0 // indirect
-	golang.org/x/exp v0.0.0-20220722155223-a9213eeb770e // indirect
 	golang.org/x/net v0.1.0 // indirect
 	golang.org/x/sys v0.1.0 // indirect
 	golang.org/x/text v0.4.0 // indirect

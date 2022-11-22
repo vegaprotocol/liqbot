@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
@@ -12,7 +11,6 @@ import (
 	"code.vegaprotocol.io/liqbot/config"
 	"code.vegaprotocol.io/liqbot/types"
 	wtypes "code.vegaprotocol.io/shared/libs/wallet/types"
-	"code.vegaprotocol.io/vega/wallet/wallets"
 )
 
 // bot represents one Normal liquidity bot.
@@ -181,7 +179,7 @@ func (b *bot) setupWallet(ctx context.Context) (string, error) {
 	walletPassphrase := "123"
 
 	if err := b.walletClient.LoginWallet(ctx, b.config.Name, walletPassphrase); err != nil {
-		if strings.Contains(err.Error(), wallets.ErrWalletDoesNotExists.Error()) {
+		if err.Error() == `{"error":"wallet does not exist"}` {
 			mnemonic, err := b.walletClient.CreateWallet(ctx, b.config.Name, walletPassphrase)
 			if err != nil {
 				return "", fmt.Errorf("failed to create wallet: %w", err)

@@ -5,8 +5,6 @@ import (
 
 	ppconfig "code.vegaprotocol.io/priceproxy/config"
 	ppservice "code.vegaprotocol.io/priceproxy/service"
-	v1 "code.vegaprotocol.io/vega/protos/vega/events/v1"
-
 	"code.vegaprotocol.io/shared/libs/num"
 )
 
@@ -27,6 +25,6 @@ type PricingEngine interface {
 }
 
 type CoinProvider interface {
-	TopUpAsync(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint) (v1.BusEventType, error)
+	TopUpAsync(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint) error
 	StakeAsync(ctx context.Context, receiverAddress, assetID string, amount *num.Uint) error
 }
