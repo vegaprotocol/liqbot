@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	code.vegaprotocol.io/priceproxy v0.1.0
-	code.vegaprotocol.io/shared v0.0.0-20221123142221-1fa684e61fbc
+	code.vegaprotocol.io/shared v0.0.0-20221123151756-22b25f9c3446
 	code.vegaprotocol.io/vega v0.62.2-0.20221118120458-4df3cf151062
 	github.com/ethereum/go-ethereum v1.10.21 // indirect
 	github.com/golang/mock v1.6.1-0.20220512030613-73266f9366fc
