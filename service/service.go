@@ -15,20 +15,16 @@ import (
 	"github.com/julienschmidt/httprouter"
 	log "github.com/sirupsen/logrus"
 
-	"code.vegaprotocol.io/liqbot/account"
 	"code.vegaprotocol.io/liqbot/bot"
 	"code.vegaprotocol.io/liqbot/config"
-	"code.vegaprotocol.io/liqbot/data"
 	"code.vegaprotocol.io/liqbot/pricing"
 	"code.vegaprotocol.io/liqbot/types"
-	"code.vegaprotocol.io/liqbot/whale"
-	ppconfig "code.vegaprotocol.io/priceproxy/config"
-	ppservice "code.vegaprotocol.io/priceproxy/service"
+	"code.vegaprotocol.io/shared/libs/account"
 	"code.vegaprotocol.io/shared/libs/erc20"
-	sconfig "code.vegaprotocol.io/shared/libs/erc20/config"
 	"code.vegaprotocol.io/shared/libs/faucet"
 	"code.vegaprotocol.io/shared/libs/node"
 	"code.vegaprotocol.io/shared/libs/wallet"
+	"code.vegaprotocol.io/shared/libs/whale"
 )
 
 // Bot is the generic bot interface.
@@ -38,13 +34,6 @@ type Bot interface {
 	Start() error
 	Stop()
 	GetTraderDetails() string
-}
-
-// PricingEngine is the source of price information from the price proxy.
-//
-//go:generate go run github.com/golang/mock/mockgen -destination mocks/pricingengine_mock.go -package mocks code.vegaprotocol.io/liqbot/service PricingEngine
-type PricingEngine interface {
-	GetPrice(pricecfg ppconfig.PriceConfig) (pi ppservice.PriceResponse, err error)
 }
 
 // SimpleResponse is used to show if a request succeeded or not, without giving any more detail.
@@ -153,9 +142,8 @@ func getWhale(config config.Config) (*whale.Service, error) {
 
 	faucetService := faucet.New(*faucetURL)
 	whaleWallet := wallet.NewClient(config.Wallet.URL)
-	accountStream := data.NewAccountStream("whale", dataNode)
 
-	tokenService, err := erc20.NewService((*sconfig.TokenConfig)(config.Token))
+	tokenService, err := erc20.NewService(config.Token)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup token service: %w", err)
 	}
@@ -167,7 +155,7 @@ func getWhale(config config.Config) (*whale.Service, error) {
 		config.Whale,
 	)
 
-	accountService := account.NewAccountService("whale", "", accountStream, provider)
+	accountService := account.NewAccountService("whale", dataNode, "", provider)
 
 	whaleService := whale.NewService(
 		dataNode,
@@ -227,7 +215,7 @@ func (s *Service) Stop() {
 	}
 }
 
-func (s *Service) initBots(pricingEngine PricingEngine, whaleService types.CoinProvider) error {
+func (s *Service) initBots(pricingEngine types.PricingEngine, whaleService account.CoinProvider) error {
 	for _, botcfg := range s.config.Bots {
 		if err := s.initBot(pricingEngine, botcfg, whaleService); err != nil {
 			return fmt.Errorf("failed to initialise bot '%s': %w", botcfg.Name, err)
@@ -237,7 +225,7 @@ func (s *Service) initBots(pricingEngine PricingEngine, whaleService types.CoinP
 	return nil
 }
 
-func (s *Service) initBot(pricingEngine PricingEngine, botcfg config.BotConfig, whaleService types.CoinProvider) error {
+func (s *Service) initBot(pricingEngine types.PricingEngine, botcfg config.BotConfig, whaleService account.CoinProvider) error {
 	log.WithFields(log.Fields{"strategy": botcfg.StrategyDetails.String()}).Debug("read strategy config")
 
 	b, err := bot.New(botcfg, s.config, pricingEngine, whaleService)

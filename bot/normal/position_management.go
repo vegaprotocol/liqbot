@@ -10,7 +10,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"code.vegaprotocol.io/liqbot/types"
+	"code.vegaprotocol.io/shared/libs/cache"
 	"code.vegaprotocol.io/shared/libs/num"
 	"code.vegaprotocol.io/vega/protos/vega"
 	commandspb "code.vegaprotocol.io/vega/protos/vega/commands/v1"
@@ -87,7 +87,7 @@ func (b *bot) ensureCommitmentAmount(ctx context.Context) error {
 		},
 	).Debug("PositionManagement: Supplied stake is less than target stake, increasing commitment amount...")
 
-	if err = b.EnsureBalance(ctx, b.settlementAssetID, types.GeneralAndBond, requiredCommitment, "PositionManagement"); err != nil {
+	if err = b.EnsureBalance(ctx, b.settlementAssetID, cache.GeneralAndBond, requiredCommitment, "PositionManagement"); err != nil {
 		return fmt.Errorf("failed to ensure balance: %w", err)
 	}
 
@@ -164,9 +164,9 @@ func (b *bot) managePosition(ctx context.Context) error {
 	size, side, shouldPlace := b.checkPosition()
 	b.log.WithFields(log.Fields{
 		"currentPrice":    b.Market().MarkPrice().String(),
-		"balance.General": types.General(b.Balance(ctx)).String(),
-		"balance.Margin":  types.Margin(b.Balance(ctx)).String(),
-		"balance.Bond":    types.Bond(b.Balance(ctx)).String(),
+		"balance.General": cache.General(b.Balance(ctx)).String(),
+		"balance.Margin":  cache.Margin(b.Balance(ctx)).String(),
+		"balance.Bond":    cache.Bond(b.Balance(ctx)).String(),
 		"openVolume":      b.Market().OpenVolume(),
 		"size":            size,
 		"side":            side.String(),
@@ -210,7 +210,7 @@ func (b *bot) sendLiquidityProvision(ctx context.Context, commitment *num.Uint, 
 
 	b.log.WithFields(log.Fields{
 		"commitment":             commitment.String(),
-		"balance.GeneralAndBond": types.GeneralAndBond(b.Balance(ctx)).String(),
+		"balance.GeneralAndBond": cache.GeneralAndBond(b.Balance(ctx)).String(),
 	}).Debug("PositionManagement: Submitting LiquidityProvisionSubmission...")
 
 	if err := b.walletClient.SignTx(ctx, submitTxReq); err != nil {
@@ -219,7 +219,7 @@ func (b *bot) sendLiquidityProvision(ctx context.Context, commitment *num.Uint, 
 
 	b.log.WithFields(log.Fields{
 		"commitment":             commitment.String(),
-		"balance.GeneralAndBond": types.GeneralAndBond(b.Balance(ctx)).String(),
+		"balance.GeneralAndBond": cache.GeneralAndBond(b.Balance(ctx)).String(),
 	}).Debug("PositionManagement: Submitted LiquidityProvisionSubmission")
 	return nil
 }
@@ -253,7 +253,7 @@ func (b *bot) sendLiquidityProvisionAmendment(ctx context.Context, commitment *n
 
 	b.log.WithFields(log.Fields{
 		"commitment":             commitmentAmount,
-		"balance.GeneralAndBond": types.GeneralAndBond(b.Balance(ctx)).String(),
+		"balance.GeneralAndBond": cache.GeneralAndBond(b.Balance(ctx)).String(),
 	}).Debug("PositionManagement: Submitted LiquidityProvisionAmendment")
 	return nil
 }
@@ -274,7 +274,7 @@ func (b *bot) sendLiquidityProvisionCancellation(ctx context.Context) error {
 
 	b.log.WithFields(log.Fields{
 		"commitment":      "0",
-		"balance.General": types.General(b.Balance(ctx)).String(),
+		"balance.General": cache.General(b.Balance(ctx)).String(),
 	}).Debug("PositionManagement: Submitted LiquidityProvisionCancellation")
 
 	return nil
@@ -309,7 +309,7 @@ func (b *bot) provideLiquidity(ctx context.Context) error {
 		return nil
 	}
 
-	if err = b.EnsureBalance(ctx, b.settlementAssetID, types.GeneralAndBond, commitment, "PositionManagement"); err != nil {
+	if err = b.EnsureBalance(ctx, b.settlementAssetID, cache.GeneralAndBond, commitment, "PositionManagement"); err != nil {
 		return fmt.Errorf("failed to ensure balance: %w", err)
 	}
 
@@ -346,7 +346,7 @@ func (b *bot) getShape() ([]*vega.LiquidityOrder, []*vega.LiquidityOrder, string
 
 func (b *bot) checkInitialMargin(ctx context.Context, buyShape, sellShape []*vega.LiquidityOrder) error {
 	// Turn the shapes into a set of orders scaled by commitment
-	obligation := types.GeneralAndBond(b.Balance(ctx))
+	obligation := cache.GeneralAndBond(b.Balance(ctx))
 	buyOrders := b.calculateOrderSizes(obligation, buyShape)
 	sellOrders := b.calculateOrderSizes(obligation, sellShape)
 
@@ -357,7 +357,7 @@ func (b *bot) checkInitialMargin(ctx context.Context, buyShape, sellShape []*veg
 	sellCost := b.calculateMarginCost(sellRisk, sellOrders)
 
 	shapeMarginCost := num.Max(buyCost, sellCost)
-	avail := mulFrac(types.General(b.Balance(ctx)), b.config.StrategyDetails.OrdersFraction, 15)
+	avail := mulFrac(cache.General(b.Balance(ctx)), b.config.StrategyDetails.OrdersFraction, 15)
 
 	if !avail.LT(shapeMarginCost) {
 		return nil

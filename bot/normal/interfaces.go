@@ -3,8 +3,9 @@ package normal
 import (
 	"context"
 
-	"code.vegaprotocol.io/liqbot/types"
+	"code.vegaprotocol.io/shared/libs/cache"
 	"code.vegaprotocol.io/shared/libs/num"
+	"code.vegaprotocol.io/shared/libs/types"
 	wtypes "code.vegaprotocol.io/shared/libs/wallet/types"
 	"code.vegaprotocol.io/vega/protos/vega"
 	"code.vegaprotocol.io/vega/protos/vega/wallet/v1"
@@ -33,7 +34,7 @@ type WalletClient interface {
 type marketService interface {
 	Init(pubKey string, pauseCh chan types.PauseSignal) error
 	Start(ctx context.Context, marketID string) error
-	Market() types.MarketData
+	Market() cache.MarketData
 	CanPlaceOrders() bool
 	SubmitOrder(ctx context.Context, order *vega.Order, from string, secondsFromNow int64) error
 	SeedOrders(ctx context.Context, from string) error
@@ -43,6 +44,6 @@ type marketService interface {
 
 type accountService interface {
 	Init(pubKey string, pauseCh chan types.PauseSignal)
-	Balance(ctx context.Context) types.Balance
-	EnsureBalance(ctx context.Context, assetID string, balanceFn func(types.Balance) *num.Uint, targetAmount *num.Uint, from string) error
+	Balance(ctx context.Context) cache.Balance
+	EnsureBalance(ctx context.Context, assetID string, balanceFn func(cache.Balance) *num.Uint, targetAmount *num.Uint, from string) error
 }

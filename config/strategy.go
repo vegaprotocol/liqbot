@@ -6,7 +6,6 @@ import (
 
 	"github.com/hashicorp/go-multierror"
 
-	"code.vegaprotocol.io/liqbot/types"
 	"code.vegaprotocol.io/vega/protos/vega"
 )
 
@@ -142,13 +141,6 @@ type LimitOrderDistParams struct {
 type Shape struct {
 	Sells LiquidityOrders `yaml:"sells"`
 	Buys  LiquidityOrders `yaml:"buys"`
-}
-
-func (s Shape) ToVegaShape() types.Shape {
-	return types.Shape{
-		Sells: s.Sells.ToVegaLiquidityOrders(),
-		Buys:  s.Buys.ToVegaLiquidityOrders(),
-	}
 }
 
 type LiquidityOrders []LiquidityOrder

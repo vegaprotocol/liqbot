@@ -11,10 +11,11 @@ import (
 
 	"code.vegaprotocol.io/liqbot/bot/normal"
 	"code.vegaprotocol.io/liqbot/config"
-	"code.vegaprotocol.io/liqbot/data"
-	"code.vegaprotocol.io/liqbot/types"
+	itypes "code.vegaprotocol.io/liqbot/types"
 	ppconfig "code.vegaprotocol.io/priceproxy/config"
+	"code.vegaprotocol.io/shared/libs/cache"
 	"code.vegaprotocol.io/shared/libs/num"
+	"code.vegaprotocol.io/shared/libs/types"
 	v12 "code.vegaprotocol.io/vega/protos/data-node/api/v2"
 	"code.vegaprotocol.io/vega/protos/vega"
 	commandspb "code.vegaprotocol.io/vega/protos/vega/commands/v1"
@@ -25,11 +26,11 @@ import (
 
 type Service struct {
 	name          string
-	pricingEngine PricingEngine
+	pricingEngine itypes.PricingEngine
 	marketStream  marketStream
-	node          tradingDataService
+	node          dataNode
 	walletClient  normal.WalletClient // TODO: wtf?!
-	store         data.MarketStore
+	store         marketStore
 	account       accountService
 	config        config.BotConfig
 	log           *log.Entry
@@ -42,17 +43,16 @@ type Service struct {
 
 func NewService(
 	name string,
-	marketStream marketStream,
-	node tradingDataService,
+	node dataNode,
 	walletClient normal.WalletClient,
-	pe PricingEngine,
+	pe itypes.PricingEngine,
 	account accountService,
 	config config.BotConfig,
 	vegaAssetID string,
 ) *Service {
 	s := &Service{
 		name:          name,
-		marketStream:  marketStream,
+		marketStream:  NewMarketStream(name, node),
 		node:          node,
 		walletClient:  walletClient,
 		pricingEngine: pe,
@@ -87,11 +87,7 @@ func (m *Service) Start(ctx context.Context, marketID string) error {
 	return nil
 }
 
-func (m *Service) SetPubKey(pubKey string) {
-	m.walletPubKey = pubKey
-}
-
-func (m *Service) Market() types.MarketData {
+func (m *Service) Market() cache.MarketData {
 	return m.store.Market()
 }
 
@@ -173,7 +169,7 @@ func (m *Service) CreateMarket(ctx context.Context) error {
 		"name":   m.name,
 	}).Info("Ensuring balance for market creation")
 
-	if err := m.account.EnsureBalance(ctx, m.config.SettlementAssetID, types.General, seedAmount, "MarketCreation"); err != nil {
+	if err := m.account.EnsureBalance(ctx, m.config.SettlementAssetID, cache.General, seedAmount, "MarketCreation"); err != nil {
 		return fmt.Errorf("failed to ensure balance: %w", err)
 	}
 
@@ -207,7 +203,7 @@ func (m *Service) CreateMarket(ctx context.Context) error {
 
 	m.log.Debug("Waiting for proposal ID...")
 
-	proposalID, err := m.marketStream.WaitForProposalID()
+	proposalID, err := m.marketStream.waitForProposalID()
 	if err != nil {
 		return fmt.Errorf("failed to wait for proposal ID: %w", err)
 	}
@@ -221,7 +217,7 @@ func (m *Service) CreateMarket(ctx context.Context) error {
 
 	m.log.Debug("Waiting for proposal to be enacted...")
 
-	if err = m.marketStream.WaitForProposalEnacted(proposalID); err != nil {
+	if err = m.marketStream.waitForProposalEnacted(proposalID); err != nil {
 		return fmt.Errorf("failed to wait for proposal to be enacted: %w", err)
 	}
 
@@ -285,7 +281,7 @@ func (m *Service) SubmitOrder(ctx context.Context, order *vega.Order, from strin
 
 	price.Mul(price, num.NewUint(order.Size))
 
-	if err := m.account.EnsureBalance(ctx, m.config.SettlementAssetID, types.General, price, from); err != nil {
+	if err := m.account.EnsureBalance(ctx, m.config.SettlementAssetID, cache.General, price, from); err != nil {
 		return fmt.Errorf("failed to ensure balance: %w", err)
 	}
 

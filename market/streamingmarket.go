@@ -1,4 +1,4 @@
-package data
+package market
 
 import (
 	"context"
@@ -6,29 +6,29 @@ import (
 	"fmt"
 	"time"
 
+	log "github.com/sirupsen/logrus"
+
+	"code.vegaprotocol.io/shared/libs/cache"
+	sevents "code.vegaprotocol.io/shared/libs/events"
+	"code.vegaprotocol.io/shared/libs/types"
 	"code.vegaprotocol.io/vega/core/events"
 	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v2"
 	"code.vegaprotocol.io/vega/protos/vega"
-
-	log "github.com/sirupsen/logrus"
-
 	coreapipb "code.vegaprotocol.io/vega/protos/vega/api/v1"
 	eventspb "code.vegaprotocol.io/vega/protos/vega/events/v1"
-
-	"code.vegaprotocol.io/liqbot/types"
 )
 
 type market struct {
 	name         string
 	log          *log.Entry
-	node         DataNode
+	node         dataNode
 	walletPubKey string
 	marketID     string
-	store        MarketStore
+	store        marketStore
 	busEvProc    busEventer
 }
 
-func NewMarketStream(name string, node DataNode) *market {
+func NewMarketStream(name string, node dataNode) *market {
 	return &market{
 		name: name,
 		node: node,
@@ -36,12 +36,12 @@ func NewMarketStream(name string, node DataNode) *market {
 	}
 }
 
-func (m *market) Init(pubKey string, pauseCh chan types.PauseSignal) (MarketStore, error) {
-	store := types.NewMarketStore()
+func (m *market) Init(pubKey string, pauseCh chan types.PauseSignal) (marketStore, error) {
+	store := cache.NewMarketStore()
 
 	m.walletPubKey = pubKey
 	m.store = store
-	m.busEvProc = newBusEventProcessor(m.node, WithPauseCh(pauseCh))
+	m.busEvProc = sevents.NewBusEventProcessor(m.node, sevents.WithPauseCh(pauseCh))
 
 	return store, nil
 }
@@ -63,7 +63,7 @@ func (m *market) Subscribe(ctx context.Context, marketID string) error {
 	return nil
 }
 
-func (m *market) WaitForProposalID() (string, error) {
+func (m *market) waitForProposalID() (string, error) {
 	req := &coreapipb.ObserveEventBusRequest{
 		Type: []eventspb.BusEventType{eventspb.BusEventType_BUS_EVENT_TYPE_PROPOSAL},
 	}
@@ -96,7 +96,7 @@ func (m *market) WaitForProposalID() (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*450)
 	defer cancel()
 
-	errCh := m.busEvProc.processEvents(ctx, "Proposals: "+m.name, req, proc)
+	errCh := m.busEvProc.ProcessEvents(ctx, "Proposals: "+m.name, req, proc)
 	select {
 	case err := <-errCh:
 		return proposalID, err
@@ -105,7 +105,7 @@ func (m *market) WaitForProposalID() (string, error) {
 	}
 }
 
-func (m *market) WaitForProposalEnacted(pID string) error {
+func (m *market) waitForProposalEnacted(pID string) error {
 	req := &coreapipb.ObserveEventBusRequest{
 		Type: []eventspb.BusEventType{eventspb.BusEventType_BUS_EVENT_TYPE_PROPOSAL},
 	}
@@ -139,7 +139,7 @@ func (m *market) WaitForProposalEnacted(pID string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*450)
 	defer cancel()
 
-	errCh := m.busEvProc.processEvents(ctx, "Proposals: "+m.name, req, proc)
+	errCh := m.busEvProc.ProcessEvents(ctx, "Proposals: "+m.name, req, proc)
 	select {
 	case err := <-errCh:
 		return err
@@ -160,17 +160,17 @@ func (m *market) subscribeToMarketEvents() {
 		for _, event := range rsp.Events {
 			marketData := event.GetMarketData()
 
-			md, err := types.FromVegaMD(marketData)
+			md, err := cache.FromVegaMD(marketData)
 			if err != nil {
 				return false, fmt.Errorf("failed to convert market market: %w", err)
 			}
 
-			m.store.MarketSet(types.SetMarketData(md))
+			m.store.MarketSet(cache.SetMarketData(md))
 		}
 		return false, nil
 	}
 
-	m.busEvProc.processEvents(context.Background(), "MarketData: "+m.name, req, proc)
+	m.busEvProc.ProcessEvents(context.Background(), "MarketData: "+m.name, req, proc)
 }
 
 func (m *market) subscribePositions() {
@@ -194,11 +194,11 @@ func (m *market) subscribePositions() {
 			}
 		}
 
-		m.store.MarketSet(types.SetOpenVolume(openVolume))
+		m.store.MarketSet(cache.SetOpenVolume(openVolume))
 		return false, nil
 	}
 
-	m.busEvProc.processEvents(context.Background(), "PositionData: "+m.name, req, proc)
+	m.busEvProc.ProcessEvents(context.Background(), "PositionData: "+m.name, req, proc)
 }
 
 func (m *market) initOpenVolume(ctx context.Context) error {
@@ -216,7 +216,7 @@ func (m *market) initOpenVolume(ctx context.Context) error {
 		openVolume = positions[0].OpenVolume
 	}
 
-	m.store.MarketSet(types.SetOpenVolume(openVolume))
+	m.store.MarketSet(cache.SetOpenVolume(openVolume))
 	return nil
 }
 
@@ -240,11 +240,11 @@ func (m *market) initMarketData(ctx context.Context) error {
 		return fmt.Errorf("failed to get market market (ID:%s): %w", m.marketID, err)
 	}
 
-	md, err := types.FromVegaMD(response)
+	md, err := cache.FromVegaMD(response)
 	if err != nil {
 		return fmt.Errorf("failed to convert market market: %w", err)
 	}
 
-	m.store.MarketSet(types.SetMarketData(md))
+	m.store.MarketSet(cache.SetMarketData(md))
 	return nil
 }

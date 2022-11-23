@@ -9,7 +9,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"code.vegaprotocol.io/liqbot/config"
-	"code.vegaprotocol.io/liqbot/types"
+	"code.vegaprotocol.io/shared/libs/types"
 	wtypes "code.vegaprotocol.io/shared/libs/wallet/types"
 )
 

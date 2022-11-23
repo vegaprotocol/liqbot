@@ -4,23 +4,18 @@ go 1.18
 
 require (
 	code.vegaprotocol.io/priceproxy v0.1.0
-	code.vegaprotocol.io/shared v0.0.0-20221122114140-26dc6e791589
+	code.vegaprotocol.io/shared v0.0.0-20221123142221-1fa684e61fbc
 	code.vegaprotocol.io/vega v0.62.2-0.20221118120458-4df3cf151062
-	github.com/ethereum/go-ethereum v1.10.21
+	github.com/ethereum/go-ethereum v1.10.21 // indirect
 	github.com/golang/mock v1.6.1-0.20220512030613-73266f9366fc
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/jinzhu/configor v1.2.1
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/shopspring/decimal v1.3.1 // indirect
 	github.com/sirupsen/logrus v1.9.0
-	github.com/slack-go/slack v0.11.3
+	github.com/slack-go/slack v0.11.4 // indirect
 	github.com/stretchr/testify v1.8.0
 	gonum.org/v1/gonum v0.12.0
-)
-
-require (
-	github.com/pkg/errors v0.9.1
-	golang.org/x/exp v0.0.0-20220722155223-a9213eeb770e
 )
 
 require (
@@ -53,6 +48,7 @@ require (
 	github.com/holiman/uint256 v1.2.0 // indirect
 	github.com/jmhodges/levigo v1.0.0 // indirect
 	github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rjeczalik/notify v0.9.1 // indirect
 	github.com/sasha-s/go-deadlock v0.3.1 // indirect
@@ -65,6 +61,7 @@ require (
 	github.com/tklauser/numcpus v0.4.0 // indirect
 	go.etcd.io/bbolt v1.3.6 // indirect
 	golang.org/x/crypto v0.1.0 // indirect
+	golang.org/x/exp v0.0.0-20220722155223-a9213eeb770e // indirect
 	golang.org/x/net v0.1.0 // indirect
 	golang.org/x/sys v0.1.0 // indirect
 	golang.org/x/text v0.4.0 // indirect

@@ -7,12 +7,11 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"code.vegaprotocol.io/liqbot/account"
 	"code.vegaprotocol.io/liqbot/bot/normal"
 	"code.vegaprotocol.io/liqbot/config"
-	"code.vegaprotocol.io/liqbot/data"
 	"code.vegaprotocol.io/liqbot/market"
 	"code.vegaprotocol.io/liqbot/types"
+	"code.vegaprotocol.io/shared/libs/account"
 	"code.vegaprotocol.io/shared/libs/node"
 	"code.vegaprotocol.io/shared/libs/wallet"
 )
@@ -22,7 +21,7 @@ func New(
 	botConf config.BotConfig,
 	conf config.Config,
 	pricing types.PricingEngine,
-	whale types.CoinProvider,
+	whale account.CoinProvider,
 ) (types.Bot, error) {
 	switch botConf.Strategy {
 	case config.BotStrategyNormal:
@@ -40,7 +39,7 @@ func newNormalBot(
 	botConf config.BotConfig,
 	conf config.Config,
 	pricing types.PricingEngine,
-	whale types.CoinProvider,
+	whale account.CoinProvider,
 ) (types.Bot, error) {
 	dataNode := node.NewDataNode(
 		conf.Locations,
@@ -51,11 +50,8 @@ func newNormalBot(
 	dataNode.MustDialConnection(context.Background()) // blocking
 
 	botWallet := wallet.NewClient(conf.Wallet.URL)
-	accountStream := data.NewAccountStream(botConf.Name, dataNode)
-	accountService := account.NewAccountService(botConf.Name, botConf.SettlementAssetID, accountStream, whale)
-
-	marketStream := data.NewMarketStream(botConf.Name, dataNode)
-	marketService := market.NewService(botConf.Name, marketStream, dataNode, botWallet, pricing, accountService, botConf, conf.VegaAssetID)
+	accountService := account.NewAccountService(botConf.Name, dataNode, botConf.SettlementAssetID, whale)
+	marketService := market.NewService(botConf.Name, dataNode, botWallet, pricing, accountService, botConf, conf.VegaAssetID)
 
 	return normal.New(
 		botConf,

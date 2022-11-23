@@ -9,20 +9,22 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	tconfig "code.vegaprotocol.io/shared/libs/erc20/config"
 	"code.vegaprotocol.io/shared/libs/errors"
+	wconfig "code.vegaprotocol.io/shared/libs/whale/config"
 )
 
 // Config describes the top level config file format.
 type Config struct {
 	Server *ServerConfig `yaml:"server"`
 
-	CallTimeoutMills int            `yaml:"callTimeoutMills"`
-	VegaAssetID      string         `yaml:"vegaAssetID"`
-	Pricing          *PricingConfig `yaml:"pricing"`
-	Wallet           *WalletConfig  `yaml:"wallet"`
-	Whale            *WhaleConfig   `yaml:"whale"`
-	Token            *TokenConfig   `yaml:"token"`
-	Locations        []string       `yaml:"locations"`
+	CallTimeoutMills int                  `yaml:"callTimeoutMills"`
+	VegaAssetID      string               `yaml:"vegaAssetID"`
+	Pricing          *PricingConfig       `yaml:"pricing"`
+	Wallet           *WalletConfig        `yaml:"wallet"`
+	Whale            *wconfig.WhaleConfig `yaml:"whale"`
+	Token            *tconfig.TokenConfig `yaml:"token"`
+	Locations        []string             `yaml:"locations"`
 
 	Bots []BotConfig `yaml:"bots"`
 }

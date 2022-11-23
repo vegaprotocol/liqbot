@@ -1,7 +1,7 @@
 code.vegaprotocol.io/priceproxy v0.1.0 h1:PibvUIcTXS/MOIJKJwGXhJbDwg9ZPLItcIlfMvt1YO4=
 code.vegaprotocol.io/priceproxy v0.1.0/go.mod h1:W/CpimpwdplSLOnO1gEz2+VLQIV5I9FsDOST+1NDJ5A=
-code.vegaprotocol.io/shared v0.0.0-20221122114140-26dc6e791589 h1:XcGzzC3YD+J4GPPxLNCJPE7eSJORD47240LGaCTW9oc=
-code.vegaprotocol.io/shared v0.0.0-20221122114140-26dc6e791589/go.mod h1:vP9lWkgVFxgs3jHKjT8f+sJ/2UxO0+IoYbUwGeUvdzY=
+code.vegaprotocol.io/shared v0.0.0-20221123142221-1fa684e61fbc h1:PfbuJB8dwXLPZQG8BV5rZPTxlv8Fb37BFgHLRGbRhC4=
+code.vegaprotocol.io/shared v0.0.0-20221123142221-1fa684e61fbc/go.mod h1:EVA93aFGPlrhOK4f/wSrJKYq2qiKdJXjstF5rms0s1w=
 code.vegaprotocol.io/vega v0.62.2-0.20221118120458-4df3cf151062 h1:yFhF5Ug/btZJQpqLf+W73J9XJaKT+dXVegZRG9qy64M=
 code.vegaprotocol.io/vega v0.62.2-0.20221118120458-4df3cf151062/go.mod h1:kferwPYB97SNdznVdU2Ao3AoNlao5NH+C68ityenuVk=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
@@ -200,8 +200,8 @@ github.com/shirou/gopsutil v3.21.4-0.20210419000835-c7a38de76ee5+incompatible h1
 github.com/shirou/gopsutil v3.21.4-0.20210419000835-c7a38de76ee5+incompatible/go.mod h1:5b4v6he4MtMOwMlS0TUMTu2PcXUg8+E1lC7eC3UO/RA=
 github.com/sirupsen/logrus v1.9.0 h1:trlNQbNUG3OdDrDil03MCb1H2o9nJ1x4/5LYw7byDE0=
 github.com/sirupsen/logrus v1.9.0/go.mod h1:naHLuLoDiP4jHNo9R0sCBMtWGeIprob74mVsIT4qYEQ=
-github.com/slack-go/slack v0.11.3 h1:GN7revxEMax4amCc3El9a+9SGnjmBvSUobs0QnO6ZO8=
-github.com/slack-go/slack v0.11.3/go.mod h1:hlGi5oXA+Gt+yWTPP0plCdRKmjsDxecdHxYQdlMQKOw=
+github.com/slack-go/slack v0.11.4 h1:ojSa7KlPm3PqY2AomX4VTxEsK5eci5JaxCjlzGV5zoM=
+github.com/slack-go/slack v0.11.4/go.mod h1:hlGi5oXA+Gt+yWTPP0plCdRKmjsDxecdHxYQdlMQKOw=
 github.com/spaolacci/murmur3 v0.0.0-20180118202830-f09979ecbc72/go.mod h1:JwIasOWyU6f++ZhiEuf87xNszmSA2myDM2Kzu9HwQUA=
 github.com/spaolacci/murmur3 v1.1.0 h1:7c1g84S4BPRrfL5Xrdp6fOJ206sU9y293DDHaoy0bLI=
 github.com/spaolacci/murmur3 v1.1.0/go.mod h1:JwIasOWyU6f++ZhiEuf87xNszmSA2myDM2Kzu9HwQUA=
