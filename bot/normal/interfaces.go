@@ -45,5 +45,5 @@ type marketService interface {
 type accountService interface {
 	Init(pubKey string, pauseCh chan types.PauseSignal)
 	Balance(ctx context.Context) cache.Balance
-	EnsureBalance(ctx context.Context, assetID string, balanceFn func(cache.Balance) *num.Uint, targetAmount *num.Uint, from string) error
+	EnsureBalance(ctx context.Context, assetID string, balanceFn func(cache.Balance) *num.Uint, targetAmount *num.Uint, scale uint64, from string) error
 }

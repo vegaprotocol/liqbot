@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"math/rand"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -53,9 +52,6 @@ func (b *bot) runPositionManagement(ctx context.Context) {
 			}
 
 			if !b.CanPlaceOrders() {
-				if err = b.placeAuctionOrders(ctx); err != nil {
-					b.log.WithFields(log.Fields{"error": err.Error()}).Warning("PositionManagement: Failed to place auction orders")
-				}
 				continue
 			}
 
@@ -87,7 +83,7 @@ func (b *bot) ensureCommitmentAmount(ctx context.Context) error {
 		},
 	).Debug("PositionManagement: Supplied stake is less than target stake, increasing commitment amount...")
 
-	if err = b.EnsureBalance(ctx, b.settlementAssetID, cache.GeneralAndBond, requiredCommitment, "PositionManagement"); err != nil {
+	if err = b.EnsureBalance(ctx, b.settlementAssetID, cache.GeneralAndBond, requiredCommitment, 2, "PositionManagement"); err != nil {
 		return fmt.Errorf("failed to ensure balance: %w", err)
 	}
 
@@ -309,7 +305,7 @@ func (b *bot) provideLiquidity(ctx context.Context) error {
 		return nil
 	}
 
-	if err = b.EnsureBalance(ctx, b.settlementAssetID, cache.GeneralAndBond, commitment, "PositionManagement"); err != nil {
+	if err = b.EnsureBalance(ctx, b.settlementAssetID, cache.GeneralAndBond, commitment, 2, "PositionManagement"); err != nil {
 		return fmt.Errorf("failed to ensure balance: %w", err)
 	}
 
@@ -378,58 +374,6 @@ func (b *bot) checkInitialMargin(ctx context.Context, buyShape, sellShape []*veg
 	}).Error("PositionManagement: Not enough collateral to safely keep orders up given current price, risk parameters and supplied default shapes.")
 
 	return errors.New("not enough collateral")
-}
-
-// Divide the auction amount into 10 orders and place them randomly
-// around the current price at upto 50+/- from it.
-func (b *bot) placeAuctionOrders(ctx context.Context) error {
-	// Check if we have a currentPrice we can use
-	if b.Market().MarkPrice().IsZero() {
-		b.log.Debug("PositionManagement: No current price to place auction orders")
-		return nil
-	}
-
-	b.log.WithFields(log.Fields{"currentPrice": b.Market().MarkPrice().String()}).Debug("PositionManagement: Placing auction orders")
-
-	// Place the random orders split into
-	totalVolume := num.Zero()
-
-	rand.Seed(time.Now().UnixNano())
-
-	for totalVolume.LT(b.config.StrategyDetails.AuctionVolume.Get()) {
-		time.Sleep(time.Second * 2)
-
-		remaining := num.Zero().Sub(b.config.StrategyDetails.AuctionVolume.Get(), totalVolume)
-		size := num.Min(num.UintChain(b.config.StrategyDetails.AuctionVolume.Get()).Div(num.NewUint(10)).Add(num.NewUint(1)).Get(), remaining)
-		// #nosec G404
-		price := num.Zero().Add(b.Market().MarkPrice(), num.NewUint(uint64(rand.Int63n(100)-50)))
-		side := vega.Side_SIDE_BUY
-		// #nosec G404
-		if rand.Intn(2) == 0 {
-			side = vega.Side_SIDE_SELL
-		}
-
-		order := &vega.Order{
-			MarketId:    b.marketID,
-			Size:        size.Uint64(),
-			Price:       price.String(),
-			Side:        side,
-			TimeInForce: vega.Order_TIME_IN_FORCE_GTT,
-			Type:        vega.Order_TYPE_LIMIT,
-			Reference:   "AuctionOrder",
-		}
-
-		if err := b.SubmitOrder(ctx, order, "PositionManagement", 330); err != nil {
-			// We failed to send an order so stop trying to send anymore
-			return fmt.Errorf("failed to send auction order: %w", err)
-		}
-
-		totalVolume = num.Zero().Add(totalVolume, size)
-	}
-
-	b.log.WithFields(log.Fields{"totalVolume": totalVolume.String()}).Debug("PositionManagement: Placed auction orders")
-
-	return nil
 }
 
 // calculateOrderSizes calculates the size of the orders using the total commitment, price, distance from mid and chance

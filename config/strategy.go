@@ -15,19 +15,14 @@ const (
 
 // Strategy describes parameters for the bot's strategy.
 type Strategy struct {
-	// ExpectedMarkPrice (optional) specifies the expected mark price for a market that may not yet
-	// have a mark price. It is used to calculate margin cost of orders meeting liquidity
-	// requirement.
-	ExpectedMarkPrice Uint `yaml:"expectedMarkPrice"`
-
-	// AuctionVolume ...
-	AuctionVolume Uint `yaml:"auctionVolume"`
-
 	// SeedAmount is the amount of tokens to mint, deposit and stake
 	SeedAmount Uint `yaml:"seedAmount"`
 
 	// SeedOrderSize is the size of the seed orders that tries to get the market out of auction
 	SeedOrderSize uint64 `yaml:"seedOrderSize"`
+
+	// SeedOrderCount is the number of seed orders that tries to get the market out of auction
+	SeedOrderCount int `yaml:"seedOrderCount"`
 
 	// CommitmentAmount is the amount of stake for the LP
 	CommitmentAmount string `yaml:"commitmentAmount"`
@@ -79,8 +74,7 @@ type Strategy struct {
 
 func (s Strategy) String() string {
 	return fmt.Sprintf(
-		`normal.Strategy{ExpectedMarkPrice=%d, 
-AuctionVolume=%d, 
+		`normal.Strategy{
 MaxLong=%d, 
 MaxShort=%d, 
 PosManagementFraction=%f, 
@@ -93,8 +87,6 @@ MinPriceSteerFraction=%f,
 PriceSteerOrderScale=%f, 
 LimitOrderDistributionParams=TBD(*LODParamsConfig), 
 TargetLNVol=%f}`,
-		s.ExpectedMarkPrice,
-		s.AuctionVolume,
 		s.MaxLong,
 		s.MaxShort,
 		s.PosManagementFraction,

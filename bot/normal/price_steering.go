@@ -9,6 +9,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"code.vegaprotocol.io/liqbot/config"
+	"code.vegaprotocol.io/shared/libs/cache"
 	"code.vegaprotocol.io/shared/libs/num"
 	"code.vegaprotocol.io/vega/protos/vega"
 )
@@ -104,6 +105,12 @@ func (b *bot) steerPrice(ctx context.Context) error {
 		TimeInForce: vega.Order_TIME_IN_FORCE_GTT,
 		Type:        vega.Order_TYPE_LIMIT,
 		Reference:   "PriceSteeringOrder",
+	}
+
+	expectedBalance := price.Mul(price, size)
+
+	if err := b.EnsureBalance(ctx, b.config.SettlementAssetID, cache.General, expectedBalance, 10, "PriceSteering"); err != nil {
+		return fmt.Errorf("failed to ensure balance: %w", err)
 	}
 
 	if err = b.SubmitOrder(

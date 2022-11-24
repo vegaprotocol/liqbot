@@ -4,6 +4,8 @@ code.vegaprotocol.io/shared v0.0.0-20221123142221-1fa684e61fbc h1:PfbuJB8dwXLPZQ
 code.vegaprotocol.io/shared v0.0.0-20221123142221-1fa684e61fbc/go.mod h1:EVA93aFGPlrhOK4f/wSrJKYq2qiKdJXjstF5rms0s1w=
 code.vegaprotocol.io/shared v0.0.0-20221123151756-22b25f9c3446 h1:bw81KTWIfn9SANrbxf0FkXzaELewPO9QeVb/P6gnUyw=
 code.vegaprotocol.io/shared v0.0.0-20221123151756-22b25f9c3446/go.mod h1:EVA93aFGPlrhOK4f/wSrJKYq2qiKdJXjstF5rms0s1w=
+code.vegaprotocol.io/shared v0.0.0-20221124120306-662cabb6caac h1:5TF9Q1rTE+Tc4AjSbAgINPVL6BOo4XFSPGVuuauA46Y=
+code.vegaprotocol.io/shared v0.0.0-20221124120306-662cabb6caac/go.mod h1:EVA93aFGPlrhOK4f/wSrJKYq2qiKdJXjstF5rms0s1w=
 code.vegaprotocol.io/vega v0.62.2-0.20221118120458-4df3cf151062 h1:yFhF5Ug/btZJQpqLf+W73J9XJaKT+dXVegZRG9qy64M=
 code.vegaprotocol.io/vega v0.62.2-0.20221118120458-4df3cf151062/go.mod h1:kferwPYB97SNdznVdU2Ao3AoNlao5NH+C68ityenuVk=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=

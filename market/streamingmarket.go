@@ -59,6 +59,7 @@ func (m *market) Subscribe(ctx context.Context, marketID string) error {
 
 	m.subscribeToMarketEvents()
 	m.subscribePositions()
+	m.subscribeToOrderEvents()
 
 	return nil
 }
@@ -171,6 +172,31 @@ func (m *market) subscribeToMarketEvents() {
 	}
 
 	m.busEvProc.ProcessEvents(context.Background(), "MarketData: "+m.name, req, proc)
+}
+
+func (m *market) subscribeToOrderEvents() {
+	req := &coreapipb.ObserveEventBusRequest{
+		Type: []eventspb.BusEventType{
+			eventspb.BusEventType_BUS_EVENT_TYPE_ORDER,
+		},
+		MarketId: m.marketID,
+	}
+
+	proc := func(rsp *coreapipb.ObserveEventBusResponse) (bool, error) {
+		for _, event := range rsp.Events {
+			order := event.GetOrder()
+
+			if order.Status == vega.Order_STATUS_REJECTED {
+				m.log.WithFields(log.Fields{
+					"orderID": order.Id,
+					"reason":  order.Reason,
+				}).Warn("Order was rejected")
+			}
+		}
+		return false, nil
+	}
+
+	m.busEvProc.ProcessEvents(context.Background(), "Order: "+m.name, req, proc)
 }
 
 func (m *market) subscribePositions() {

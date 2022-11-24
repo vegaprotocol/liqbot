@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/rand"
 	"strings"
 	"time"
 
@@ -169,7 +170,7 @@ func (m *Service) CreateMarket(ctx context.Context) error {
 		"name":   m.name,
 	}).Info("Ensuring balance for market creation")
 
-	if err := m.account.EnsureBalance(ctx, m.config.SettlementAssetID, cache.General, seedAmount, "MarketCreation"); err != nil {
+	if err := m.account.EnsureBalance(ctx, m.config.SettlementAssetID, cache.General, seedAmount, 1, "MarketCreation"); err != nil {
 		return fmt.Errorf("failed to ensure balance: %w", err)
 	}
 
@@ -281,10 +282,6 @@ func (m *Service) SubmitOrder(ctx context.Context, order *vega.Order, from strin
 
 	price.Mul(price, num.NewUint(order.Size))
 
-	if err := m.account.EnsureBalance(ctx, m.config.SettlementAssetID, cache.General, price, from); err != nil {
-		return fmt.Errorf("failed to ensure balance: %w", err)
-	}
-
 	cmd := &walletpb.SubmitTransactionRequest_OrderSubmission{
 		OrderSubmission: &commandspb.OrderSubmission{
 			MarketId:    order.MarketId,
@@ -330,53 +327,68 @@ func (m *Service) SubmitOrder(ctx context.Context, order *vega.Order, from strin
 }
 
 func (m *Service) SeedOrders(ctx context.Context, from string) error {
-	m.log.Debugf("%s: Seeding orders", from)
-
 	externalPrice, err := m.GetExternalPrice()
 	if err != nil {
 		return fmt.Errorf("failed to get external price: %w", err)
 	}
 
-	for i := 0; !m.CanPlaceOrders(); i++ {
-		price := externalPrice.Clone()
-		tif := vega.Order_TIME_IN_FORCE_GFA
+	m.log.WithFields(log.Fields{"externalPrice": externalPrice.String()}).Debugf("%s: Seeding auction orders", from)
+	orders, totalCost := m.createSeedOrders(externalPrice.Clone())
 
+	if err := m.account.EnsureBalance(ctx, m.config.SettlementAssetID, cache.General, totalCost, 1, from); err != nil {
+		return fmt.Errorf("failed to ensure balance: %w", err)
+	}
+
+	for _, order := range orders {
+		if err = m.SubmitOrder(ctx, order, from, int64(m.config.StrategyDetails.PosManagementFraction)); err != nil {
+			return fmt.Errorf("failed to create seed order: %w", err)
+		}
+
+		if m.CanPlaceOrders() {
+			m.log.Debugf("%s: Seeding orders finished", from)
+			return nil
+		}
+
+		time.Sleep(time.Second * 2)
+	}
+
+	return fmt.Errorf("seeding orders did not end the auction")
+}
+
+func (m *Service) createSeedOrders(externalPrice *num.Uint) ([]*vega.Order, *num.Uint) {
+	tif := vega.Order_TIME_IN_FORCE_GTC
+	count := m.config.StrategyDetails.SeedOrderCount
+	orders := make([]*vega.Order, count)
+	totalCost := num.NewUint(0)
+	size := m.config.StrategyDetails.SeedOrderSize
+
+	for i := 0; i < count; i++ {
 		side := vega.Side_SIDE_BUY
 		if i%2 == 0 {
 			side = vega.Side_SIDE_SELL
 		}
 
-		if i == 0 {
-			price = num.UintChain(price).Mul(num.NewUint(105)).Div(num.NewUint(100)).Get()
-			tif = vega.Order_TIME_IN_FORCE_GTC
-		} else if i == 1 {
-			price = num.UintChain(price).Mul(num.NewUint(95)).Div(num.NewUint(100)).Get()
-			tif = vega.Order_TIME_IN_FORCE_GTC
+		add := num.NewUint(uint64(math.Abs(float64(rand.Intn(100) - 50))))
+		price := num.Zero().Add(externalPrice, add)
+
+		totalCost.Add(totalCost, price.Clone().Mul(price, num.NewUint(size)))
+
+		if i > 1 {
+			tif = vega.Order_TIME_IN_FORCE_GFA
 		}
 
-		order := &vega.Order{
+		orders[i] = &vega.Order{
 			MarketId:    m.marketID,
-			Size:        m.config.StrategyDetails.SeedOrderSize,
+			Size:        size,
 			Price:       price.String(),
 			Side:        side,
 			TimeInForce: tif,
 			Type:        vega.Order_TYPE_LIMIT,
-			Reference:   "MarketCreation",
-		}
-
-		if err = m.SubmitOrder(ctx, order, from, int64(m.config.StrategyDetails.PosManagementFraction)); err != nil {
-			return fmt.Errorf("failed to create seed order: %w", err)
-		}
-
-		time.Sleep(time.Second * 2)
-
-		if i == 100 { // TODO: make this configurable
-			return fmt.Errorf("seeding orders did not end the auction")
+			Reference:   "AuctionOrder",
 		}
 	}
 
-	m.log.Debugf("%s: Seeding orders finished", from)
-	return nil
+	return orders, totalCost
 }
 
 func (m *Service) GetExternalPrice() (*num.Uint, error) {

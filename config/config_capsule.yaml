@@ -46,7 +46,6 @@ bots:
     settlementAssetID: 993ed98f4f770d91a796faab1738551193ba45c62341d20597df70fea6704ede
     strategy: normal
     strategyDetails:
-      expectedMarkPrice: 0
       auctionVolume: 100
       maxLong: 100
       maxShort: 100
