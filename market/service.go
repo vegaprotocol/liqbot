@@ -19,7 +19,6 @@ import (
 	"code.vegaprotocol.io/vega/protos/vega"
 	commandspb "code.vegaprotocol.io/vega/protos/vega/commands/v1"
 	v1 "code.vegaprotocol.io/vega/protos/vega/commands/v1"
-	oraclesv1 "code.vegaprotocol.io/vega/protos/vega/oracles/v1"
 	walletpb "code.vegaprotocol.io/vega/protos/vega/wallet/v1"
 )
 
@@ -32,6 +31,7 @@ type Service struct {
 	store         data.MarketStore
 	account       accountService
 	config        config.BotConfig
+	networkParams *types.NetworkParameters
 	log           *log.Entry
 
 	decimalPlaces uint64
@@ -73,8 +73,13 @@ func (m *Service) Init(pubKey string, pauseCh chan types.PauseSignal) error {
 	if err != nil {
 		return err
 	}
+	networkParams, err := m.node.GetAllNetworkParameters()
+	if err != nil {
+		return err
+	}
 	m.store = store
 	m.walletPubKey = pubKey
+	m.networkParams = networkParams
 	return nil
 }
 
@@ -232,8 +237,26 @@ func (m *Service) CreateMarket(ctx context.Context) error {
 }
 
 func (m *Service) sendNewMarketProposal(ctx context.Context) error {
+	proposalParams, err := m.networkParams.GetMarketProposalParams()
+	if err != nil {
+		return err
+	}
+	marketProposal := NewMarketProposal(ShortMarketProposalConfig{
+		Name:                  m.config.MarketProposalConfig.Name,
+		Title:                 m.config.MarketProposalConfig.Title,
+		Description:           m.config.MarketProposalConfig.Description,
+		InstrumentBase:        m.config.InstrumentBase,
+		InstrumentQuote:       m.config.InstrumentQuote,
+		InstrumentCode:        m.config.MarketProposalConfig.InstrumentCode,
+		DataSubmitterPubKey:   m.config.MarketProposalConfig.DataSubmitterPubKey,
+		SettlementVegaAssetId: m.config.SettlementAssetID,
+		DecimalPlaces:         *m.config.MarketProposalConfig.DecimalPlaces,
+		ExtraMetadata:         m.config.MarketProposalConfig.Metadata,
+		ClosingTime:           time.Now().Add(time.Second * 20).Add(proposalParams.MinClose),
+		EnactmentTime:         time.Now().Add(time.Second * 30).Add(proposalParams.MinClose).Add(proposalParams.MinEnact),
+	})
 	cmd := &walletpb.SubmitTransactionRequest_ProposalSubmission{
-		ProposalSubmission: m.getExampleMarketProposal(),
+		ProposalSubmission: marketProposal,
 	}
 
 	submitTxReq := &walletpb.SubmitTransactionRequest{
@@ -399,94 +422,4 @@ func (m *Service) GetExternalPrice() (*num.Uint, error) {
 	externalPrice := externalPriceResponse.Price * math.Pow(10, float64(m.decimalPlaces))
 	externalPriceNum := num.NewUint(uint64(externalPrice))
 	return externalPriceNum, nil
-}
-
-func (m *Service) getExampleMarketProposal() *v1.ProposalSubmission {
-	return &v1.ProposalSubmission{
-		Rationale: &vega.ProposalRationale{
-			Title:       "Example Market",
-			Description: "some description",
-		},
-		Reference: "ProposalReference",
-		Terms: &vega.ProposalTerms{
-			ClosingTimestamp:   secondsFromNowInSecs(15),
-			EnactmentTimestamp: secondsFromNowInSecs(15),
-			Change: &vega.ProposalTerms_NewMarket{
-				NewMarket: m.getExampleMarket(),
-			},
-		},
-	}
-}
-
-func (m *Service) getExampleMarket() *vega.NewMarket {
-	return &vega.NewMarket{
-		Changes: &vega.NewMarketConfiguration{
-			Instrument: &vega.InstrumentConfiguration{
-				Code:    fmt.Sprintf("CRYPTO:%s%s/NOV22", m.config.InstrumentBase, m.config.InstrumentQuote),
-				Name:    fmt.Sprintf("NOV 2022 %s vs %s future", m.config.InstrumentBase, m.config.InstrumentQuote),
-				Product: m.getExampleProduct(),
-			},
-			DecimalPlaces: 5,
-			Metadata:      []string{"base:" + m.config.InstrumentBase, "quote:" + m.config.InstrumentQuote, "class:fx/crypto", "monthly", "sector:crypto"},
-			RiskParameters: &vega.NewMarketConfiguration_Simple{
-				Simple: &vega.SimpleModelParams{
-					FactorLong:           0.15,
-					FactorShort:          0.25,
-					MaxMoveUp:            10,
-					MinMoveDown:          -5,
-					ProbabilityOfTrading: 0.1,
-				},
-			},
-		},
-		/*
-			TODO: is this needed?
-			LiquidityCommitment: &vega.NewMarketCommitment{
-				Fee:              fmt.Sprint(m.config.StrategyDetails.Fee),
-				CommitmentAmount: m.config.StrategyDetails.CommitmentAmount,
-				Buys:             m.config.StrategyDetails.ShorteningShape.Buys.ToVegaLiquidityOrders(),
-				Sells:            m.config.StrategyDetails.LongeningShape.Sells.ToVegaLiquidityOrders(),
-			},*/
-	}
-}
-
-func (m *Service) getExampleProduct() *vega.InstrumentConfiguration_Future {
-	return &vega.InstrumentConfiguration_Future{
-		Future: &vega.FutureProduct{
-			SettlementAsset: m.config.SettlementAssetID,
-			QuoteName:       fmt.Sprintf("%s%s", m.config.InstrumentBase, m.config.InstrumentQuote),
-			OracleSpecForSettlementPrice: &oraclesv1.OracleSpecConfiguration{
-				PubKeys: []string{"0xDEADBEEF"},
-				Filters: []*oraclesv1.Filter{
-					{
-						Key: &oraclesv1.PropertyKey{
-							Name: "prices.ETH.value",
-							Type: oraclesv1.PropertyKey_TYPE_INTEGER,
-						},
-						Conditions: []*oraclesv1.Condition{},
-					},
-				},
-			},
-			OracleSpecForTradingTermination: &oraclesv1.OracleSpecConfiguration{
-				PubKeys: []string{"0xDEADBEEF"},
-				Filters: []*oraclesv1.Filter{
-					{
-						Key: &oraclesv1.PropertyKey{
-							Name: "trading.termination",
-							Type: oraclesv1.PropertyKey_TYPE_BOOLEAN,
-						},
-						Conditions: []*oraclesv1.Condition{},
-					},
-				},
-			},
-			OracleSpecBinding: &vega.OracleSpecToFutureBinding{
-				SettlementPriceProperty:    "prices.ETH.value",
-				TradingTerminationProperty: "trading.termination",
-			},
-		},
-	}
-}
-
-// secondsFromNowInSecs : Creates a timestamp relative to the current time in seconds.
-func secondsFromNowInSecs(seconds int64) int64 {
-	return time.Now().Unix() + seconds
 }
