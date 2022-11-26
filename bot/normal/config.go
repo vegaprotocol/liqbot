@@ -8,7 +8,7 @@ import (
 
 	"code.vegaprotocol.io/liqbot/config"
 
-	"code.vegaprotocol.io/protos/vega"
+	"code.vegaprotocol.io/vega/protos/vega"
 	"github.com/hashicorp/go-multierror"
 )
 

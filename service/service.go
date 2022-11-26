@@ -17,14 +17,15 @@ import (
 
 	ppconfig "code.vegaprotocol.io/priceproxy/config"
 	ppservice "code.vegaprotocol.io/priceproxy/service"
-	store "code.vegaprotocol.io/vegawallet/wallet/store/v1"
-	"code.vegaprotocol.io/vegawallet/wallets"
+	store "code.vegaprotocol.io/vega/wallet/wallet/store/v1"
+	"code.vegaprotocol.io/vega/wallet/wallets"
 
 	"github.com/julienschmidt/httprouter"
 	log "github.com/sirupsen/logrus"
 )
 
 // Bot is the generic bot interface.
+//
 //go:generate go run github.com/golang/mock/mockgen -destination mocks/bot_mock.go -package mocks code.vegaprotocol.io/liqbot/service Bot
 type Bot interface {
 	Start() error
@@ -33,6 +34,7 @@ type Bot interface {
 }
 
 // PricingEngine is the source of price information from the price proxy.
+//
 //go:generate go run github.com/golang/mock/mockgen -destination mocks/pricingengine_mock.go -package mocks code.vegaprotocol.io/liqbot/service PricingEngine
 type PricingEngine interface {
 	GetPrice(pricecfg ppconfig.PriceConfig) (pi ppservice.PriceResponse, err error)

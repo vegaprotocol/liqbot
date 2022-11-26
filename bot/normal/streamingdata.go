@@ -6,10 +6,10 @@ import (
 
 	"code.vegaprotocol.io/liqbot/types/num"
 
-	dataapipb "code.vegaprotocol.io/protos/data-node/api/v1"
-	"code.vegaprotocol.io/protos/vega"
-	vegaapipb "code.vegaprotocol.io/protos/vega/api/v1"
-	eventspb "code.vegaprotocol.io/protos/vega/events/v1"
+	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v1"
+	"code.vegaprotocol.io/vega/protos/vega"
+	vegaapipb "code.vegaprotocol.io/vega/protos/vega/api/v1"
+	eventspb "code.vegaprotocol.io/vega/protos/vega/events/v1"
 	log "github.com/sirupsen/logrus"
 )
 
