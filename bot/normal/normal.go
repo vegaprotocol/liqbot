@@ -16,7 +16,7 @@ import (
 	ppconfig "code.vegaprotocol.io/priceproxy/config"
 	ppservice "code.vegaprotocol.io/priceproxy/service"
 	vgcrypto "code.vegaprotocol.io/shared/libs/crypto"
-	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v1"
+	dataapipbv2 "code.vegaprotocol.io/vega/protos/data-node/api/v2"
 	"code.vegaprotocol.io/vega/protos/vega"
 	vegaapipb "code.vegaprotocol.io/vega/protos/vega/api/v1"
 	commandspb "code.vegaprotocol.io/vega/protos/vega/commands/v1"
@@ -53,79 +53,12 @@ type CoreStateService interface { // Avoid using this. Use something from DataNo
 
 // TradingDataService implements the gRPC service of the same name.
 type TradingDataService interface {
-	// rpc MarketAccounts(MarketAccountsRequest) returns (MarketAccountsResponse);
-	// rpc PartyAccounts(PartyAccountsRequest) returns (PartyAccountsResponse);
-	PartyAccounts(req *dataapipb.PartyAccountsRequest) (response *dataapipb.PartyAccountsResponse, err error)
-	// rpc FeeInfrastructureAccounts(FeeInfrastructureAccountsRequest) returns (FeeInfrastructureAccountsResponse);
-	// rpc GlobalRewardPoolAccounts(GlobalRewardPoolAccountsRequest) returns (GlobalRewardPoolAccountsResponse);
-	// rpc Candles(CandlesRequest) returns (CandlesResponse);
-	MarketDataByID(req *dataapipb.MarketDataByIDRequest) (response *dataapipb.MarketDataByIDResponse, err error)
-	// rpc MarketsData(MarketsDataRequest) returns (MarketsDataResponse);
-	// rpc MarketByID(MarketByIDRequest) returns (MarketByIDResponse);
-	// rpc MarketDepth(MarketDepthRequest) returns (MarketDepthResponse);
-	Markets(req *dataapipb.MarketsRequest) (response *dataapipb.MarketsResponse, err error)
-	// rpc OrderByMarketAndID(OrderByMarketAndIDRequest) returns (OrderByMarketAndIDResponse);
-	// rpc OrderByReference(OrderByReferenceRequest) returns (OrderByReferenceResponse);
-	// rpc OrdersByMarket(OrdersByMarketRequest) returns (OrdersByMarketResponse);
-	// rpc OrdersByParty(OrdersByPartyRequest) returns (OrdersByPartyResponse);
-	// rpc OrderByID(OrderByIDRequest) returns (OrderByIDResponse);
-	// rpc OrderVersionsByID(OrderVersionsByIDRequest) returns (OrderVersionsByIDResponse);
-	// rpc MarginLevels(MarginLevelsRequest) returns (MarginLevelsResponse);
-	// rpc Parties(PartiesRequest) returns (PartiesResponse);
-	// rpc PartyByID(PartyByIDRequest) returns (PartyByIDResponse);
-	PositionsByParty(req *dataapipb.PositionsByPartyRequest) (response *dataapipb.PositionsByPartyResponse, err error)
-	// rpc LastTrade(LastTradeRequest) returns (LastTradeResponse);
-	// rpc TradesByMarket(TradesByMarketRequest) returns (TradesByMarketResponse);
-	// rpc TradesByOrder(TradesByOrderRequest) returns (TradesByOrderResponse);
-	// rpc TradesByParty(TradesByPartyRequest) returns (TradesByPartyResponse);
-	// rpc GetProposals(GetProposalsRequest) returns (GetProposalsResponse);
-	// rpc GetProposalsByParty(GetProposalsByPartyRequest) returns (GetProposalsByPartyResponse);
-	// rpc GetVotesByParty(GetVotesByPartyRequest) returns (GetVotesByPartyResponse);
-	// rpc GetNewMarketProposals(GetNewMarketProposalsRequest) returns (GetNewMarketProposalsResponse);
-	// rpc GetUpdateMarketProposals(GetUpdateMarketProposalsRequest) returns (GetUpdateMarketProposalsResponse);
-	// rpc GetNetworkParametersProposals(GetNetworkParametersProposalsRequest) returns (GetNetworkParametersProposalsResponse);
-	// rpc GetNewAssetProposals(GetNewAssetProposalsRequest) returns (GetNewAssetProposalsResponse);
-	// rpc GetProposalByID(GetProposalByIDRequest) returns (GetProposalByIDResponse);
-	// rpc GetProposalByReference(GetProposalByReferenceRequest) returns (GetProposalByReferenceResponse);
-	// rpc ObserveGovernance(ObserveGovernanceRequest) returns (stream ObserveGovernanceResponse);
-	// rpc ObservePartyProposals(ObservePartyProposalsRequest) returns (stream ObservePartyProposalsResponse);
-	// rpc ObservePartyVotes(ObservePartyVotesRequest) returns (stream ObservePartyVotesResponse);
-	// rpc ObserveProposalVotes(ObserveProposalVotesRequest) returns (stream ObserveProposalVotesResponse);
-	// rpc ObserveEventBus(stream ObserveEventBusRequest) returns (stream ObserveEventBusResponse);
-	// rpc GetNodeData(GetNodeDataRequest) returns (GetNodeDataResponse);
-	// rpc GetNodes(GetNodesRequest) returns (GetNodesResponse);
-	// rpc GetNodeByID(GetNodeByIDRequest) returns (GetNodeByIDResponse);
-	// rpc GetEpoch(GetEpochRequest) returns (GetEpochResponse);
-	// rpc GetVegaTime(GetVegaTimeRequest) returns (GetVegaTimeResponse);
-	// rpc AccountsSubscribe(AccountsSubscribeRequest) returns (stream AccountsSubscribeResponse);
-	// rpc CandlesSubscribe(CandlesSubscribeRequest) returns (stream CandlesSubscribeResponse);
-	// rpc MarginLevelsSubscribe(MarginLevelsSubscribeRequest) returns (stream MarginLevelsSubscribeResponse);
-	// rpc MarketDepthSubscribe(MarketDepthSubscribeRequest) returns (stream MarketDepthSubscribeResponse);
-	// rpc MarketDepthUpdatesSubscribe(MarketDepthUpdatesSubscribeRequest) returns (stream MarketDepthUpdatesSubscribeResponse);
-	// rpc MarketsDataSubscribe(MarketsDataSubscribeRequest) returns (stream MarketsDataSubscribeResponse);
-	// rpc OrdersSubscribe(OrdersSubscribeRequest) returns (stream OrdersSubscribeResponse);
-	PositionsSubscribe(req *dataapipb.PositionsSubscribeRequest) (client dataapipb.TradingDataService_PositionsSubscribeClient, err error)
-	// rpc TradesSubscribe(TradesSubscribeRequest) returns (stream TradesSubscribeResponse);
-	// rpc TransferResponsesSubscribe(TransferResponsesSubscribeRequest) returns (stream TransferResponsesSubscribeResponse);
-	// rpc GetNodeSignaturesAggregate(GetNodeSignaturesAggregateRequest) returns (GetNodeSignaturesAggregateResponse);
-	AssetByID(req *dataapipb.AssetByIDRequest) (response *dataapipb.AssetByIDResponse, err error)
-	// rpc Assets(AssetsRequest) returns (AssetsResponse);
-	// rpc EstimateFee(EstimateFeeRequest) returns (EstimateFeeResponse);
-	// rpc EstimateMargin(EstimateMarginRequest) returns (EstimateMarginResponse);
-	// rpc ERC20WithdrawalApproval(ERC20WithdrawalApprovalRequest) returns (ERC20WithdrawalApprovalResponse);
-	// rpc Withdrawal(WithdrawalRequest) returns (WithdrawalResponse);
-	// rpc Withdrawals(WithdrawalsRequest) returns (WithdrawalsResponse);
-	// rpc Deposit(DepositRequest) returns (DepositResponse);
-	// rpc Deposits(DepositsRequest) returns (DepositsResponse);
-	// rpc NetworkParameters(NetworkParametersRequest) returns (NetworkParametersResponse);
-	// rpc LiquidityProvisions(LiquidityProvisionsRequest) returns (LiquidityProvisionsResponse);
-	// rpc OracleSpec(OracleSpecRequest) returns (OracleSpecResponse);
-	// rpc OracleSpecs(OracleSpecsRequest) returns (OracleSpecsResponse);
-	// rpc OracleDataBySpec(OracleDataBySpecRequest) returns (OracleDataBySpecResponse);
-	// rpc GetRewardDetails(GetRewardDetailsRequest) returns (GetRewardDetailsResponse);
-	// rpc Checkpoints(CheckpointsRequest) returns (CheckpointsResponse);
-	// rpc Delegations(DelegationsRequest) returns (DelegationsResponse);
-	// rpc PartyStake(PartyStakeRequest) returns (PartyStakeResponse);
+	ListAccounts(*dataapipbv2.ListAccountsRequest) (*dataapipbv2.ListAccountsResponse, error)
+	GetLatestMarketData(*dataapipbv2.GetLatestMarketDataRequest) (*dataapipbv2.GetLatestMarketDataResponse, error)
+	ListMarkets(*dataapipbv2.ListMarketsRequest) (*dataapipbv2.ListMarketsResponse, error)
+	ListPositions(*dataapipbv2.ListPositionsRequest) (*dataapipbv2.ListPositionsResponse, error)
+	ObservePositions(*dataapipbv2.ObservePositionsRequest) (dataapipbv2.TradingDataService_ObservePositionsClient, error)
+	ListAssets(*dataapipbv2.ListAssetsRequest) (*dataapipbv2.ListAssetsResponse, error)
 }
 
 // CoreNode is a Vega Core node
@@ -237,12 +170,18 @@ func (b *Bot) Start() error {
 		"address": b.config.Location,
 	}).Debug("Connected to Vega gRPC node")
 
-	marketsResponse, err := b.node.Markets(&dataapipb.MarketsRequest{})
+	marketsResponse, err := b.node.ListMarkets(&dataapipbv2.ListMarketsRequest{})
 	if err != nil {
 		return fmt.Errorf("failed to get markets: %w", err)
 	}
+
 	b.market = nil
-	for _, mkt := range marketsResponse.Markets {
+	for _, marketEdge := range marketsResponse.Markets.Edges {
+		if marketEdge.Node == nil {
+			continue
+		}
+		mkt := marketEdge.Node
+
 		instrument := mkt.TradableInstrument.GetInstrument()
 		if instrument != nil {
 			md := instrument.Metadata
@@ -280,18 +219,21 @@ func (b *Bot) Start() error {
 	}).Info("Fetched market info")
 
 	// Use the settlementAssetID to lookup the settlement ethereum address
-	assetResponse, err := b.node.AssetByID(&dataapipb.AssetByIDRequest{Id: b.settlementAssetID})
+	// assetResponse, err := b.node.AssetByID(&dataapipb.AssetByIDRequest{Id: b.settlementAssetID})
+	assetResponse, err := b.node.ListAssets(&dataapipbv2.ListAssetsRequest{
+		AssetId: &b.settlementAssetID,
+	})
 	if err != nil {
 		return fmt.Errorf("unable to look up asset details for %s: %w", b.settlementAssetID, err)
 	}
 
-	// if assetResponse == nil || assetResponse.Assets == nil || assetResponse.Assets.Edges == nil ||
-	// 	len(assetResponse.Assets.Edges) < 1 || assetResponse.Assets.Edges[0].Node == nil ||
-	// 	assetResponse.Assets.Edges[0].Node.Details == nil || assetResponse.Assets.Edges[0].Node.Details.GetErc20() == nil {
-	// 	return fmt.Errorf("asset %s not found", b.settlementAssetID)
-	// }
-	// erc20 := assetResponse.Assets.Edges[0].Node.Details.GetErc20()
-	erc20 := assetResponse.Asset.Details.GetErc20()
+	if assetResponse == nil || assetResponse.Assets == nil || assetResponse.Assets.Edges == nil ||
+		len(assetResponse.Assets.Edges) < 1 || assetResponse.Assets.Edges[0].Node == nil ||
+		assetResponse.Assets.Edges[0].Node.Details == nil {
+		return fmt.Errorf("asset %s not found", b.settlementAssetID)
+	}
+	erc20 := assetResponse.Assets.Edges[0].Node.Details.GetErc20()
+	// erc20 := assetResponse.Asset.Details.GetErc20()
 	if erc20 != nil {
 		b.settlementAssetAddress = erc20.ContractAddress
 	} else {

@@ -5,7 +5,7 @@ go 1.19
 require (
 	code.vegaprotocol.io/priceproxy v0.0.2
 	code.vegaprotocol.io/shared v0.0.0-20220614080106-5c97205b0d92
-	code.vegaprotocol.io/vega v0.60.1-0.20221027181258-98af1292bef4
+	code.vegaprotocol.io/vega v0.62.1
 	github.com/golang/mock v1.6.1-0.20220512030613-73266f9366fc
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/holiman/uint256 v1.2.0

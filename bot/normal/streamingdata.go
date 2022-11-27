@@ -7,6 +7,7 @@ import (
 	"code.vegaprotocol.io/liqbot/types/num"
 
 	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v1"
+	v2 "code.vegaprotocol.io/vega/protos/data-node/api/v2"
 	"code.vegaprotocol.io/vega/protos/vega"
 	vegaapipb "code.vegaprotocol.io/vega/protos/vega/api/v1"
 	eventspb "code.vegaprotocol.io/vega/protos/vega/events/v1"
@@ -138,22 +139,21 @@ func (b *Bot) processEventBusData(stream vegaapipb.CoreService_ObserveEventBusCl
 }
 
 func (b *Bot) subscribePositions() error {
-	req := &dataapipb.PositionsSubscribeRequest{
-		MarketId: b.market.Id,
-		PartyId:  b.walletPubKey,
-	}
-	stream, err := b.node.PositionsSubscribe(req)
+	stream, err := b.node.ObservePositions(&v2.ObservePositionsRequest{
+		MarketId: &b.market.Id,
+		PartyId:  &b.walletPubKey,
+	})
 	if err != nil {
 		return fmt.Errorf("Failed to subscribe to positions: %w", err)
 	}
 
 	// Run in background and process messages
 	b.positionStreamLive = true
-	go b.processPositions(stream)
+	go b.processPositiosUpdates(stream)
 	return nil
 }
 
-func (b *Bot) processPositions(stream dataapipb.TradingDataService_PositionsSubscribeClient) {
+func (b *Bot) processPositiosUpdates(stream v2.TradingDataService_ObservePositionsClient) {
 	for {
 		o, err := stream.Recv()
 		if err == io.EOF {
@@ -164,8 +164,19 @@ func (b *Bot) processPositions(stream dataapipb.TradingDataService_PositionsSubs
 			log.Debugln("positions: stream closed err:", err)
 			break
 		}
-		b.openVolume = o.GetPosition().OpenVolume
+
+		// TODO: Verify if it works
+		if o.GetUpdates() != nil {
+			positions := o.GetUpdates().GetPositions()
+			if len(positions) < 1 {
+				continue
+			}
+			b.openVolume = positions[len(positions)-1].OpenVolume
+		} else {
+			continue
+		}
 	}
+
 	// Let the app know we have stopped receiving position updates
 	b.positionStreamLive = false
 }

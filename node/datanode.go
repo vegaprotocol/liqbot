@@ -10,10 +10,18 @@ import (
 	"code.vegaprotocol.io/liqbot/helpers"
 
 	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v1"
+	dataapipbv2 "code.vegaprotocol.io/vega/protos/data-node/api/v2"
 
 	vegaapipb "code.vegaprotocol.io/vega/protos/vega/api/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
+)
+
+var (
+	ErrFailedCreateTradingServiceClient = fmt.Errorf("failed to create new trading service client")
+
+	ErrMsgFailedTradingServiceRequest = "failed request to the trading service client %s service: %w"
+	ErrMsgCheckConnection             = "failed connecting to the data-base: %w"
 )
 
 // DataNode stores state for a Vega Data node.
@@ -161,28 +169,159 @@ func (n *DataNode) ObserveEventBus() (client vegaapipb.CoreService_ObserveEventB
 
 // rpc MarketAccounts(MarketAccountsRequest) returns (MarketAccountsResponse);
 
-// PartyAccounts returns accounts for the given party.
-func (n *DataNode) PartyAccounts(req *dataapipb.PartyAccountsRequest) (response *dataapipb.PartyAccountsResponse, err error) {
-	msg := "gRPC call failed (data-node): PartyAccounts: %w"
+func (n *DataNode) CheckConnection() error {
 	if n == nil {
-		err = fmt.Errorf(msg, e.ErrNil)
-		return
+		return fmt.Errorf("data-node connection is nil", e.ErrNil)
 	}
 
 	if n.conn.GetState() != connectivity.Ready {
-		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
-		return
+		return fmt.Errorf("data-node-connection is not ready: %w", e.ErrConnectionNotReady)
 	}
 
-	c := dataapipb.NewTradingDataServiceClient(n.conn)
+	return nil
+}
+
+func (n *DataNode) ListAccounts(req *dataapipbv2.ListAccountsRequest) (*dataapipbv2.ListAccountsResponse, error) {
+	if err := n.CheckConnection(); err != nil {
+		return nil, fmt.Errorf(ErrMsgCheckConnection, err)
+	}
+
+	c := dataapipbv2.NewTradingDataServiceClient(n.conn)
+	if c == nil {
+		return nil, ErrFailedCreateTradingServiceClient
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
 	defer cancel()
-
-	response, err = c.PartyAccounts(ctx, req)
+	response, err := c.ListAccounts(ctx, req)
 	if err != nil {
-		err = fmt.Errorf(msg, helpers.ErrorDetail(err))
+		return nil, fmt.Errorf(ErrMsgFailedTradingServiceRequest, "list account", err)
 	}
-	return
+
+	return response, nil
+}
+
+// func (n *DataNode) GetMarket(req *dataapipbv2.GetMarketRequest) (*dataapipbv2.GetMarketResponse, error) {
+// 	if err := n.CheckConnection(); err != nil {
+// 		return nil, fmt.Errorf(ErrMsgCheckConnection, err)
+// 	}
+
+// 	c := dataapipbv2.NewTradingDataServiceClient(n.conn)
+// 	if c == nil {
+// 		return nil, ErrFailedCreateTradingServiceClient
+// 	}
+
+// 	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
+// 	defer cancel()
+// 	response, err := c.GetMarket(ctx, req)
+// 	if err != nil {
+// 		return nil, fmt.Errorf(ErrMsgFailedTradingServiceRequest, "get market", err)
+// 	}
+
+// 	return response, nil
+// }
+
+func (n *DataNode) GetLatestMarketData(req *dataapipbv2.GetLatestMarketDataRequest) (*dataapipbv2.GetLatestMarketDataResponse, error) {
+	if err := n.CheckConnection(); err != nil {
+		return nil, fmt.Errorf(ErrMsgCheckConnection, err)
+	}
+
+	c := dataapipbv2.NewTradingDataServiceClient(n.conn)
+	if c == nil {
+		return nil, ErrFailedCreateTradingServiceClient
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
+	defer cancel()
+	response, err := c.GetLatestMarketData(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf(ErrMsgFailedTradingServiceRequest, "get market", err)
+	}
+
+	return response, nil
+}
+
+func (n *DataNode) ListMarkets(req *dataapipbv2.ListMarketsRequest) (*dataapipbv2.ListMarketsResponse, error) {
+	if err := n.CheckConnection(); err != nil {
+		return nil, fmt.Errorf(ErrMsgCheckConnection, err)
+	}
+
+	c := dataapipbv2.NewTradingDataServiceClient(n.conn)
+	if c == nil {
+		return nil, ErrFailedCreateTradingServiceClient
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
+	defer cancel()
+	response, err := c.ListMarkets(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf(ErrMsgFailedTradingServiceRequest, "list markets", err)
+	}
+
+	return response, nil
+}
+
+func (n *DataNode) ListPositions(req *dataapipbv2.ListPositionsRequest) (*dataapipbv2.ListPositionsResponse, error) {
+	if err := n.CheckConnection(); err != nil {
+		return nil, fmt.Errorf(ErrMsgCheckConnection, err)
+	}
+
+	c := dataapipbv2.NewTradingDataServiceClient(n.conn)
+	if c == nil {
+		return nil, ErrFailedCreateTradingServiceClient
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
+	defer cancel()
+	response, err := c.ListPositions(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf(ErrMsgFailedTradingServiceRequest, "list positions", err)
+	}
+
+	return response, nil
+}
+
+func (n *DataNode) ObservePositions(req *dataapipbv2.ObservePositionsRequest) (dataapipbv2.TradingDataService_ObservePositionsClient, error) {
+	if err := n.CheckConnection(); err != nil {
+		return nil, fmt.Errorf(ErrMsgCheckConnection, err)
+	}
+
+	c := dataapipbv2.NewTradingDataServiceClient(n.conn)
+	if c == nil {
+		return nil, ErrFailedCreateTradingServiceClient
+	}
+
+	client, err := c.ObservePositions(context.Background(), req)
+	if err != nil {
+		return nil, fmt.Errorf(ErrMsgFailedTradingServiceRequest, "observe positions", err)
+	}
+
+	return client, nil
+}
+
+func (n *DataNode) ListAssets(req *dataapipbv2.ListAssetsRequest) (*dataapipbv2.ListAssetsResponse, error) {
+	if err := n.CheckConnection(); err != nil {
+		return nil, fmt.Errorf(ErrMsgCheckConnection, err)
+	}
+
+	c := dataapipbv2.NewTradingDataServiceClient(n.conn)
+	if c == nil {
+		return nil, ErrFailedCreateTradingServiceClient
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
+	defer cancel()
+	response, err := c.ListAssets(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf(ErrMsgFailedTradingServiceRequest, "list assets", err)
+	}
+
+	return response, nil
+}
+
+// PartyAccounts returns accounts for the given party.
+func (n *DataNode) PartyAccounts(req *dataapipb.PartyAccountsRequest) (*dataapipb.PartyAccountsResponse, error) {
+	return nil, fmt.Errorf("PartyAccounts not implemented")
 }
 
 // rpc FeeInfrastructureAccounts(FeeInfrastructureAccountsRequest) returns (FeeInfrastructureAccountsResponse);
@@ -190,27 +329,8 @@ func (n *DataNode) PartyAccounts(req *dataapipb.PartyAccountsRequest) (response 
 // rpc Candles(CandlesRequest) returns (CandlesResponse);
 
 // MarketDataByID returns market data for the specified market.
-func (n *DataNode) MarketDataByID(req *dataapipb.MarketDataByIDRequest) (response *dataapipb.MarketDataByIDResponse, err error) {
-	msg := "gRPC call failed (data-node): MarketDataByID: %w"
-	if n == nil {
-		err = fmt.Errorf(msg, e.ErrNil)
-		return
-	}
-
-	if n.conn.GetState() != connectivity.Ready {
-		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
-		return
-	}
-
-	c := dataapipb.NewTradingDataServiceClient(n.conn)
-	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
-	defer cancel()
-
-	response, err = c.MarketDataByID(ctx, req)
-	if err != nil {
-		err = fmt.Errorf(msg, helpers.ErrorDetail(err))
-	}
-	return
+func (n *DataNode) MarketDataByID(req *dataapipb.MarketDataByIDRequest) (*dataapipb.MarketDataByIDResponse, error) {
+	return nil, fmt.Errorf("MarketDataByID not implemented")
 }
 
 // rpc MarketsData(MarketsDataRequest) returns (MarketsDataResponse);
@@ -218,27 +338,8 @@ func (n *DataNode) MarketDataByID(req *dataapipb.MarketDataByIDRequest) (respons
 // rpc MarketDepth(MarketDepthRequest) returns (MarketDepthResponse);
 
 // Markets returns all markets.
-func (n *DataNode) Markets(req *dataapipb.MarketsRequest) (response *dataapipb.MarketsResponse, err error) {
-	msg := "gRPC call failed (data-node): Markets: %w"
-	if n == nil {
-		err = fmt.Errorf(msg, e.ErrNil)
-		return
-	}
-
-	if n.conn.GetState() != connectivity.Ready {
-		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
-		return
-	}
-
-	c := dataapipb.NewTradingDataServiceClient(n.conn)
-	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
-	defer cancel()
-
-	response, err = c.Markets(ctx, req)
-	if err != nil {
-		err = fmt.Errorf(msg, helpers.ErrorDetail(err))
-	}
-	return
+func (n *DataNode) Markets(req *dataapipb.MarketsRequest) (*dataapipb.MarketsResponse, error) {
+	return nil, fmt.Errorf("Markets not implemented")
 }
 
 // rpc OrderByMarketAndID(OrderByMarketAndIDRequest) returns (OrderByMarketAndIDResponse);
@@ -252,27 +353,8 @@ func (n *DataNode) Markets(req *dataapipb.MarketsRequest) (response *dataapipb.M
 // rpc PartyByID(PartyByIDRequest) returns (PartyByIDResponse);
 
 // PositionsByParty returns positions for the given party.
-func (n *DataNode) PositionsByParty(req *dataapipb.PositionsByPartyRequest) (response *dataapipb.PositionsByPartyResponse, err error) {
-	msg := "gRPC call failed (data-node): PositionsByParty: %w"
-	if n == nil {
-		err = fmt.Errorf(msg, e.ErrNil)
-		return
-	}
-
-	if n.conn.GetState() != connectivity.Ready {
-		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
-		return
-	}
-
-	c := dataapipb.NewTradingDataServiceClient(n.conn)
-	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
-	defer cancel()
-
-	response, err = c.PositionsByParty(ctx, req)
-	if err != nil {
-		err = fmt.Errorf(msg, helpers.ErrorDetail(err))
-	}
-	return
+func (n *DataNode) PositionsByParty(req *dataapipb.PositionsByPartyRequest) (*dataapipb.PositionsByPartyResponse, error) {
+	return nil, fmt.Errorf("PositionsByParty not implemented")
 }
 
 // rpc LastTrade(LastTradeRequest) returns (LastTradeResponse);
@@ -307,26 +389,8 @@ func (n *DataNode) PositionsByParty(req *dataapipb.PositionsByPartyRequest) (res
 // rpc OrdersSubscribe(OrdersSubscribeRequest) returns (stream OrdersSubscribeResponse);
 
 // PositionsSubscribe opens a stream.
-func (n *DataNode) PositionsSubscribe(req *dataapipb.PositionsSubscribeRequest) (client dataapipb.TradingDataService_PositionsSubscribeClient, err error) {
-	msg := "gRPC call failed: PositionsSubscribe: %w"
-	if n == nil {
-		err = fmt.Errorf(msg, e.ErrNil)
-		return
-	}
-
-	if n.conn.GetState() != connectivity.Ready {
-		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
-		return
-	}
-
-	c := dataapipb.NewTradingDataServiceClient(n.conn)
-	// no timeout on streams
-	client, err = c.PositionsSubscribe(context.Background(), req)
-	if err != nil {
-		err = fmt.Errorf(msg, helpers.ErrorDetail(err))
-		return
-	}
-	return
+func (n *DataNode) PositionsSubscribe(req *dataapipb.PositionsSubscribeRequest) (dataapipb.TradingDataService_PositionsSubscribeClient, error) {
+	return nil, fmt.Errorf("PositionsSubscribe not implemented")
 }
 
 // rpc TradesSubscribe(TradesSubscribeRequest) returns (stream TradesSubscribeResponse);
@@ -334,27 +398,8 @@ func (n *DataNode) PositionsSubscribe(req *dataapipb.PositionsSubscribeRequest) 
 // rpc GetNodeSignaturesAggregate(GetNodeSignaturesAggregateRequest) returns (GetNodeSignaturesAggregateResponse);
 
 // AssetByID returns the specified asset.
-func (n *DataNode) AssetByID(req *dataapipb.AssetByIDRequest) (response *dataapipb.AssetByIDResponse, err error) {
-	msg := "gRPC call failed (data-node): ListAssets: %w"
-	if n == nil {
-		err = fmt.Errorf(msg, e.ErrNil)
-		return
-	}
-
-	if n.conn.GetState() != connectivity.Ready {
-		err = fmt.Errorf(msg, e.ErrConnectionNotReady)
-		return
-	}
-
-	c := dataapipb.NewTradingDataServiceClient(n.conn)
-	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
-	defer cancel()
-
-	response, err = c.AssetByID(ctx, req)
-	if err != nil {
-		err = fmt.Errorf(msg, helpers.ErrorDetail(err))
-	}
-	return
+func (n *DataNode) AssetByID(req *dataapipb.AssetByIDRequest) (*dataapipb.AssetByIDResponse, error) {
+	return nil, fmt.Errorf("AssetByID not implemented")
 }
 
 func (n *DataNode) Statistics(*vegaapipb.StatisticsRequest) (*vegaapipb.StatisticsResponse, error) {
