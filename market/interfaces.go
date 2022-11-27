@@ -29,6 +29,7 @@ type dataNode interface {
 }
 
 type accountService interface {
+	Balance(ctx context.Context) cache.Balance
 	EnsureBalance(ctx context.Context, assetID string, balanceFn func(cache.Balance) *num.Uint, targetAmount *num.Uint, scale uint64, from string) error
 	EnsureStake(ctx context.Context, receiverName, receiverPubKey, assetID string, targetAmount *num.Uint, from string) error
 }

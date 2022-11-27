@@ -66,18 +66,17 @@ func New(
 func (b *bot) Start() error {
 	ctx := context.Background()
 
-	walletPubKey, err := b.setupWallet(ctx)
+	var err error
+	b.walletPubKey, err = b.setupWallet(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to setup wallet: %w", err)
 	}
 
-	b.walletPubKey = walletPubKey
-
 	pauseCh := b.pauseChannel()
 
-	b.accountService.Init(walletPubKey, pauseCh)
+	b.accountService.Init(ctx, b.walletPubKey, pauseCh)
 
-	if err = b.marketService.Init(walletPubKey, pauseCh); err != nil {
+	if err = b.marketService.Init(b.walletPubKey, pauseCh); err != nil {
 		return fmt.Errorf("failed to init market service: %w", err)
 	}
 

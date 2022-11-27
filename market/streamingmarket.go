@@ -179,6 +179,7 @@ func (m *market) subscribeToOrderEvents() {
 		Type: []eventspb.BusEventType{
 			eventspb.BusEventType_BUS_EVENT_TYPE_ORDER,
 		},
+		PartyId:  m.walletPubKey,
 		MarketId: m.marketID,
 	}
 
@@ -188,8 +189,11 @@ func (m *market) subscribeToOrderEvents() {
 
 			if order.Status == vega.Order_STATUS_REJECTED {
 				m.log.WithFields(log.Fields{
-					"orderID": order.Id,
-					"reason":  order.Reason,
+					"orderID":        order.Id,
+					"order.status":   order.Status.String(),
+					"order.PartyId":  order.PartyId,
+					"order.marketID": order.MarketId,
+					"reason":         order.Reason,
 				}).Warn("Order was rejected")
 			}
 		}
@@ -198,6 +202,11 @@ func (m *market) subscribeToOrderEvents() {
 
 	m.busEvProc.ProcessEvents(context.Background(), "Order: "+m.name, req, proc)
 }
+
+// balance.general: 4389751733879200
+// order.price: 543283
+// order.size: 400
+// "OrderError: Margin Check Failed"
 
 func (m *market) subscribePositions() {
 	req := &coreapipb.ObserveEventBusRequest{

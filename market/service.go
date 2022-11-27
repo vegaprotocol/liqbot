@@ -332,10 +332,16 @@ func (m *Service) SeedOrders(ctx context.Context, from string) error {
 		return fmt.Errorf("failed to get external price: %w", err)
 	}
 
-	m.log.WithFields(log.Fields{"externalPrice": externalPrice.String()}).Debugf("%s: Seeding auction orders", from)
 	orders, totalCost := m.createSeedOrders(externalPrice.Clone())
+	m.log.WithFields(log.Fields{
+		"externalPrice":   externalPrice.String(),
+		"totalCost":       totalCost.String(),
+		"balance.General": cache.General(m.account.Balance(ctx)).String(),
+	}).Debugf("%s: Seeding auction orders", from)
 
-	if err := m.account.EnsureBalance(ctx, m.config.SettlementAssetID, cache.General, totalCost, 1, from); err != nil {
+	totalCost.Mul(totalCost, num.NewUint(uint64(math.Pow10(7))))
+
+	if err := m.account.EnsureBalance(ctx, m.config.SettlementAssetID, cache.General, totalCost, 2, from); err != nil {
 		return fmt.Errorf("failed to ensure balance: %w", err)
 	}
 
