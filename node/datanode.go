@@ -171,7 +171,7 @@ func (n *DataNode) ObserveEventBus() (client vegaapipb.CoreService_ObserveEventB
 
 func (n *DataNode) CheckConnection() error {
 	if n == nil {
-		return fmt.Errorf("data-node connection is nil", e.ErrNil)
+		return fmt.Errorf("data-node connection is nil: %w", e.ErrNil)
 	}
 
 	if n.conn.GetState() != connectivity.Ready {
