@@ -6,7 +6,6 @@ import (
 
 	"code.vegaprotocol.io/liqbot/types/num"
 
-	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v1"
 	v2 "code.vegaprotocol.io/vega/protos/data-node/api/v2"
 	"code.vegaprotocol.io/vega/protos/vega"
 	vegaapipb "code.vegaprotocol.io/vega/protos/vega/api/v1"
@@ -20,7 +19,7 @@ import (
 // * Market Data.
 func (b *Bot) subscribeToEvents() error {
 	// Party related events
-	eventBusDataReq := &dataapipb.ObserveEventBusRequest{
+	eventBusDataReq := &v2.ObserveEventBusRequest{
 		Type: []eventspb.BusEventType{
 			eventspb.BusEventType_BUS_EVENT_TYPE_ACCOUNT,
 		},

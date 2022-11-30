@@ -9,7 +9,6 @@ import (
 	e "code.vegaprotocol.io/liqbot/errors"
 	"code.vegaprotocol.io/liqbot/helpers"
 
-	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v1"
 	dataapipbv2 "code.vegaprotocol.io/vega/protos/data-node/api/v2"
 
 	vegaapipb "code.vegaprotocol.io/vega/protos/vega/api/v1"
@@ -319,89 +318,6 @@ func (n *DataNode) ListAssets(req *dataapipbv2.ListAssetsRequest) (*dataapipbv2.
 	return response, nil
 }
 
-// PartyAccounts returns accounts for the given party.
-func (n *DataNode) PartyAccounts(req *dataapipb.PartyAccountsRequest) (*dataapipb.PartyAccountsResponse, error) {
-	return nil, fmt.Errorf("PartyAccounts not implemented")
-}
-
-// rpc FeeInfrastructureAccounts(FeeInfrastructureAccountsRequest) returns (FeeInfrastructureAccountsResponse);
-// rpc GlobalRewardPoolAccounts(GlobalRewardPoolAccountsRequest) returns (GlobalRewardPoolAccountsResponse);
-// rpc Candles(CandlesRequest) returns (CandlesResponse);
-
-// MarketDataByID returns market data for the specified market.
-func (n *DataNode) MarketDataByID(req *dataapipb.MarketDataByIDRequest) (*dataapipb.MarketDataByIDResponse, error) {
-	return nil, fmt.Errorf("MarketDataByID not implemented")
-}
-
-// rpc MarketsData(MarketsDataRequest) returns (MarketsDataResponse);
-// rpc MarketByID(MarketByIDRequest) returns (MarketByIDResponse);
-// rpc MarketDepth(MarketDepthRequest) returns (MarketDepthResponse);
-
-// Markets returns all markets.
-func (n *DataNode) Markets(req *dataapipb.MarketsRequest) (*dataapipb.MarketsResponse, error) {
-	return nil, fmt.Errorf("Markets not implemented")
-}
-
-// rpc OrderByMarketAndID(OrderByMarketAndIDRequest) returns (OrderByMarketAndIDResponse);
-// rpc OrderByReference(OrderByReferenceRequest) returns (OrderByReferenceResponse);
-// rpc OrdersByMarket(OrdersByMarketRequest) returns (OrdersByMarketResponse);
-// rpc OrdersByParty(OrdersByPartyRequest) returns (OrdersByPartyResponse);
-// rpc OrderByID(OrderByIDRequest) returns (OrderByIDResponse);
-// rpc OrderVersionsByID(OrderVersionsByIDRequest) returns (OrderVersionsByIDResponse);
-// rpc MarginLevels(MarginLevelsRequest) returns (MarginLevelsResponse);
-// rpc Parties(PartiesRequest) returns (PartiesResponse);
-// rpc PartyByID(PartyByIDRequest) returns (PartyByIDResponse);
-
-// PositionsByParty returns positions for the given party.
-func (n *DataNode) PositionsByParty(req *dataapipb.PositionsByPartyRequest) (*dataapipb.PositionsByPartyResponse, error) {
-	return nil, fmt.Errorf("PositionsByParty not implemented")
-}
-
-// rpc LastTrade(LastTradeRequest) returns (LastTradeResponse);
-// rpc TradesByMarket(TradesByMarketRequest) returns (TradesByMarketResponse);
-// rpc TradesByOrder(TradesByOrderRequest) returns (TradesByOrderResponse);
-// rpc TradesByParty(TradesByPartyRequest) returns (TradesByPartyResponse);
-// rpc GetProposals(GetProposalsRequest) returns (GetProposalsResponse);
-// rpc GetProposalsByParty(GetProposalsByPartyRequest) returns (GetProposalsByPartyResponse);
-// rpc GetVotesByParty(GetVotesByPartyRequest) returns (GetVotesByPartyResponse);
-// rpc GetNewMarketProposals(GetNewMarketProposalsRequest) returns (GetNewMarketProposalsResponse);
-// rpc GetUpdateMarketProposals(GetUpdateMarketProposalsRequest) returns (GetUpdateMarketProposalsResponse);
-// rpc GetNetworkParametersProposals(GetNetworkParametersProposalsRequest) returns (GetNetworkParametersProposalsResponse);
-// rpc GetNewAssetProposals(GetNewAssetProposalsRequest) returns (GetNewAssetProposalsResponse);
-// rpc GetProposalByID(GetProposalByIDRequest) returns (GetProposalByIDResponse);
-// rpc GetProposalByReference(GetProposalByReferenceRequest) returns (GetProposalByReferenceResponse);
-// rpc ObserveGovernance(ObserveGovernanceRequest) returns (stream ObserveGovernanceResponse);
-// rpc ObservePartyProposals(ObservePartyProposalsRequest) returns (stream ObservePartyProposalsResponse);
-// rpc ObservePartyVotes(ObservePartyVotesRequest) returns (stream ObservePartyVotesResponse);
-// rpc ObserveProposalVotes(ObserveProposalVotesRequest) returns (stream ObserveProposalVotesResponse);
-// rpc ObserveEventBus(stream ObserveEventBusRequest) returns (stream ObserveEventBusResponse);
-// rpc GetNodeData(GetNodeDataRequest) returns (GetNodeDataResponse);
-// rpc GetNodes(GetNodesRequest) returns (GetNodesResponse);
-// rpc GetNodeByID(GetNodeByIDRequest) returns (GetNodeByIDResponse);
-// rpc GetEpoch(GetEpochRequest) returns (GetEpochResponse);
-// rpc GetVegaTime(GetVegaTimeRequest) returns (GetVegaTimeResponse);
-// rpc AccountsSubscribe(AccountsSubscribeRequest) returns (stream AccountsSubscribeResponse);
-// rpc CandlesSubscribe(CandlesSubscribeRequest) returns (stream CandlesSubscribeResponse);
-// rpc MarginLevelsSubscribe(MarginLevelsSubscribeRequest) returns (stream MarginLevelsSubscribeResponse);
-// rpc MarketDepthSubscribe(MarketDepthSubscribeRequest) returns (stream MarketDepthSubscribeResponse);
-// rpc MarketDepthUpdatesSubscribe(MarketDepthUpdatesSubscribeRequest) returns (stream MarketDepthUpdatesSubscribeResponse);
-// rpc MarketsDataSubscribe(MarketsDataSubscribeRequest) returns (stream MarketsDataSubscribeResponse);
-// rpc OrdersSubscribe(OrdersSubscribeRequest) returns (stream OrdersSubscribeResponse);
-
-// PositionsSubscribe opens a stream.
-func (n *DataNode) PositionsSubscribe(req *dataapipb.PositionsSubscribeRequest) (dataapipb.TradingDataService_PositionsSubscribeClient, error) {
-	return nil, fmt.Errorf("PositionsSubscribe not implemented")
-}
-
-// rpc TradesSubscribe(TradesSubscribeRequest) returns (stream TradesSubscribeResponse);
-// rpc TransferResponsesSubscribe(TransferResponsesSubscribeRequest) returns (stream TransferResponsesSubscribeResponse);
-// rpc GetNodeSignaturesAggregate(GetNodeSignaturesAggregateRequest) returns (GetNodeSignaturesAggregateResponse);
-
-// AssetByID returns the specified asset.
-func (n *DataNode) AssetByID(req *dataapipb.AssetByIDRequest) (*dataapipb.AssetByIDResponse, error) {
-	return nil, fmt.Errorf("AssetByID not implemented")
-}
-
 func (n *DataNode) Statistics(*vegaapipb.StatisticsRequest) (*vegaapipb.StatisticsResponse, error) {
 	if n == nil {
 		return nil, fmt.Errorf("data node instance is nil: %w", e.ErrNil)
@@ -422,21 +338,3 @@ func (n *DataNode) Statistics(*vegaapipb.StatisticsRequest) (*vegaapipb.Statisti
 
 	return response, nil
 }
-
-// rpc Assets(AssetsRequest) returns (AssetsResponse);
-// rpc EstimateFee(EstimateFeeRequest) returns (EstimateFeeResponse);
-// rpc EstimateMargin(EstimateMarginRequest) returns (EstimateMarginResponse);
-// rpc ERC20WithdrawalApproval(ERC20WithdrawalApprovalRequest) returns (ERC20WithdrawalApprovalResponse);
-// rpc Withdrawal(WithdrawalRequest) returns (WithdrawalResponse);
-// rpc Withdrawals(WithdrawalsRequest) returns (WithdrawalsResponse);
-// rpc Deposit(DepositRequest) returns (DepositResponse);
-// rpc Deposits(DepositsRequest) returns (DepositsResponse);
-// rpc NetworkParameters(NetworkParametersRequest) returns (NetworkParametersResponse);
-// rpc LiquidityProvisions(LiquidityProvisionsRequest) returns (LiquidityProvisionsResponse);
-// rpc OracleSpec(OracleSpecRequest) returns (OracleSpecResponse);
-// rpc OracleSpecs(OracleSpecsRequest) returns (OracleSpecsResponse);
-// rpc OracleDataBySpec(OracleDataBySpecRequest) returns (OracleDataBySpecResponse);
-// rpc GetRewardDetails(GetRewardDetailsRequest) returns (GetRewardDetailsResponse);
-// rpc Checkpoints(CheckpointsRequest) returns (CheckpointsResponse);
-// rpc Delegations(DelegationsRequest) returns (DelegationsResponse);
-// rpc PartyStake(PartyStakeRequest) returns (PartyStakeResponse);
