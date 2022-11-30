@@ -159,6 +159,7 @@ func (i *Int) Sub(a *Int) *Int {
 }
 
 // AddSum adds all of the parameters to i
+// nolint:dupword
 // i = i + a + b + c.
 func (i *Int) AddSum(vals ...*Int) *Int {
 	for _, x := range vals {
@@ -168,6 +169,7 @@ func (i *Int) AddSum(vals ...*Int) *Int {
 }
 
 // SubSum subtracts all of the parameters from i
+// nolint:dupword
 // i = i - a - b - c.
 func (i *Int) SubSum(vals ...*Int) *Int {
 	for _, x := range vals {

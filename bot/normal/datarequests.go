@@ -68,7 +68,6 @@ func (b *Bot) getAccount(typ vega.AccountType) (*num.Uint, error) {
 			AccountTypes: []vega.AccountType{typ},
 		},
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +121,6 @@ func (b *Bot) getPositions() ([]*vega.Position, error) {
 		PartyId:  b.walletPubKey,
 		MarketId: b.market.Id,
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +143,6 @@ func (b *Bot) getMarketData() error {
 	response, err := b.node.GetLatestMarketData(&dataapipbv2.GetLatestMarketDataRequest{
 		MarketId: b.market.Id,
 	})
-
 	if err != nil {
 		return fmt.Errorf("failed to get market data (ID:%s): %w", b.market.Id, err)
 	}

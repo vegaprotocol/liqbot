@@ -62,6 +62,7 @@ disable = [
     "ifshort",
     "predeclared",
     "nolintlint",
+    "nonamedreturns",
 ]
 
 [[issues.exclude-rules]]

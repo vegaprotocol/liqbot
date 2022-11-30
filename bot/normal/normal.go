@@ -480,7 +480,7 @@ func (b *Bot) signSubmitTx(
 		return fmt.Errorf("failed to get statistics for vega node: %w", err)
 	}
 	if statistics.Statistics == nil {
-		return fmt.Errorf("empty reponse returned for vega node statistics")
+		return fmt.Errorf("empty response returned for vega node statistics")
 	}
 
 	signedTx, err := b.walletServer.SignTx(b.config.Name, submitTxReq, blockData.Height, statistics.Statistics.ChainId)
