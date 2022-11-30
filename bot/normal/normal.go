@@ -507,7 +507,7 @@ func (b *Bot) signSubmitTx(
 		return fmt.Errorf(msg, fmt.Errorf("failed to submit signed tx: %w", err))
 	}
 	if !submitResponse.Success {
-		return fmt.Errorf(msg, errors.New("success=false"))
+		return fmt.Errorf(msg, fmt.Errorf("success=false, thash: '%s', log: '%s', data: '%s", submitResponse.TxHash, submitResponse.Log, submitResponse.Data))
 	}
 	return nil
 }
