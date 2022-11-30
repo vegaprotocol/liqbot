@@ -6,7 +6,7 @@ import (
 
 	"code.vegaprotocol.io/liqbot/types/num"
 
-	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v1"
+	dataapipbv2 "code.vegaprotocol.io/vega/protos/data-node/api/v2"
 	"code.vegaprotocol.io/vega/protos/vega"
 	log "github.com/sirupsen/logrus"
 )
@@ -41,7 +41,7 @@ func (b *Bot) lookupInitialValues() error {
 	}
 
 	// If we have not traded yet then we won't have a position
-	if positions == nil {
+	if len(positions) == 0 {
 		b.openVolume = 0
 	} else {
 		if len(positions) != 1 {
@@ -61,26 +61,27 @@ func convertUint256(valueStr string) (value *num.Uint, err error) {
 }
 
 func (b *Bot) getAccount(typ vega.AccountType) (*num.Uint, error) {
-	response, err := b.node.PartyAccounts(&dataapipb.PartyAccountsRequest{
-		// MarketId: general account is not per market
-		PartyId: b.walletPubKey,
-		Asset:   b.settlementAssetID,
-		Type:    typ,
+	response, err := b.node.ListAccounts(&dataapipbv2.ListAccountsRequest{
+		Filter: &dataapipbv2.AccountFilter{
+			PartyIds:     []string{b.walletPubKey},
+			AssetId:      b.settlementAssetID,
+			AccountTypes: []vega.AccountType{typ},
+		},
 	})
 	if err != nil {
 		return nil, err
 	}
-	if len(response.Accounts) == 0 {
+	if len(response.Accounts.Edges) == 0 || response.Accounts.Edges[0].Account == nil {
 		b.log.WithFields(log.Fields{
 			"type": typ,
 		}).Debug("zero accounts for party")
 		return num.Zero(), nil
 	}
-	if len(response.Accounts) > 1 {
-		return nil, fmt.Errorf("too many accounts for party: %d", len(response.Accounts))
+	if len(response.Accounts.Edges) > 1 {
+		return nil, fmt.Errorf("too many accounts for party: %d", len(response.Accounts.Edges))
 	}
 
-	return convertUint256(response.Accounts[0].Balance)
+	return convertUint256(response.Accounts.Edges[0].Account.Balance)
 }
 
 // getAccountGeneral get this bot's general account balance.
@@ -116,19 +117,30 @@ func (b *Bot) getAccountBond() error {
 
 // getPositions get this bot's positions.
 func (b *Bot) getPositions() ([]*vega.Position, error) {
-	response, err := b.node.PositionsByParty(&dataapipb.PositionsByPartyRequest{
+	response, err := b.node.ListPositions(&dataapipbv2.ListPositionsRequest{
 		PartyId:  b.walletPubKey,
 		MarketId: b.market.Id,
 	})
 	if err != nil {
 		return nil, err
 	}
-	return response.Positions, nil
+
+	result := []*vega.Position{}
+	for _, partyEdge := range response.Positions.Edges {
+		if partyEdge.Node == nil {
+			continue
+		}
+
+		result = append(result, partyEdge.Node)
+	}
+
+	return result, nil
 }
 
 // getMarketData gets the latest info about the market.
 func (b *Bot) getMarketData() error {
-	response, err := b.node.MarketDataByID(&dataapipb.MarketDataByIDRequest{
+	// TODO: Add support for pages
+	response, err := b.node.GetLatestMarketData(&dataapipbv2.GetLatestMarketDataRequest{
 		MarketId: b.market.Id,
 	})
 	if err != nil {
