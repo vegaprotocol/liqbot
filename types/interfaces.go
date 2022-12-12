@@ -3,6 +3,7 @@ package types
 import (
 	ppconfig "code.vegaprotocol.io/priceproxy/config"
 	ppservice "code.vegaprotocol.io/priceproxy/service"
+	"code.vegaprotocol.io/shared/libs/types"
 )
 
 // Bot is the generic bot interface.
@@ -12,6 +13,7 @@ type Bot interface {
 	Start() error
 	Stop()
 	GetTraderDetails() string
+	PauseChannel() chan types.PauseSignal
 }
 
 // PricingEngine is the source of price information from the price proxy.

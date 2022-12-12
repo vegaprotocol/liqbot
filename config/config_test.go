@@ -7,7 +7,10 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"code.vegaprotocol.io/liqbot/config"
+	tconfig "code.vegaprotocol.io/shared/libs/erc20/config"
 	"code.vegaprotocol.io/shared/libs/errors"
+	"code.vegaprotocol.io/shared/libs/wallet"
+	wconfig "code.vegaprotocol.io/shared/libs/whale/config"
 )
 
 func TestCheckConfig(t *testing.T) {
@@ -24,15 +27,15 @@ func TestCheckConfig(t *testing.T) {
 	err = cfg.CheckConfig()
 	assert.True(t, strings.HasPrefix(err.Error(), errors.ErrMissingEmptyConfigSection.Error()))
 
-	cfg.Wallet = &config.WalletConfig{}
+	cfg.Wallet = &wallet.Config{}
 	err = cfg.CheckConfig()
 	assert.True(t, strings.HasPrefix(err.Error(), errors.ErrMissingEmptyConfigSection.Error()))
 
-	cfg.Whale = &config.WhaleConfig{}
+	cfg.Whale = &wconfig.WhaleConfig{}
 	err = cfg.CheckConfig()
 	assert.True(t, strings.HasPrefix(err.Error(), errors.ErrMissingEmptyConfigSection.Error()))
 
-	cfg.Token = &config.TokenConfig{}
+	cfg.Token = &tconfig.TokenConfig{}
 	err = cfg.CheckConfig()
 	assert.True(t, strings.HasPrefix(err.Error(), errors.ErrMissingEmptyConfigSection.Error()))
 

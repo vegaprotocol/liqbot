@@ -10,12 +10,10 @@ import (
 
 	"code.vegaprotocol.io/liqbot/config"
 	"code.vegaprotocol.io/shared/libs/types"
-	wtypes "code.vegaprotocol.io/shared/libs/wallet/types"
 )
 
 // bot represents one Normal liquidity bot.
 type bot struct {
-	walletClient WalletClient
 	marketService
 	accountService
 
@@ -26,6 +24,7 @@ type bot struct {
 	stopPriceSteer  chan bool
 	pausePosMgmt    chan struct{}
 	pausePriceSteer chan struct{}
+	pauseChannel    chan types.PauseSignal
 
 	walletPubKey      string
 	marketID          string
@@ -40,9 +39,9 @@ type bot struct {
 func New(
 	botConf config.BotConfig,
 	vegaAssetID string,
-	wc WalletClient,
 	accountService accountService,
 	marketService marketService,
+	pauseChannel chan types.PauseSignal,
 ) *bot {
 	return &bot{
 		config:            botConf,
@@ -58,7 +57,7 @@ func New(
 		pausePriceSteer: make(chan struct{}),
 		accountService:  accountService,
 		marketService:   marketService,
-		walletClient:    wc,
+		pauseChannel:    pauseChannel,
 	}
 }
 
@@ -66,19 +65,11 @@ func New(
 func (b *bot) Start() error {
 	ctx := context.Background()
 
-	var err error
-	b.walletPubKey, err = b.setupWallet(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to setup wallet: %w", err)
-	}
-
-	pauseCh := b.pauseChannel()
-
-	b.accountService.Init(ctx, b.walletPubKey, pauseCh)
-
-	if err = b.marketService.Init(b.walletPubKey, pauseCh); err != nil {
-		return fmt.Errorf("failed to init market service: %w", err)
-	}
+	go func() {
+		for p := range b.pauseChannel {
+			b.Pause(p)
+		}
+	}()
 
 	market, err := b.SetupMarket(ctx)
 	if err != nil {
@@ -87,10 +78,6 @@ func (b *bot) Start() error {
 
 	b.marketID = market.Id
 	b.decimalPlaces = market.DecimalPlaces
-
-	if err = b.marketService.Start(ctx, market.Id); err != nil {
-		return fmt.Errorf("failed to start market service: %w", err)
-	}
 
 	b.log.WithFields(log.Fields{
 		"id":                b.marketID,
@@ -114,14 +101,8 @@ func (b *bot) Start() error {
 	return nil
 }
 
-func (b *bot) pauseChannel() chan types.PauseSignal {
-	in := make(chan types.PauseSignal)
-	go func() {
-		for p := range in {
-			b.Pause(p)
-		}
-	}()
-	return in
+func (b *bot) PauseChannel() chan types.PauseSignal {
+	return b.pauseChannel
 }
 
 // Pause pauses the liquidity bot goroutine(s).
@@ -172,45 +153,4 @@ func (b *bot) GetTraderDetails() string {
 		"settlementVegaAssetID": b.settlementAssetID,
 	}, "", "  ")
 	return string(jsn)
-}
-
-func (b *bot) setupWallet(ctx context.Context) (string, error) {
-	walletPassphrase := "123"
-
-	if err := b.walletClient.LoginWallet(ctx, b.config.Name, walletPassphrase); err != nil {
-		if err.Error() == `{"error":"wallet does not exist"}` {
-			mnemonic, err := b.walletClient.CreateWallet(ctx, b.config.Name, walletPassphrase)
-			if err != nil {
-				return "", fmt.Errorf("failed to create wallet: %w", err)
-			}
-			b.log.WithFields(log.Fields{"mnemonic": mnemonic}).Info("Created and logged into wallet")
-		} else {
-			return "", fmt.Errorf("failed to log into wallet: %w", err)
-		}
-	}
-
-	b.log.Info("Logged into wallet")
-
-	publicKeys, err := b.walletClient.ListPublicKeys(ctx)
-	if err != nil {
-		return "", fmt.Errorf("failed to list public keys: %w", err)
-	}
-
-	var walletPubKey string
-
-	if len(publicKeys) == 0 {
-		key, err := b.walletClient.GenerateKeyPair(ctx, walletPassphrase, []wtypes.Meta{})
-		if err != nil {
-			return "", fmt.Errorf("failed to generate keypair: %w", err)
-		}
-		walletPubKey = key.Pub
-		b.log.WithFields(log.Fields{"pubKey": walletPubKey}).Debug("Created keypair")
-	} else {
-		walletPubKey = publicKeys[0]
-		b.log.WithFields(log.Fields{"pubKey": walletPubKey}).Debug("Using existing keypair")
-	}
-
-	b.log = b.log.WithFields(log.Fields{"pubkey": walletPubKey})
-
-	return walletPubKey, nil
 }

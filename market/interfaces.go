@@ -5,18 +5,17 @@ import (
 
 	"code.vegaprotocol.io/shared/libs/cache"
 	"code.vegaprotocol.io/shared/libs/num"
-	"code.vegaprotocol.io/shared/libs/types"
 	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v2"
 	"code.vegaprotocol.io/vega/protos/vega"
 	vegaapipb "code.vegaprotocol.io/vega/protos/vega/api/v1"
 )
 
-// TODO: this could be improved: pubKey could be specified in config.
 type marketStream interface {
-	Init(pubKey string, pauseCh chan types.PauseSignal) (marketStore, error)
+	Store() marketStore
 	Subscribe(ctx context.Context, marketID string) error
 	waitForProposalID() (string, error)
 	waitForProposalEnacted(pID string) error
+	waitForLiquidityProvision(ctx context.Context, ref string) error
 }
 
 type dataNode interface {
@@ -30,7 +29,7 @@ type dataNode interface {
 
 type accountService interface {
 	Balance(ctx context.Context) cache.Balance
-	EnsureBalance(ctx context.Context, assetID string, balanceFn func(cache.Balance) *num.Uint, targetAmount *num.Uint, scale uint64, from string) error
+	EnsureBalance(ctx context.Context, assetID string, balanceFn func(cache.Balance) *num.Uint, targetAmount *num.Uint, dp, scale uint64, from string) error
 	EnsureStake(ctx context.Context, receiverName, receiverPubKey, assetID string, targetAmount *num.Uint, from string) error
 }
 

@@ -11,6 +11,7 @@ import (
 
 	tconfig "code.vegaprotocol.io/shared/libs/erc20/config"
 	"code.vegaprotocol.io/shared/libs/errors"
+	"code.vegaprotocol.io/shared/libs/wallet"
 	wconfig "code.vegaprotocol.io/shared/libs/whale/config"
 )
 
@@ -21,7 +22,7 @@ type Config struct {
 	CallTimeoutMills int                  `yaml:"callTimeoutMills"`
 	VegaAssetID      string               `yaml:"vegaAssetID"`
 	Pricing          *PricingConfig       `yaml:"pricing"`
-	Wallet           *WalletConfig        `yaml:"wallet"`
+	Wallet           *wallet.Config       `yaml:"wallet"`
 	Whale            *wconfig.WhaleConfig `yaml:"whale"`
 	Token            *tconfig.TokenConfig `yaml:"token"`
 	Locations        []string             `yaml:"locations"`
@@ -121,24 +122,6 @@ type PricingConfig struct {
 	Address *url.URL `yaml:"address"`
 }
 
-type WhaleConfig struct {
-	WalletPubKey     string            `yaml:"walletPubKey"`
-	WalletName       string            `yaml:"walletName"`
-	WalletPassphrase string            `yaml:"walletPassphrase"`
-	OwnerPrivateKeys map[string]string `yaml:"ownerPrivateKeys"`
-	FaucetURL        string            `yaml:"faucetURL"`
-	FaucetRateLimit  time.Duration     `yaml:"faucetRateLimit"`
-	SyncTimeoutSec   int               `yaml:"syncTimeoutSec"`
-	SlackConfig      SlackConfig       `yaml:"slack"`
-}
-
-type SlackConfig struct {
-	AppToken  string `yaml:"appToken"`
-	BotToken  string `yaml:"botToken"`
-	ChannelID string `yaml:"channelID"`
-	Enabled   bool   `yaml:"enabled"`
-}
-
 // BotConfig specifies the configuration parameters for one bot, which talks to one market on one
 // Vega node.
 type BotConfig struct {
@@ -160,16 +143,4 @@ type BotConfig struct {
 
 	// StrategyDetails contains the parameters needed by the strategy algorithm.
 	StrategyDetails Strategy `yaml:"strategyDetails"`
-}
-
-// WalletConfig describes the settings for running an internal wallet server.
-type WalletConfig struct {
-	URL string `yaml:"url"`
-}
-
-type TokenConfig struct {
-	EthereumAPIAddress   string `yaml:"ethereumAPIAddress"`
-	Erc20BridgeAddress   string `yaml:"erc20BridgeAddress"`
-	StakingBridgeAddress string `yaml:"stakingBridgeAddress"`
-	SyncTimeoutSec       int    `yaml:"syncTimeoutSec"`
 }

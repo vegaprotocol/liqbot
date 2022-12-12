@@ -17,17 +17,6 @@ import (
 func (b *bot) runPriceSteering(ctx context.Context) {
 	defer b.log.Warning("PriceSteering: Stopped")
 
-	if !b.CanPlaceOrders() {
-		b.log.WithFields(log.Fields{
-			"PriceSteerOrderScale": b.config.StrategyDetails.PriceSteerOrderScale,
-		}).Debug("PriceSteering: Cannot place orders")
-
-		if err := b.SeedOrders(ctx, "PriceSteering"); err != nil {
-			b.log.WithFields(log.Fields{"error": err.Error()}).Error("PriceSteering: Failed to seed orders")
-			return
-		}
-	}
-
 	sleepTime := 1000.0 / b.config.StrategyDetails.MarketPriceSteeringRatePerSecond
 
 	for {
@@ -109,7 +98,7 @@ func (b *bot) steerPrice(ctx context.Context) error {
 
 	expectedBalance := price.Mul(price, size)
 
-	if err := b.EnsureBalance(ctx, b.config.SettlementAssetID, cache.General, expectedBalance, 10, "PriceSteering"); err != nil {
+	if err := b.EnsureBalance(ctx, b.config.SettlementAssetID, cache.General, expectedBalance, b.decimalPlaces, 10, "PriceSteering"); err != nil {
 		return fmt.Errorf("failed to ensure balance: %w", err)
 	}
 
@@ -139,7 +128,7 @@ func (b *bot) getRealisticOrderDetails(externalPrice *num.Uint) (*num.Uint, *num
 		return nil, nil, fmt.Errorf("method for generating price distributions not recognised")
 	}
 	// TODO: size?
-	size := mulFrac(num.NewUint(1), b.config.StrategyDetails.PriceSteerOrderScale, 15)
+	size := num.MulFrac(num.NewUint(1), b.config.StrategyDetails.PriceSteerOrderScale, 15)
 
 	return price, size, nil
 }

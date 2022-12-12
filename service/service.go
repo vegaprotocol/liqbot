@@ -75,7 +75,7 @@ func NewService(config config.Config) (*Service, error) {
 
 	whaleService, err := getWhale(config)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create whale service: %w", err)
 	}
 
 	if err = s.initBots(pricingEngine, whaleService); err != nil {
@@ -135,41 +135,32 @@ func getWhale(config config.Config) (*whale.Service, error) {
 		config.CallTimeoutMills,
 	)
 
+	ctx := context.Background()
+	log.Info("Attempting to connect to a node...")
+	dataNode.MustDialConnection(ctx)
+	log.Info("Connected to a node")
+
 	faucetURL, err := url.Parse(config.Whale.FaucetURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse faucet URL: %w", err)
 	}
 
 	faucetService := faucet.New(*faucetURL)
-	whaleWallet := wallet.NewClient(config.Wallet.URL)
+	whaleWallet, err := wallet.NewWalletV2Service(config.Whale.Wallet)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create wallet: %w", err)
+	}
 
 	tokenService, err := erc20.NewService(config.Token)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup token service: %w", err)
 	}
 
-	provider := whale.NewProvider(
-		dataNode,
-		tokenService,
-		faucetService,
-		config.Whale,
-	)
-
-	accountService := account.NewAccountService("whale", dataNode, "", provider)
-
-	whaleService := whale.NewService(
-		dataNode,
-		whaleWallet,
-		accountService,
-		faucetService,
-		config.Whale,
-	)
-
-	if err = whaleService.Start(context.Background()); err != nil {
-		return nil, fmt.Errorf("failed to start whale service: %w", err)
-	}
-
-	return whaleService, nil
+	streamWhale := account.NewStream("provider-whale", dataNode, nil)
+	provider := whale.NewProvider(dataNode, tokenService, faucetService, streamWhale, config.Whale)
+	pubKey := whaleWallet.PublicKey()
+	accountService := account.NewService("whale", pubKey, "", streamWhale, provider)
+	return whale.NewService(dataNode, whaleWallet, accountService, streamWhale, faucetService, config.Whale), nil
 }
 
 func (s *Service) addRoutes() {

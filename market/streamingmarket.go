@@ -19,31 +19,28 @@ import (
 )
 
 type market struct {
-	name         string
-	log          *log.Entry
-	node         dataNode
-	walletPubKey string
-	marketID     string
-	store        marketStore
-	busEvProc    busEventer
+	name      string
+	log       *log.Entry
+	node      dataNode
+	pubKey    string
+	marketID  string
+	store     marketStore
+	busEvProc busEventer
 }
 
-func NewMarketStream(name string, node dataNode) *market {
+func NewStream(name, pubKey string, node dataNode, pauseCh chan types.PauseSignal) *market {
 	return &market{
-		name: name,
-		node: node,
-		log:  log.WithField("component", "MarketStreamer"),
+		name:      name,
+		node:      node,
+		pubKey:    pubKey,
+		store:     cache.NewMarketStore(),
+		log:       log.WithField("component", "MarketStreamer"),
+		busEvProc: sevents.NewBusEventProcessor(node, sevents.WithPauseCh(pauseCh)),
 	}
 }
 
-func (m *market) Init(pubKey string, pauseCh chan types.PauseSignal) (marketStore, error) {
-	store := cache.NewMarketStore()
-
-	m.walletPubKey = pubKey
-	m.store = store
-	m.busEvProc = sevents.NewBusEventProcessor(m.node, sevents.WithPauseCh(pauseCh))
-
-	return store, nil
+func (m *market) Store() marketStore {
+	return m.store
 }
 
 func (m *market) Subscribe(ctx context.Context, marketID string) error {
@@ -64,6 +61,47 @@ func (m *market) Subscribe(ctx context.Context, marketID string) error {
 	return nil
 }
 
+func (m *market) waitForLiquidityProvision(ctx context.Context, ref string) error {
+	req := &coreapipb.ObserveEventBusRequest{
+		Type:     []eventspb.BusEventType{eventspb.BusEventType_BUS_EVENT_TYPE_LIQUIDITY_PROVISION},
+		MarketId: m.marketID,
+	}
+
+	proc := func(rsp *coreapipb.ObserveEventBusResponse) (bool, error) {
+		for _, event := range rsp.GetEvents() {
+			lp := event.GetLiquidityProvision()
+
+			if lp.Reference != ref {
+				continue
+			}
+
+			switch lp.Status {
+			case vega.LiquidityProvision_STATUS_ACTIVE, vega.LiquidityProvision_STATUS_PENDING:
+				m.log.WithFields(
+					log.Fields{
+						"liquidityProvisionID":  lp.Id,
+						"liquidityProvisionRef": lp.Reference,
+					}).Debug("liquidity provision is in: %s state", lp.Status.String())
+				return true, nil
+			default:
+				return true, fmt.Errorf("failed to process liquidity provision: %s, %s, %s", lp.Id, lp.Reference, lp.Status.String())
+			}
+		}
+		return false, nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*450)
+	defer cancel()
+
+	errCh := m.busEvProc.ProcessEvents(ctx, "Orders: "+m.name, req, proc)
+	select {
+	case err := <-errCh:
+		return err
+	case <-ctx.Done():
+		return fmt.Errorf("timed out waiting for order acceptance")
+	}
+}
+
 func (m *market) waitForProposalID() (string, error) {
 	req := &coreapipb.ObserveEventBusRequest{
 		Type: []eventspb.BusEventType{eventspb.BusEventType_BUS_EVENT_TYPE_PROPOSAL},
@@ -75,7 +113,7 @@ func (m *market) waitForProposalID() (string, error) {
 		for _, event := range rsp.GetEvents() {
 			proposal := event.GetProposal()
 
-			if proposal.PartyId != m.walletPubKey {
+			if proposal.PartyId != m.pubKey {
 				continue
 			}
 
@@ -179,7 +217,7 @@ func (m *market) subscribeToOrderEvents() {
 		Type: []eventspb.BusEventType{
 			eventspb.BusEventType_BUS_EVENT_TYPE_ORDER,
 		},
-		PartyId:  m.walletPubKey,
+		PartyId:  m.pubKey,
 		MarketId: m.marketID,
 	}
 
@@ -188,13 +226,15 @@ func (m *market) subscribeToOrderEvents() {
 			order := event.GetOrder()
 
 			if order.Status == vega.Order_STATUS_REJECTED {
-				m.log.WithFields(log.Fields{
-					"orderID":        order.Id,
-					"order.status":   order.Status.String(),
-					"order.PartyId":  order.PartyId,
-					"order.marketID": order.MarketId,
-					"reason":         order.Reason,
-				}).Warn("Order was rejected")
+				fields := log.Fields{
+					"orderID":         order.Id,
+					"order.status":    order.Status.String(),
+					"order.PartyId":   order.PartyId,
+					"order.marketID":  order.MarketId,
+					"order.reference": order.Reference,
+					"order.reason":    order.Reason,
+				}
+				m.log.WithFields(fields).Warn("Order was rejected")
 			}
 		}
 		return false, nil
@@ -203,17 +243,12 @@ func (m *market) subscribeToOrderEvents() {
 	m.busEvProc.ProcessEvents(context.Background(), "Order: "+m.name, req, proc)
 }
 
-// balance.general: 4389751733879200
-// order.price: 543283
-// order.size: 400
-// "OrderError: Margin Check Failed"
-
 func (m *market) subscribePositions() {
 	req := &coreapipb.ObserveEventBusRequest{
 		Type: []eventspb.BusEventType{
 			eventspb.BusEventType_BUS_EVENT_TYPE_SETTLE_POSITION,
 		},
-		PartyId:  m.walletPubKey,
+		PartyId:  m.pubKey,
 		MarketId: m.marketID,
 	}
 
@@ -258,7 +293,7 @@ func (m *market) initOpenVolume(ctx context.Context) error {
 // getPositions get this bot's positions.
 func (m *market) getPositions(ctx context.Context) ([]*vega.Position, error) {
 	response, err := m.node.PositionsByParty(ctx, &dataapipb.ListPositionsRequest{
-		PartyId:  m.walletPubKey,
+		PartyId:  m.pubKey,
 		MarketId: m.marketID,
 	})
 	if err != nil {

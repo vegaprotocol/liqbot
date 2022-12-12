@@ -2,21 +2,20 @@ package market
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
-	"math/rand"
 	"strings"
 	"time"
 
 	log "github.com/sirupsen/logrus"
 
-	"code.vegaprotocol.io/liqbot/bot/normal"
 	"code.vegaprotocol.io/liqbot/config"
 	itypes "code.vegaprotocol.io/liqbot/types"
 	ppconfig "code.vegaprotocol.io/priceproxy/config"
 	"code.vegaprotocol.io/shared/libs/cache"
 	"code.vegaprotocol.io/shared/libs/num"
-	"code.vegaprotocol.io/shared/libs/types"
+	"code.vegaprotocol.io/shared/libs/wallet"
 	v12 "code.vegaprotocol.io/vega/protos/data-node/api/v2"
 	"code.vegaprotocol.io/vega/protos/vega"
 	commandspb "code.vegaprotocol.io/vega/protos/vega/commands/v1"
@@ -26,74 +25,72 @@ import (
 )
 
 type Service struct {
-	name          string
 	pricingEngine itypes.PricingEngine
 	marketStream  marketStream
 	node          dataNode
-	walletClient  normal.WalletClient // TODO: wtf?!
-	store         marketStore
+	wallet        wallet.WalletV2
 	account       accountService
 	config        config.BotConfig
 	log           *log.Entry
 
 	decimalPlaces uint64
 	marketID      string
-	walletPubKey  string
 	vegaAssetID   string
 }
 
 func NewService(
-	name string,
 	node dataNode,
-	walletClient normal.WalletClient,
+	wallet wallet.WalletV2,
 	pe itypes.PricingEngine,
 	account accountService,
+	marketStream marketStream,
 	config config.BotConfig,
 	vegaAssetID string,
 ) *Service {
-	s := &Service{
-		name:          name,
-		marketStream:  NewMarketStream(name, node),
+	return &Service{
+		marketStream:  marketStream,
 		node:          node,
-		walletClient:  walletClient,
+		wallet:        wallet,
 		pricingEngine: pe,
 		account:       account,
 		config:        config,
 		vegaAssetID:   vegaAssetID,
-		log:           log.WithField("component", "MarketService"),
+		log:           log.WithFields(log.Fields{"component": "MarketService", "node": node.Target()}),
 	}
-
-	s.log = s.log.WithFields(log.Fields{"node": s.node.Target()})
-	s.log.Info("Connected to Vega gRPC node")
-
-	return s
-}
-
-func (m *Service) Init(pubKey string, pauseCh chan types.PauseSignal) error {
-	store, err := m.marketStream.Init(pubKey, pauseCh)
-	if err != nil {
-		return err
-	}
-	m.store = store
-	m.walletPubKey = pubKey
-	return nil
-}
-
-func (m *Service) Start(ctx context.Context, marketID string) error {
-	m.log.Info("Starting market service")
-	if err := m.marketStream.Subscribe(ctx, marketID); err != nil {
-		return fmt.Errorf("failed to subscribe to market stream: %w", err)
-	}
-	m.marketID = marketID
-	return nil
 }
 
 func (m *Service) Market() cache.MarketData {
-	return m.store.Market()
+	return m.marketStream.Store().Market()
 }
 
+// SetupMarket creates a market if it doesn't exist, provides liquidity and gets the market into continuous trading mode.
 func (m *Service) SetupMarket(ctx context.Context) (*vega.Market, error) {
-	market, err := m.FindMarket(ctx)
+	market, err := m.ProvideMarket(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to provide market: %w", err)
+	}
+
+	m.log.Info("Starting market service")
+	if err := m.marketStream.Subscribe(ctx, market.Id); err != nil {
+		return nil, fmt.Errorf("failed to subscribe to market stream: %w", err)
+	}
+	m.marketID = market.Id
+
+	if err = m.ProvideLiquidity(ctx); err != nil {
+		return nil, fmt.Errorf("failed to provide liquidity: %w", err)
+	}
+
+	if !m.CanPlaceOrders() {
+		if err = m.SeedOrders(ctx); err != nil {
+			return nil, fmt.Errorf("failed to seed orders: %w", err)
+		}
+	}
+
+	return market, nil
+}
+
+func (m *Service) ProvideMarket(ctx context.Context) (*vega.Market, error) {
+	market, err := m.findMarket(ctx)
 	if err == nil {
 		m.log.WithField("market", market).Info("Found market")
 		return market, nil
@@ -105,7 +102,7 @@ func (m *Service) SetupMarket(ctx context.Context) (*vega.Market, error) {
 		return nil, fmt.Errorf("failed to create market: %w", err)
 	}
 
-	market, err = m.FindMarket(ctx)
+	market, err = m.findMarket(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find market after creation: %w", err)
 	}
@@ -113,7 +110,7 @@ func (m *Service) SetupMarket(ctx context.Context) (*vega.Market, error) {
 	return market, nil
 }
 
-func (m *Service) FindMarket(ctx context.Context) (*vega.Market, error) {
+func (m *Service) findMarket(ctx context.Context) (*vega.Market, error) {
 	marketsResponse, err := m.node.Markets(ctx, &v12.ListMarketsRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get markets: %w", err)
@@ -167,33 +164,33 @@ func (m *Service) CreateMarket(ctx context.Context) error {
 	m.log.WithFields(log.Fields{
 		"amount": seedAmount.String(),
 		"asset":  m.config.SettlementAssetID,
-		"name":   m.name,
+		"name":   m.config.Name,
 	}).Info("Ensuring balance for market creation")
 
-	if err := m.account.EnsureBalance(ctx, m.config.SettlementAssetID, cache.General, seedAmount, 1, "MarketCreation"); err != nil {
+	if err := m.account.EnsureBalance(ctx, m.config.SettlementAssetID, cache.General, seedAmount, m.decimalPlaces, 1, "MarketCreation"); err != nil {
 		return fmt.Errorf("failed to ensure balance: %w", err)
 	}
 
 	m.log.WithFields(log.Fields{
 		"amount": seedAmount.String(),
 		"asset":  m.config.SettlementAssetID,
-		"name":   m.name,
+		"name":   m.config.Name,
 	}).Info("Balance ensured")
 
 	m.log.WithFields(log.Fields{
 		"amount": seedAmount.String(),
 		"asset":  m.vegaAssetID,
-		"name":   m.name,
+		"name":   m.config.Name,
 	}).Info("Ensuring stake for market creation")
 
-	if err := m.account.EnsureStake(ctx, m.config.Name, m.walletPubKey, m.vegaAssetID, seedAmount, "MarketCreation"); err != nil {
+	if err := m.account.EnsureStake(ctx, m.config.Name, m.wallet.PublicKey(), m.vegaAssetID, seedAmount, "MarketCreation"); err != nil {
 		return fmt.Errorf("failed to ensure stake: %w", err)
 	}
 
 	m.log.WithFields(log.Fields{
 		"amount": seedAmount.String(),
 		"asset":  m.vegaAssetID,
-		"name":   m.name,
+		"name":   m.config.Name,
 	}).Info("Successfully linked stake")
 
 	m.log.Info("Sending new market proposal...")
@@ -233,11 +230,10 @@ func (m *Service) sendNewMarketProposal(ctx context.Context) error {
 	}
 
 	submitTxReq := &walletpb.SubmitTransactionRequest{
-		PubKey:  m.walletPubKey,
 		Command: cmd,
 	}
 
-	if err := m.walletClient.SignTx(ctx, submitTxReq); err != nil {
+	if _, err := m.wallet.SendTransaction(ctx, submitTxReq); err != nil {
 		return fmt.Errorf("failed to sign transaction: %v", err)
 	}
 
@@ -258,17 +254,313 @@ func (m *Service) sendVote(ctx context.Context, proposalId string, vote bool) er
 	}
 
 	submitTxReq := &walletpb.SubmitTransactionRequest{
-		PubKey:  m.walletPubKey,
 		Command: cmd,
 	}
 
-	if err := m.walletClient.SignTx(ctx, submitTxReq); err != nil {
+	if _, err := m.wallet.SendTransaction(ctx, submitTxReq); err != nil {
 		return fmt.Errorf("failed to submit Vote Submission: %w", err)
 	}
 
 	return nil
 }
 
+func (m *Service) ProvideLiquidity(ctx context.Context) error {
+	commitment, err := m.GetRequiredCommitment()
+	if err != nil {
+		return fmt.Errorf("failed to get required commitment: %w", err)
+	}
+
+	if commitment.IsZero() {
+		return nil
+	}
+
+	if err = m.account.EnsureBalance(ctx, m.config.SettlementAssetID, cache.GeneralAndBond, commitment, m.decimalPlaces, 2, "MarketCreation"); err != nil {
+		return fmt.Errorf("failed to ensure balance: %w", err)
+	}
+
+	// We always cache off with longening shapes
+	buyShape, sellShape, _ := m.GetShape()
+	// At the cache of each loop, wait for positive general account balance. This is in case the network has
+	// been restarted.
+	if err := m.CheckInitialMargin(ctx, buyShape, sellShape); err != nil {
+		return fmt.Errorf("failed initial margin check: %w", err)
+	}
+
+	// Submit LP order to market.
+	if err = m.SendLiquidityProvision(ctx, commitment, buyShape, sellShape); err != nil {
+		return fmt.Errorf("failed to send liquidity provision order: %w", err)
+	}
+
+	return nil
+}
+
+func (m *Service) CheckInitialMargin(ctx context.Context, buyShape, sellShape []*vega.LiquidityOrder) error {
+	// Turn the shapes into a set of orders scaled by commitment
+	obligation := cache.GeneralAndBond(m.account.Balance(ctx))
+	buyOrders := m.calculateOrderSizes(obligation, buyShape)
+	sellOrders := m.calculateOrderSizes(obligation, sellShape)
+
+	buyRisk := 0.01
+	sellRisk := 0.01
+
+	buyCost := m.calculateMarginCost(buyRisk, buyOrders)
+	sellCost := m.calculateMarginCost(sellRisk, sellOrders)
+
+	shapeMarginCost := num.Max(buyCost, sellCost)
+	avail := num.MulFrac(cache.General(m.account.Balance(ctx)), m.config.StrategyDetails.OrdersFraction, 15)
+
+	if !avail.LT(shapeMarginCost) {
+		return nil
+	}
+
+	missingPercent := "Inf"
+
+	if !avail.IsZero() {
+		x := num.UintChain(shapeMarginCost).Sub(avail).Mul(num.NewUint(100)).Div(avail).Get()
+		missingPercent = fmt.Sprintf("%v%%", x)
+	}
+
+	m.log.WithFields(log.Fields{
+		"available":      avail.String(),
+		"cost":           shapeMarginCost.String(),
+		"missing":        num.Zero().Sub(avail, shapeMarginCost).String(),
+		"missingPercent": missingPercent,
+	}).Error("Not enough collateral to safely keep orders up given current price, risk parameters and supplied default shapes.")
+
+	return errors.New("not enough collateral")
+}
+
+// calculateOrderSizes calculates the size of the orders using the total commitment, price, distance from mid and chance
+// of trading liquidity.supplied.updateSizes(obligation, currentPrice, liquidityOrders, true, minPrice, maxPrice).
+func (m *Service) calculateOrderSizes(obligation *num.Uint, liquidityOrders []*vega.LiquidityOrder) []*vega.Order {
+	orders := make([]*vega.Order, 0, len(liquidityOrders))
+	// Work out the total proportion for the shape
+	totalProportion := num.Zero()
+	for _, order := range liquidityOrders {
+		totalProportion.Add(totalProportion, num.NewUint(uint64(order.Proportion)))
+	}
+
+	// Now size up the orders and create the real order objects
+	for _, lo := range liquidityOrders {
+		size := num.UintChain(obligation.Clone()).
+			Mul(num.NewUint(uint64(lo.Proportion))).
+			Mul(num.NewUint(10)).
+			Div(totalProportion).Div(m.Market().MarkPrice()).Get()
+		peggedOrder := vega.PeggedOrder{
+			Reference: lo.Reference,
+			Offset:    lo.Offset,
+		}
+
+		order := vega.Order{
+			Side:        vega.Side_SIDE_BUY,
+			Remaining:   size.Uint64(),
+			Size:        size.Uint64(),
+			TimeInForce: vega.Order_TIME_IN_FORCE_GTC,
+			Type:        vega.Order_TYPE_LIMIT,
+			PeggedOrder: &peggedOrder,
+		}
+		orders = append(orders, &order)
+	}
+
+	return orders
+}
+
+// calculateMarginCost estimates the margin cost of the set of orders.
+func (m *Service) calculateMarginCost(risk float64, orders []*vega.Order) *num.Uint {
+	margins := make([]*num.Uint, len(orders))
+
+	for i, order := range orders {
+		if order.Side == vega.Side_SIDE_BUY {
+			margins[i] = num.NewUint(1 + order.Size)
+		} else {
+			margins[i] = num.NewUint(order.Size)
+		}
+	}
+
+	totalMargin := num.UintChain(num.Zero()).Add(margins...).Mul(m.Market().MarkPrice()).Get()
+	return num.MulFrac(totalMargin, risk, 15)
+}
+
+func (m *Service) GetShape() ([]*vega.LiquidityOrder, []*vega.LiquidityOrder, string) {
+	// We always cache off with longening shapes
+	shape := "longening"
+	buyShape := m.config.StrategyDetails.LongeningShape.Buys.ToVegaLiquidityOrders()
+	sellShape := m.config.StrategyDetails.LongeningShape.Sells.ToVegaLiquidityOrders()
+
+	if m.Market().OpenVolume() > 0 {
+		shape = "shortening"
+		buyShape = m.config.StrategyDetails.ShorteningShape.Buys.ToVegaLiquidityOrders()
+		sellShape = m.config.StrategyDetails.ShorteningShape.Sells.ToVegaLiquidityOrders()
+	}
+
+	return buyShape, sellShape, shape
+}
+
+func (m *Service) CheckPosition() (uint64, vega.Side, bool) {
+	size := uint64(0)
+	side := vega.Side_SIDE_UNSPECIFIED
+	shouldPlace := true
+	openVolume := m.Market().OpenVolume()
+
+	if openVolume >= 0 && num.NewUint(uint64(openVolume)).GT(m.config.StrategyDetails.MaxLong.Get()) {
+		size = num.MulFrac(num.NewUint(uint64(openVolume)), m.config.StrategyDetails.PosManagementFraction, 15).Uint64()
+		side = vega.Side_SIDE_SELL
+	} else if openVolume < 0 && num.NewUint(uint64(-openVolume)).GT(m.config.StrategyDetails.MaxShort.Get()) {
+		size = num.MulFrac(num.NewUint(uint64(-openVolume)), m.config.StrategyDetails.PosManagementFraction, 15).Uint64()
+		side = vega.Side_SIDE_BUY
+	} else {
+		shouldPlace = false
+	}
+
+	return size, side, shouldPlace
+}
+
+func (m *Service) SendLiquidityProvision(ctx context.Context, commitment *num.Uint, buys, sells []*vega.LiquidityOrder) error {
+	ref := m.config.Name + "-" + commitment.String()
+	submitTxReq := &walletpb.SubmitTransactionRequest{
+		Command: &walletpb.SubmitTransactionRequest_LiquidityProvisionSubmission{
+			LiquidityProvisionSubmission: &commandspb.LiquidityProvisionSubmission{
+				MarketId:         m.marketID,
+				CommitmentAmount: commitment.String(),
+				Fee:              m.config.StrategyDetails.Fee,
+				Sells:            sells,
+				Buys:             buys,
+				Reference:        ref,
+			},
+		},
+	}
+
+	m.log.WithFields(log.Fields{
+		"commitment": commitment.String(),
+	}).Debug("Submitting LiquidityProvisionSubmission...")
+
+	if _, err := m.wallet.SendTransaction(ctx, submitTxReq); err != nil {
+		return fmt.Errorf("failed to submit LiquidityProvisionSubmission: %w", err)
+	}
+
+	if err := m.marketStream.waitForLiquidityProvision(ctx, ref); err != nil {
+		return fmt.Errorf("failed to wait for liquidity provision to be active: %w", err)
+	}
+
+	m.log.WithFields(log.Fields{
+		"commitment": commitment.String(),
+	}).Debug("Submitted LiquidityProvisionSubmission")
+
+	return nil
+}
+
+// call this if the position flips.
+func (m *Service) SendLiquidityProvisionAmendment(ctx context.Context, commitment *num.Uint, buys, sells []*vega.LiquidityOrder) error {
+	var commitmentAmount string
+	if commitment != nil {
+		if commitment.IsZero() {
+			return m.SendLiquidityProvisionCancellation(ctx)
+		}
+		commitmentAmount = commitment.String()
+	}
+
+	submitTxReq := &walletpb.SubmitTransactionRequest{
+		Command: &walletpb.SubmitTransactionRequest_LiquidityProvisionAmendment{
+			LiquidityProvisionAmendment: &commandspb.LiquidityProvisionAmendment{
+				MarketId:         m.marketID,
+				CommitmentAmount: commitmentAmount,
+				Fee:              m.config.StrategyDetails.Fee,
+				Sells:            sells,
+				Buys:             buys,
+			},
+		},
+	}
+
+	if _, err := m.wallet.SendTransaction(ctx, submitTxReq); err != nil {
+		return fmt.Errorf("failed to submit LiquidityProvisionAmendment: %w", err)
+	}
+
+	m.log.WithFields(log.Fields{
+		"commitment": commitmentAmount,
+	}).Debug("Submitted LiquidityProvisionAmendment")
+	return nil
+}
+
+func (m *Service) EnsureCommitmentAmount(ctx context.Context) error {
+	requiredCommitment, err := m.GetRequiredCommitment()
+	if err != nil {
+		return fmt.Errorf("failed to get new commitment amount: %w", err)
+	}
+
+	if requiredCommitment.IsZero() {
+		return nil
+	}
+
+	m.log.WithFields(
+		log.Fields{
+			"newCommitment": requiredCommitment.String(),
+		},
+	).Debug("Supplied stake is less than target stake, increasing commitment amount...")
+
+	if err = m.account.EnsureBalance(ctx, m.config.SettlementAssetID, cache.GeneralAndBond, requiredCommitment, m.decimalPlaces, 2, "MarketService"); err != nil {
+		return fmt.Errorf("failed to ensure balance: %w", err)
+	}
+
+	buys, sells, _ := m.GetShape()
+
+	m.log.WithFields(
+		log.Fields{
+			"newCommitment": requiredCommitment.String(),
+		},
+	).Debug("Sending new commitment amount...")
+
+	if err = m.SendLiquidityProvisionAmendment(ctx, requiredCommitment, buys, sells); err != nil {
+		return fmt.Errorf("failed to update commitment amount: %w", err)
+	}
+
+	return nil
+}
+
+func (m *Service) SendLiquidityProvisionCancellation(ctx context.Context) error {
+	submitTxReq := &walletpb.SubmitTransactionRequest{
+		Command: &walletpb.SubmitTransactionRequest_LiquidityProvisionCancellation{
+			LiquidityProvisionCancellation: &commandspb.LiquidityProvisionCancellation{
+				MarketId: m.marketID,
+			},
+		},
+	}
+
+	if _, err := m.wallet.SendTransaction(ctx, submitTxReq); err != nil {
+		return fmt.Errorf("failed to submit LiquidityProvisionCancellation: %w", err)
+	}
+
+	m.log.WithFields(log.Fields{
+		"commitment": "0",
+	}).Debug("Submitted LiquidityProvisionCancellation")
+
+	return nil
+}
+
+func (m *Service) GetRequiredCommitment() (*num.Uint, error) {
+	suppliedStake := m.Market().SuppliedStake().Clone()
+	targetStake := m.Market().TargetStake().Clone()
+
+	if targetStake.IsZero() {
+		var err error
+		targetStake, err = num.ConvertUint256(m.config.StrategyDetails.CommitmentAmount)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert commitment amount: %w", err)
+		}
+	}
+
+	m.log.WithFields(log.Fields{
+		"suppliedStake": suppliedStake.String(),
+		"targetStake":   targetStake.String(),
+	}).Debug("Checking for required commitment")
+
+	dx := suppliedStake.Int().Sub(targetStake.Int())
+
+	if dx.IsPositive() {
+		return num.Zero(), nil
+	}
+
+	return num.Zero().Add(targetStake, dx.Uint()), nil
+}
 func (m *Service) CanPlaceOrders() bool {
 	return m.Market().TradingMode() == vega.Market_TRADING_MODE_CONTINUOUS
 }
@@ -315,18 +607,17 @@ func (m *Service) SubmitOrder(ctx context.Context, order *vega.Order, from strin
 	}).Debugf("%s: Submitting order", from)
 
 	submitTxReq := &walletpb.SubmitTransactionRequest{
-		PubKey:  m.walletPubKey,
 		Command: cmd,
 	}
 
-	if err := m.walletClient.SignTx(ctx, submitTxReq); err != nil {
+	if _, err := m.wallet.SendTransaction(ctx, submitTxReq); err != nil {
 		return fmt.Errorf("failed to submit OrderSubmission: %w", err)
 	}
 
 	return nil
 }
 
-func (m *Service) SeedOrders(ctx context.Context, from string) error {
+func (m *Service) SeedOrders(ctx context.Context) error {
 	externalPrice, err := m.GetExternalPrice()
 	if err != nil {
 		return fmt.Errorf("failed to get external price: %w", err)
@@ -337,21 +628,19 @@ func (m *Service) SeedOrders(ctx context.Context, from string) error {
 		"externalPrice":   externalPrice.String(),
 		"totalCost":       totalCost.String(),
 		"balance.General": cache.General(m.account.Balance(ctx)).String(),
-	}).Debugf("%s: Seeding auction orders", from)
+	}).Debug("Seeding auction orders")
 
-	totalCost.Mul(totalCost, num.NewUint(uint64(math.Pow10(7))))
-
-	if err := m.account.EnsureBalance(ctx, m.config.SettlementAssetID, cache.General, totalCost, 2, from); err != nil {
+	if err := m.account.EnsureBalance(ctx, m.config.SettlementAssetID, cache.General, totalCost, m.decimalPlaces, 2, "MarketService"); err != nil {
 		return fmt.Errorf("failed to ensure balance: %w", err)
 	}
 
 	for _, order := range orders {
-		if err = m.SubmitOrder(ctx, order, from, int64(m.config.StrategyDetails.PosManagementFraction)); err != nil {
+		if err = m.SubmitOrder(ctx, order, "MarketService", int64(m.config.StrategyDetails.PosManagementFraction)); err != nil {
 			return fmt.Errorf("failed to create seed order: %w", err)
 		}
 
 		if m.CanPlaceOrders() {
-			m.log.Debugf("%s: Seeding orders finished", from)
+			m.log.Debug("Trading mode is continuous")
 			return nil
 		}
 
@@ -374,14 +663,17 @@ func (m *Service) createSeedOrders(externalPrice *num.Uint) ([]*vega.Order, *num
 			side = vega.Side_SIDE_SELL
 		}
 
-		add := num.NewUint(uint64(math.Abs(float64(rand.Intn(100) - 50))))
-		price := num.Zero().Add(externalPrice, add)
+		price := externalPrice.Clone()
 
-		totalCost.Add(totalCost, price.Clone().Mul(price, num.NewUint(size)))
-
-		if i > 1 {
+		if i == 0 {
+			price = num.UintChain(price).Mul(num.NewUint(105)).Div(num.NewUint(100)).Get()
+		} else if i == 1 {
+			price = num.UintChain(price).Mul(num.NewUint(95)).Div(num.NewUint(100)).Get()
+		} else {
 			tif = vega.Order_TIME_IN_FORCE_GFA
 		}
+
+		totalCost.Add(totalCost, num.Zero().Mul(price.Clone(), num.NewUint(size)))
 
 		orders[i] = &vega.Order{
 			MarketId:    m.marketID,

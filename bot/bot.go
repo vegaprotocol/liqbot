@@ -13,6 +13,7 @@ import (
 	"code.vegaprotocol.io/liqbot/types"
 	"code.vegaprotocol.io/shared/libs/account"
 	"code.vegaprotocol.io/shared/libs/node"
+	btypes "code.vegaprotocol.io/shared/libs/types"
 	"code.vegaprotocol.io/shared/libs/wallet"
 )
 
@@ -47,17 +48,23 @@ func newNormalBot(
 	)
 
 	log.Debug("Attempting to connect to Vega gRPC node...")
-	dataNode.MustDialConnection(context.Background()) // blocking
+	ctx := context.Background()
+	dataNode.MustDialConnection(ctx) // blocking
 
-	botWallet := wallet.NewClient(conf.Wallet.URL)
-	accountService := account.NewAccountService(botConf.Name, dataNode, botConf.SettlementAssetID, whale)
-	marketService := market.NewService(botConf.Name, dataNode, botWallet, pricing, accountService, botConf, conf.VegaAssetID)
+	conf.Wallet.Name = botConf.Name
+	conf.Wallet.Passphrase = "supersecret"
+	botWallet, err := wallet.NewWalletV2Service(conf.Wallet)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create bot wallet: %w", err)
+	}
 
-	return normal.New(
-		botConf,
-		conf.VegaAssetID,
-		botWallet,
-		accountService,
-		marketService,
-	), nil
+	pubKey := botWallet.PublicKey()
+	pauseCh := make(chan btypes.PauseSignal)
+	accountStream := account.NewStream(botConf.Name, dataNode, pauseCh)
+	marketStream := market.NewStream(botConf.Name, pubKey, dataNode, pauseCh)
+	accountService := account.NewService(botConf.Name, pubKey, botConf.SettlementAssetID, accountStream, whale)
+	marketService := market.NewService(dataNode, botWallet, pricing, accountService, marketStream, botConf, conf.VegaAssetID)
+	bot := normal.New(botConf, conf.VegaAssetID, accountService, marketService, pauseCh)
+
+	return bot, nil
 }
