@@ -665,12 +665,11 @@ func (m *Service) createSeedOrders(externalPrice *num.Uint) ([]*vega.Order, *num
 
 		price := externalPrice.Clone()
 
-		if i == 0 {
+		switch i {
+		case 0:
 			price = num.UintChain(price).Mul(num.NewUint(105)).Div(num.NewUint(100)).Get()
-		} else if i == 1 {
+		case 1:
 			price = num.UintChain(price).Mul(num.NewUint(95)).Div(num.NewUint(100)).Get()
-		} else {
-			tif = vega.Order_TIME_IN_FORCE_GFA
 		}
 
 		totalCost.Add(totalCost, num.Zero().Mul(price.Clone(), num.NewUint(size)))

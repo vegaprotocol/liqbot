@@ -18,6 +18,7 @@ type marketService interface {
 	GetShape() ([]*vega.LiquidityOrder, []*vega.LiquidityOrder, string)
 	CheckPosition() (uint64, vega.Side, bool)
 	SendLiquidityProvisionAmendment(ctx context.Context, commitment *num.Uint, buys, sells []*vega.LiquidityOrder) error
+	SeedOrders(ctx context.Context) error
 }
 
 type accountService interface {

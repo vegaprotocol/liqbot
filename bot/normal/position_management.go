@@ -42,6 +42,10 @@ func (b *bot) runPositionManagement(ctx context.Context) {
 			}
 
 			if !b.CanPlaceOrders() {
+				if err := b.SeedOrders(ctx); err != nil {
+					b.log.WithFields(log.Fields{"error": err.Error()}).Warning("PositionManagement: Failed to seed orders")
+					return
+				}
 				continue
 			}
 
