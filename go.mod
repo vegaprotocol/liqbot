@@ -15,7 +15,7 @@ require (
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/shopspring/decimal v1.3.1
 	github.com/sirupsen/logrus v1.9.0
-	github.com/slack-go/slack v0.11.3
+	github.com/slack-go/slack v0.12.1
 	github.com/stretchr/testify v1.8.0
 	gonum.org/v1/gonum v0.9.1
 	google.golang.org/genproto v0.0.0-20220725144611-272f38e5d71b
