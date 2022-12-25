@@ -80,4 +80,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/shopspring/decimal => github.com/vegaprotocol/decimal v1.2.1-0.20210705145732-aaa563729a0a
+replace github.com/shopspring/decimal => github.com/vegaprotocol/decimal v1.2.1-0.20210622222456-cc4584f0a5de

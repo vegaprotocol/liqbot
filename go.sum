@@ -290,6 +290,8 @@ github.com/tyler-smith/go-bip39 v1.1.0 h1:5eUemwrMargf3BSLRRCalXT93Ns6pQJIjYQN2n
 github.com/tyler-smith/go-bip39 v1.1.0/go.mod h1:gUYDtqQw1JS3ZJ8UWVcGTGqqr6YIN3CWg+kkNaLt55U=
 github.com/ugorji/go/codec v0.0.0-20181204163529-d75b2dcb6bc8/go.mod h1:VFNgLljTbGfSG7qAOspJ7OScBnGdDN/yBr0sguwnwf0=
 github.com/urfave/cli/v2 v2.10.2 h1:x3p8awjp/2arX+Nl/G2040AZpOCHS/eMJJ1/a+mye4Y=
+github.com/vegaprotocol/decimal v1.2.1-0.20210622222456-cc4584f0a5de h1:KhTyHERY0l6Sj08bYTNB3Xv5sX7Al6Xal2hB4NjFRhk=
+github.com/vegaprotocol/decimal v1.2.1-0.20210622222456-cc4584f0a5de/go.mod h1:DKyhrW/HYNuLGql+MJL6WCR6knT2jwCFRcu2hWCYk4o=
 github.com/vegaprotocol/decimal v1.2.1-0.20210705145732-aaa563729a0a h1:Ee7N99nGQCl0uGfT2Lea0q/BlLo7r1m/DGf7PbQdoB4=
 github.com/vegaprotocol/decimal v1.2.1-0.20210705145732-aaa563729a0a/go.mod h1:tTrKXoJwKjjYYCku9qigFo0fbZB9vbsXhAnjfwheAgY=
 github.com/vegaprotocol/go-slip10 v0.1.0 h1:pP3XF2gSKM6OuaAURobHZlXZ9AzZ5LgeWvXFudL7Mb4=
