@@ -8,14 +8,13 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-
 	"code.vegaprotocol.io/liqbot/config"
 	itypes "code.vegaprotocol.io/liqbot/types"
 	ppconfig "code.vegaprotocol.io/priceproxy/config"
 	"code.vegaprotocol.io/shared/libs/cache"
 	"code.vegaprotocol.io/shared/libs/num"
 	"code.vegaprotocol.io/shared/libs/wallet"
+	"code.vegaprotocol.io/vega/logging"
 	v12 "code.vegaprotocol.io/vega/protos/data-node/api/v2"
 	"code.vegaprotocol.io/vega/protos/vega"
 	commandspb "code.vegaprotocol.io/vega/protos/vega/commands/v1"
@@ -31,7 +30,7 @@ type Service struct {
 	wallet        wallet.WalletV2
 	account       accountService
 	config        config.BotConfig
-	log           *log.Entry
+	log           *logging.Logger
 
 	decimalPlaces uint64
 	marketID      string
@@ -39,6 +38,7 @@ type Service struct {
 }
 
 func NewService(
+	log *logging.Logger,
 	node dataNode,
 	wallet wallet.WalletV2,
 	pe itypes.PricingEngine,
@@ -55,7 +55,7 @@ func NewService(
 		account:       account,
 		config:        config,
 		vegaAssetID:   vegaAssetID,
-		log:           log.WithFields(log.Fields{"component": "MarketService", "node": node.Target()}),
+		log:           log.Named("MarketService"),
 	}
 }
 
@@ -92,11 +92,11 @@ func (m *Service) SetupMarket(ctx context.Context) (*vega.Market, error) {
 func (m *Service) ProvideMarket(ctx context.Context) (*vega.Market, error) {
 	market, err := m.findMarket(ctx)
 	if err == nil {
-		m.log.WithField("market", market).Info("Found market")
+		m.log.With(logging.Market(market)).Info("Found market")
 		return market, nil
 	}
 
-	m.log.WithError(err).Info("Failed to find market, creating it")
+	m.log.Info("Failed to find market, creating it")
 
 	if err = m.CreateMarket(ctx); err != nil {
 		return nil, fmt.Errorf("failed to create market: %w", err)
@@ -147,7 +147,7 @@ func (m *Service) findMarket(ctx context.Context) (*vega.Market, error) {
 			continue
 		}
 
-		m.log = m.log.WithFields(log.Fields{"marketID": mkt.Id})
+		m.log = m.log.With(logging.MarketID(mkt.Id))
 		m.decimalPlaces = mkt.DecimalPlaces
 
 		return mkt, nil
@@ -161,37 +161,37 @@ func (m *Service) CreateMarket(ctx context.Context) error {
 
 	seedAmount := m.config.StrategyDetails.SeedAmount.Get()
 
-	m.log.WithFields(log.Fields{
-		"amount": seedAmount.String(),
-		"asset":  m.config.SettlementAssetID,
-		"name":   m.config.Name,
-	}).Info("Ensuring balance for market creation")
+	m.log.With(
+		logging.String("amount", seedAmount.String()),
+		logging.String("asset", m.config.SettlementAssetID),
+		logging.String("name", m.config.Name),
+	).Info("Ensuring balance for market creation")
 
 	if err := m.account.EnsureBalance(ctx, m.config.SettlementAssetID, cache.General, seedAmount, m.decimalPlaces, 1, "MarketCreation"); err != nil {
 		return fmt.Errorf("failed to ensure balance: %w", err)
 	}
 
-	m.log.WithFields(log.Fields{
-		"amount": seedAmount.String(),
-		"asset":  m.config.SettlementAssetID,
-		"name":   m.config.Name,
-	}).Info("Balance ensured")
+	m.log.With(
+		logging.String("amount", seedAmount.String()),
+		logging.String("asset", m.config.SettlementAssetID),
+		logging.String("name", m.config.Name),
+	).Info("Balance ensured")
 
-	m.log.WithFields(log.Fields{
-		"amount": seedAmount.String(),
-		"asset":  m.vegaAssetID,
-		"name":   m.config.Name,
-	}).Info("Ensuring stake for market creation")
+	m.log.With(
+		logging.String("amount", seedAmount.String()),
+		logging.String("asset", m.vegaAssetID),
+		logging.String("name", m.config.Name),
+	).Info("Ensuring stake for market creation")
 
 	if err := m.account.EnsureStake(ctx, m.config.Name, m.wallet.PublicKey(), m.vegaAssetID, seedAmount, "MarketCreation"); err != nil {
 		return fmt.Errorf("failed to ensure stake: %w", err)
 	}
 
-	m.log.WithFields(log.Fields{
-		"amount": seedAmount.String(),
-		"asset":  m.vegaAssetID,
-		"name":   m.config.Name,
-	}).Info("Successfully linked stake")
+	m.log.With(
+		logging.String("amount", seedAmount.String()),
+		logging.String("asset", m.vegaAssetID),
+		logging.String("name", m.config.Name),
+	).Info("Successfully linked stake")
 
 	m.log.Info("Sending new market proposal...")
 
@@ -320,12 +320,12 @@ func (m *Service) CheckInitialMargin(ctx context.Context, buyShape, sellShape []
 		missingPercent = fmt.Sprintf("%v%%", x)
 	}
 
-	m.log.WithFields(log.Fields{
-		"available":      avail.String(),
-		"cost":           shapeMarginCost.String(),
-		"missing":        num.Zero().Sub(avail, shapeMarginCost).String(),
-		"missingPercent": missingPercent,
-	}).Error("Not enough collateral to safely keep orders up given current price, risk parameters and supplied default shapes.")
+	m.log.With(
+		logging.String("available", avail.String()),
+		logging.String("cost", shapeMarginCost.String()),
+		logging.String("missing", num.Zero().Sub(avail, shapeMarginCost).String()),
+		logging.String("missingPercent", missingPercent),
+	).Error("Not enough collateral to safely keep orders up given current price, risk parameters and supplied default shapes.")
 
 	return errors.New("not enough collateral")
 }
@@ -430,9 +430,7 @@ func (m *Service) SendLiquidityProvision(ctx context.Context, commitment *num.Ui
 		},
 	}
 
-	m.log.WithFields(log.Fields{
-		"commitment": commitment.String(),
-	}).Debug("Submitting LiquidityProvisionSubmission...")
+	m.log.With(logging.String("commitment", commitment.String())).Debug("Submitting LiquidityProvisionSubmission...")
 
 	if _, err := m.wallet.SendTransaction(ctx, submitTxReq); err != nil {
 		return fmt.Errorf("failed to submit LiquidityProvisionSubmission: %w", err)
@@ -442,9 +440,7 @@ func (m *Service) SendLiquidityProvision(ctx context.Context, commitment *num.Ui
 		return fmt.Errorf("failed to wait for liquidity provision to be active: %w", err)
 	}
 
-	m.log.WithFields(log.Fields{
-		"commitment": commitment.String(),
-	}).Debug("Submitted LiquidityProvisionSubmission")
+	m.log.With(logging.String("commitment", commitment.String())).Debug("Submitted LiquidityProvisionSubmission")
 
 	return nil
 }
@@ -475,9 +471,7 @@ func (m *Service) SendLiquidityProvisionAmendment(ctx context.Context, commitmen
 		return fmt.Errorf("failed to submit LiquidityProvisionAmendment: %w", err)
 	}
 
-	m.log.WithFields(log.Fields{
-		"commitment": commitmentAmount,
-	}).Debug("Submitted LiquidityProvisionAmendment")
+	m.log.With(logging.String("commitment", commitment.String())).Debug("Submitted LiquidityProvisionAmendment")
 	return nil
 }
 
@@ -491,11 +485,7 @@ func (m *Service) EnsureCommitmentAmount(ctx context.Context) error {
 		return nil
 	}
 
-	m.log.WithFields(
-		log.Fields{
-			"newCommitment": requiredCommitment.String(),
-		},
-	).Debug("Supplied stake is less than target stake, increasing commitment amount...")
+	m.log.With(logging.String("newCommitment", requiredCommitment.String())).Debug("Supplied stake is less than target stake, increasing commitment amount...")
 
 	if err = m.account.EnsureBalance(ctx, m.config.SettlementAssetID, cache.GeneralAndBond, requiredCommitment, m.decimalPlaces, 2, "MarketService"); err != nil {
 		return fmt.Errorf("failed to ensure balance: %w", err)
@@ -503,11 +493,7 @@ func (m *Service) EnsureCommitmentAmount(ctx context.Context) error {
 
 	buys, sells, _ := m.GetShape()
 
-	m.log.WithFields(
-		log.Fields{
-			"newCommitment": requiredCommitment.String(),
-		},
-	).Debug("Sending new commitment amount...")
+	m.log.With(logging.String("newCommitment", requiredCommitment.String())).Debug("Sending new commitment amount...")
 
 	if err = m.SendLiquidityProvisionAmendment(ctx, requiredCommitment, buys, sells); err != nil {
 		return fmt.Errorf("failed to update commitment amount: %w", err)
@@ -529,9 +515,7 @@ func (m *Service) SendLiquidityProvisionCancellation(ctx context.Context) error 
 		return fmt.Errorf("failed to submit LiquidityProvisionCancellation: %w", err)
 	}
 
-	m.log.WithFields(log.Fields{
-		"commitment": "0",
-	}).Debug("Submitted LiquidityProvisionCancellation")
+	m.log.With(logging.String("commitment", "0")).Debug("Submitted LiquidityProvisionCancellation")
 
 	return nil
 }
@@ -548,10 +532,10 @@ func (m *Service) GetRequiredCommitment() (*num.Uint, error) {
 		}
 	}
 
-	m.log.WithFields(log.Fields{
-		"suppliedStake": suppliedStake.String(),
-		"targetStake":   targetStake.String(),
-	}).Debug("Checking for required commitment")
+	m.log.With(
+		logging.String("suppliedStake", suppliedStake.String()),
+		logging.String("targetStake", targetStake.String()),
+	).Debug("Checking for required commitment")
 
 	dx := suppliedStake.Int().Sub(targetStake.Int())
 
@@ -596,15 +580,15 @@ func (m *Service) SubmitOrder(ctx context.Context, order *vega.Order, from strin
 		cmd.OrderSubmission.Price = order.Price
 	}
 
-	m.log.WithFields(log.Fields{
-		"expiresAt": cmd.OrderSubmission.ExpiresAt,
-		"types":     order.Type.String(),
-		"reference": order.Reference,
-		"size":      order.Size,
-		"side":      order.Side.String(),
-		"price":     order.Price,
-		"tif":       order.TimeInForce.String(),
-	}).Debugf("%s: Submitting order", from)
+	m.log.With(
+		logging.Int64("expiresAt", cmd.OrderSubmission.ExpiresAt),
+		logging.String("types", order.Type.String()),
+		logging.String("reference", order.Reference),
+		logging.Uint64("size", order.Size),
+		logging.String("side", order.Side.String()),
+		logging.String("price", order.Price),
+		logging.String("tif", order.TimeInForce.String()),
+	).Debugf("%s: Submitting order", from)
 
 	submitTxReq := &walletpb.SubmitTransactionRequest{
 		Command: cmd,
@@ -623,12 +607,12 @@ func (m *Service) SeedOrders(ctx context.Context) error {
 		return fmt.Errorf("failed to get external price: %w", err)
 	}
 
-	orders, totalCost := m.createSeedOrders(externalPrice.Clone())
-	m.log.WithFields(log.Fields{
-		"externalPrice":   externalPrice.String(),
-		"totalCost":       totalCost.String(),
-		"balance.General": cache.General(m.account.Balance(ctx)).String(),
-	}).Debug("Seeding auction orders")
+	orders, totalCost := m.createSeedAuctionOrders(externalPrice.Clone())
+	m.log.With(
+		logging.String("externalPrice", externalPrice.String()),
+		logging.String("totalCost", totalCost.String()),
+		logging.String("balance.General", cache.General(m.account.Balance(ctx)).String()),
+	).Debug("Seeding auction orders")
 
 	if err := m.account.EnsureBalance(ctx, m.config.SettlementAssetID, cache.General, totalCost, m.decimalPlaces, 2, "MarketService"); err != nil {
 		return fmt.Errorf("failed to ensure balance: %w", err)
@@ -650,7 +634,7 @@ func (m *Service) SeedOrders(ctx context.Context) error {
 	return fmt.Errorf("seeding orders did not end the auction")
 }
 
-func (m *Service) createSeedOrders(externalPrice *num.Uint) ([]*vega.Order, *num.Uint) {
+func (m *Service) createSeedAuctionOrders(externalPrice *num.Uint) ([]*vega.Order, *num.Uint) {
 	tif := vega.Order_TIME_IN_FORCE_GTC
 	count := m.config.StrategyDetails.SeedOrderCount
 	orders := make([]*vega.Order, count)

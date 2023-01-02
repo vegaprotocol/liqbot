@@ -6,10 +6,9 @@ import (
 	"fmt"
 	"sync"
 
-	log "github.com/sirupsen/logrus"
-
 	"code.vegaprotocol.io/liqbot/config"
 	"code.vegaprotocol.io/shared/libs/types"
+	"code.vegaprotocol.io/vega/logging"
 )
 
 // bot represents one Normal liquidity bot.
@@ -18,7 +17,7 @@ type bot struct {
 	accountService
 
 	config config.BotConfig
-	log    *log.Entry
+	log    *logging.Logger
 
 	stopPosMgmt     chan bool
 	stopPriceSteer  chan bool
@@ -37,6 +36,7 @@ type bot struct {
 
 // New returns a new instance of bot.
 func New(
+	log *logging.Logger,
 	botConf config.BotConfig,
 	vegaAssetID string,
 	accountService accountService,
@@ -47,17 +47,14 @@ func New(
 		config:            botConf,
 		settlementAssetID: botConf.SettlementAssetID,
 		vegaAssetID:       vegaAssetID,
-		log: log.WithFields(log.Fields{
-			"bot": botConf.Name,
-		}),
-
-		stopPosMgmt:     make(chan bool),
-		stopPriceSteer:  make(chan bool),
-		pausePosMgmt:    make(chan struct{}),
-		pausePriceSteer: make(chan struct{}),
-		accountService:  accountService,
-		marketService:   marketService,
-		pauseChannel:    pauseChannel,
+		log:               log,
+		stopPosMgmt:       make(chan bool),
+		stopPriceSteer:    make(chan bool),
+		pausePosMgmt:      make(chan struct{}),
+		pausePriceSteer:   make(chan struct{}),
+		accountService:    accountService,
+		marketService:     marketService,
+		pauseChannel:      pauseChannel,
 	}
 }
 
@@ -79,12 +76,12 @@ func (b *bot) Start() error {
 	b.marketID = market.Id
 	b.decimalPlaces = market.DecimalPlaces
 
-	b.log.WithFields(log.Fields{
-		"id":                b.marketID,
-		"base/ticker":       b.config.InstrumentBase,
-		"quote":             b.config.InstrumentQuote,
-		"settlementAssetID": b.settlementAssetID,
-	}).Info("Market info")
+	b.log.With(
+		logging.String("id", b.marketID),
+		logging.String("base/ticker", b.config.InstrumentBase),
+		logging.String("quote", b.config.InstrumentQuote),
+		logging.String("settlementAssetID", b.settlementAssetID),
+	).Info("Market info")
 
 	ctx, cancel := context.WithCancel(ctx)
 
@@ -111,10 +108,10 @@ func (b *bot) Pause(p types.PauseSignal) {
 	defer b.mu.Unlock()
 
 	if p.Pause && !b.botPaused {
-		b.log.WithFields(log.Fields{"From": p.From}).Info("Pausing bot")
+		b.log.With(logging.String("From", p.From)).Info("Pausing bot")
 		b.botPaused = true
 	} else if !p.Pause && b.botPaused {
-		b.log.WithFields(log.Fields{"From": p.From}).Info("Resuming bot")
+		b.log.With(logging.String("From", p.From)).Info("Resuming bot")
 		b.botPaused = false
 	} else {
 		return

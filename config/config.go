@@ -5,14 +5,14 @@ package config
 import (
 	"fmt"
 	"net/url"
-	"time"
 
-	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 
 	tconfig "code.vegaprotocol.io/shared/libs/erc20/config"
 	"code.vegaprotocol.io/shared/libs/errors"
 	"code.vegaprotocol.io/shared/libs/wallet"
 	wconfig "code.vegaprotocol.io/shared/libs/whale/config"
+	"code.vegaprotocol.io/vega/logging"
 )
 
 // Config describes the top level config file format.
@@ -70,51 +70,36 @@ func (cfg *Config) CheckConfig() error {
 }
 
 // ConfigureLogging configures logging.
-func (cfg *Config) ConfigureLogging() error {
-	if cfg.Server.Env != "prod" {
-		// https://github.com/sirupsen/logrus#logging-method-name
-		// This slows down logging (by a factor of 2).
-		log.SetReportCaller(true)
+func (cfg *Config) ConfigureLogging(log *logging.Logger) error {
+	logCfg := logging.NewDefaultConfig()
+	if cfg.Server.Env != "" {
+		logCfg.Environment = cfg.Server.Env
+		if logCfg.Environment != "prod" {
+			log.Logger.WithOptions(zap.AddCaller(), zap.AddCallerSkip(1))
+		}
 	}
 
-	switch cfg.Server.LogFormat {
-	case "json":
-		log.SetFormatter(&log.JSONFormatter{
-			TimestampFormat: time.RFC3339Nano,
-		})
-	case "textcolour":
-		log.SetFormatter(&log.TextFormatter{
-			ForceColors:     true,
-			FullTimestamp:   true,
-			TimestampFormat: time.RFC3339Nano,
-		})
-	case "textnocolour":
-		log.SetFormatter(&log.TextFormatter{
-			DisableColors:   true,
-			FullTimestamp:   true,
-			TimestampFormat: time.RFC3339Nano,
-		})
-	default:
-		log.SetFormatter(&log.TextFormatter{
-			FullTimestamp:   true,
-			TimestampFormat: time.RFC3339Nano,
-		}) // with colour if TTY, without otherwise
+	if cfg.Server.LogEncoding != "" {
+		logCfg.Custom.Zap.Encoding = cfg.Server.LogEncoding
 	}
 
-	if loglevel, err := log.ParseLevel(cfg.Server.LogLevel); err == nil {
+	if loglevel, err := logging.ParseLevel(cfg.Server.LogLevel); err == nil {
 		log.SetLevel(loglevel)
 	} else {
-		log.SetLevel(log.WarnLevel)
+		log.SetLevel(logging.WarnLevel)
 	}
+
+	log = logging.NewLoggerFromConfig(logCfg)
+
 	return nil
 }
 
 // ServerConfig describes the settings for running the liquidity bot.
 type ServerConfig struct {
-	Env       string
-	Listen    string
-	LogFormat string
-	LogLevel  string
+	Env         string
+	Listen      string
+	LogEncoding string
+	LogLevel    string
 }
 
 // PricingConfig describes the settings for contacting the price proxy.

@@ -123,7 +123,7 @@ func (s Strategy) validateStrategyConfig() error {
 // LimitOrderDistParams for configuring the way price steering orders are sent.
 type LimitOrderDistParams struct {
 	Method              SteeringMethod `yaml:"method"`
-	GttLength           uint64         `yaml:"gttLengthSeconds"`
+	GttLengthSeconds    uint64         `yaml:"gttLengthSeconds"`
 	TgtTimeHorizonHours float64        `yaml:"tgtTimeHorizonHours"`
 	NumTicksFromMid     uint64         `yaml:"numTicksFromMid"`
 	NumIdenticalBots    int            `yaml:"numIdenticalBots"`

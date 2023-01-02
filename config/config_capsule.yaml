@@ -3,7 +3,7 @@
 server:
   env: prod  # dev, prod
   listen: ":7800"
-  logformat: json_pretty  # json, text
+  logencoding: json  # console
   loglevel: debug  # debug, info, warning, error
 
 callTimeoutMills: 10000

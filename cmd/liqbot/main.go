@@ -11,10 +11,10 @@ import (
 	"time"
 
 	"github.com/jinzhu/configor"
-	log "github.com/sirupsen/logrus"
 
 	"code.vegaprotocol.io/liqbot/config"
 	"code.vegaprotocol.io/liqbot/service"
+	"code.vegaprotocol.io/vega/logging"
 )
 
 var (
@@ -32,6 +32,12 @@ func main() {
 	flag.BoolVar(&configVersion, "version", false, "Show version")
 	flag.Parse()
 
+	log := logging.NewDevLogger()
+
+	if configName == "" {
+		log.Fatal("config flag was not provided")
+	}
+
 	if configVersion {
 		fmt.Printf("version %v (%v)\n", Version, VersionHash)
 		return
@@ -42,42 +48,31 @@ func main() {
 	var cfg config.Config
 	// https://github.com/jinzhu/configor/issues/40
 	if err := configor.Load(&cfg, configName); err != nil && !strings.Contains(err.Error(), "should be struct") {
-		log.WithFields(log.Fields{
-			"error": err.Error(),
-		}).Fatal("Failed to read config")
+		log.Fatal("Failed to read config", logging.Error(err))
 	}
 
 	if err := cfg.CheckConfig(); err != nil {
-		log.WithFields(log.Fields{
-			"error": err.Error(),
-		}).Fatal("Config checks failed")
+		log.Fatal("Config checks failed", logging.Error(err))
 	}
 
-	if err := cfg.ConfigureLogging(); err != nil {
-		log.WithFields(log.Fields{
-			"error": err.Error(),
-		}).Fatal("Failed to load config")
+	if err := cfg.ConfigureLogging(log); err != nil {
+		log.Fatal("Failed to load config", logging.Error(err))
 	}
 
-	log.WithFields(log.Fields{
-		"version": Version,
-		"hash":    VersionHash,
-	}).Info("Version")
+	log.With(
+		logging.String("version", Version),
+		logging.String("hash", VersionHash),
+	).Info("Version")
 
-	s, err := service.NewService(cfg)
+	s, err := service.NewService(log, cfg)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"error": err.Error(),
-		}).Fatal("Failed to create service")
+		log.Fatal("Failed to create service", logging.Error(err))
 	}
 
 	go func() {
 		err := s.Start()
 		if err != nil && err.Error() != "http: Server closed" {
-			log.WithFields(log.Fields{
-				"listen": cfg.Server.Listen,
-				"error":  err.Error(),
-			}).Fatal("Could not listen")
+			log.With(logging.String("listen", cfg.Server.Listen)).Fatal("Could not listen", logging.Error(err))
 		}
 	}()
 	c := make(chan os.Signal, 2)

@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	code.vegaprotocol.io/priceproxy v0.1.0
-	code.vegaprotocol.io/shared v0.0.0-20221212034427-2eba9e843c30
+	code.vegaprotocol.io/shared v0.0.0-20230102183548-eb73057be892
 	code.vegaprotocol.io/vega v0.63.2-0.20221207161357-3780ca754bc6
 	github.com/ethereum/go-ethereum v1.10.21 // indirect
 	github.com/golang/mock v1.6.1-0.20220512030613-73266f9366fc
@@ -12,9 +12,10 @@ require (
 	github.com/jinzhu/configor v1.2.1
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/shopspring/decimal v1.3.1 // indirect
-	github.com/sirupsen/logrus v1.9.0
+	github.com/sirupsen/logrus v1.9.0 // indirect
 	github.com/slack-go/slack v0.11.4 // indirect
 	github.com/stretchr/testify v1.8.0
+	go.uber.org/zap v1.23.0
 	gonum.org/v1/gonum v0.12.0
 )
 
@@ -71,7 +72,6 @@ require (
 	go.etcd.io/bbolt v1.3.6 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
-	go.uber.org/zap v1.23.0 // indirect
 	golang.org/x/crypto v0.1.0 // indirect
 	golang.org/x/exp v0.0.0-20220722155223-a9213eeb770e // indirect
 	golang.org/x/net v0.1.0 // indirect

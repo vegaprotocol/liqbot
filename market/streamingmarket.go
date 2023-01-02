@@ -6,12 +6,11 @@ import (
 	"fmt"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-
 	"code.vegaprotocol.io/shared/libs/cache"
 	sevents "code.vegaprotocol.io/shared/libs/events"
 	"code.vegaprotocol.io/shared/libs/types"
 	"code.vegaprotocol.io/vega/core/events"
+	"code.vegaprotocol.io/vega/logging"
 	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v2"
 	"code.vegaprotocol.io/vega/protos/vega"
 	coreapipb "code.vegaprotocol.io/vega/protos/vega/api/v1"
@@ -20,7 +19,7 @@ import (
 
 type market struct {
 	name      string
-	log       *log.Entry
+	log       *logging.Logger
 	node      dataNode
 	pubKey    string
 	marketID  string
@@ -28,14 +27,14 @@ type market struct {
 	busEvProc busEventer
 }
 
-func NewStream(name, pubKey string, node dataNode, pauseCh chan types.PauseSignal) *market {
+func NewStream(log *logging.Logger, name, pubKey string, node dataNode, pauseCh chan types.PauseSignal) *market {
 	return &market{
 		name:      name,
 		node:      node,
 		pubKey:    pubKey,
 		store:     cache.NewMarketStore(),
-		log:       log.WithField("component", "MarketStreamer"),
-		busEvProc: sevents.NewBusEventProcessor(node, sevents.WithPauseCh(pauseCh)),
+		log:       log.Named("MarketStreamer"),
+		busEvProc: sevents.NewBusEventProcessor(log, node, sevents.WithPauseCh(pauseCh)),
 	}
 }
 
@@ -77,11 +76,11 @@ func (m *market) waitForLiquidityProvision(ctx context.Context, ref string) erro
 
 			switch lp.Status {
 			case vega.LiquidityProvision_STATUS_ACTIVE, vega.LiquidityProvision_STATUS_PENDING:
-				m.log.WithFields(
-					log.Fields{
-						"liquidityProvisionID":  lp.Id,
-						"liquidityProvisionRef": lp.Reference,
-					}).Debug("liquidity provision is in: %s state", lp.Status.String())
+				m.log.With(
+					logging.String("liquidityProvisionID", lp.Id),
+					logging.String("liquidityProvisionRef", lp.Reference),
+					logging.String("liquidityProvisionStatus", lp.Status.String()),
+				).Debugf("liquidity provision state")
 				return true, nil
 			default:
 				return true, fmt.Errorf("failed to process liquidity provision: %s, %s, %s", lp.Id, lp.Reference, lp.Status.String())
@@ -124,9 +123,7 @@ func (m *market) waitForProposalID() (string, error) {
 
 			proposalID = proposal.Id
 
-			m.log.WithFields(log.Fields{
-				"proposalID": proposalID,
-			}).Info("Received proposal ID")
+			m.log.With(logging.ProposalID(proposalID)).Info("Received proposal ID")
 			return true, nil
 		}
 		return false, nil
@@ -166,10 +163,7 @@ func (m *market) waitForProposalEnacted(pID string) error {
 					proposal.ErrorDetails, proposal.State.String())
 			}
 
-			m.log.WithFields(
-				log.Fields{
-					"proposalID": proposal.Id,
-				}).Debug("Proposal was enacted")
+			m.log.With(logging.ProposalID(proposal.Id)).Info("Proposal was enacted")
 			return true, nil
 		}
 		return false, nil
@@ -226,15 +220,14 @@ func (m *market) subscribeToOrderEvents() {
 			order := event.GetOrder()
 
 			if order.Status == vega.Order_STATUS_REJECTED {
-				fields := log.Fields{
-					"orderID":         order.Id,
-					"order.status":    order.Status.String(),
-					"order.PartyId":   order.PartyId,
-					"order.marketID":  order.MarketId,
-					"order.reference": order.Reference,
-					"order.reason":    order.Reason,
-				}
-				m.log.WithFields(fields).Warn("Order was rejected")
+				m.log.With(
+					logging.String("orderID", order.Id),
+					logging.String("order.status", order.Status.String()),
+					logging.String("order.PartyId", order.PartyId),
+					logging.String("order.marketID", order.MarketId),
+					logging.String("order.reference", order.Reference),
+					logging.String("order.reason", order.Reason.String()),
+				).Warn("Order was rejected")
 			}
 		}
 		return false, nil

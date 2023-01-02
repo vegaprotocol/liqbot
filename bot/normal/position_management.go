@@ -5,15 +5,14 @@ import (
 	"fmt"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-
 	"code.vegaprotocol.io/shared/libs/cache"
 	"code.vegaprotocol.io/shared/libs/num"
+	"code.vegaprotocol.io/vega/logging"
 	"code.vegaprotocol.io/vega/protos/vega"
 )
 
 func (b *bot) runPositionManagement(ctx context.Context) {
-	defer b.log.Warning("PositionManagement: Stopped")
+	defer b.log.Warn("PositionManagement: Stopped")
 
 	sleepTime := time.Duration(b.config.StrategyDetails.PosManagementSleepMilliseconds) * time.Millisecond
 	previousOpenVolume := int64(0)
@@ -21,15 +20,13 @@ func (b *bot) runPositionManagement(ctx context.Context) {
 	for {
 		select {
 		case <-b.pausePosMgmt:
-			b.log.Warning("PositionManagement: Paused")
+			b.log.Warn("PositionManagement: Paused")
 			<-b.pausePosMgmt
 			b.log.Info("PositionManagement: Resumed")
 		case <-b.stopPosMgmt:
 			return
 		case <-ctx.Done():
-			b.log.WithFields(log.Fields{
-				"error": ctx.Err(),
-			}).Warning("PositionManagement: Stopped by context")
+			b.log.Warn("PositionManagement: Stopped by context")
 			return
 		default:
 			err := doze(sleepTime, b.stopPosMgmt)
@@ -38,12 +35,12 @@ func (b *bot) runPositionManagement(ctx context.Context) {
 			}
 
 			if err := b.EnsureCommitmentAmount(ctx); err != nil {
-				b.log.WithFields(log.Fields{"error": err.Error()}).Warning("PositionManagement: Failed to update commitment amount")
+				b.log.Warn("PositionManagement: Failed to update commitment amount", logging.Error(err))
 			}
 
 			if !b.CanPlaceOrders() {
 				if err := b.SeedOrders(ctx); err != nil {
-					b.log.WithFields(log.Fields{"error": err.Error()}).Warning("PositionManagement: Failed to seed orders")
+					b.log.Warn("PositionManagement: Failed to seed orders", logging.Error(err))
 					return
 				}
 				continue
@@ -51,11 +48,11 @@ func (b *bot) runPositionManagement(ctx context.Context) {
 
 			previousOpenVolume, err = b.manageDirection(ctx, previousOpenVolume)
 			if err != nil {
-				b.log.WithFields(log.Fields{"error": err.Error()}).Warning("PositionManagement: Failed to change LP direction")
+				b.log.Warn("PositionManagement: Failed to change LP direction", logging.Error(err))
 			}
 
 			if err = b.managePosition(ctx); err != nil {
-				b.log.WithFields(log.Fields{"error": err.Error()}).Warning("PositionManagement: Failed to manage position")
+				b.log.Warn("PositionManagement: Failed to manage position", logging.Error(err))
 			}
 		}
 	}
@@ -66,18 +63,18 @@ func (b *bot) manageDirection(ctx context.Context, previousOpenVolume int64) (in
 	buyShape, sellShape, shape := b.GetShape()
 	from := "PositionManagement"
 
-	b.log.WithFields(log.Fields{
-		"openVolume":         b.Market().OpenVolume(),
-		"previousOpenVolume": previousOpenVolume,
-		"shape":              shape,
-	}).Debug(from + ": Checking for direction change")
+	b.log.With(
+		logging.Int64("openVolume", b.Market().OpenVolume()),
+		logging.Int64("previousOpenVolume", previousOpenVolume),
+		logging.String("shape", shape),
+	).Debug(from + ": Checking for direction change")
 
 	// If we flipped then send the new LP order
 	if !((openVolume > 0 && previousOpenVolume <= 0) || (openVolume < 0 && previousOpenVolume >= 0)) {
 		return previousOpenVolume, nil
 	}
 
-	b.log.WithFields(log.Fields{"shape": shape}).Debug(from + ": Flipping LP direction")
+	b.log.With(logging.String("shape", shape)).Debug(from + ": Flipping LP direction")
 
 	if err := b.SendLiquidityProvisionAmendment(ctx, nil, buyShape, sellShape); err != nil {
 		return openVolume, fmt.Errorf("failed to send liquidity provision amendment: %w", err)
@@ -88,16 +85,16 @@ func (b *bot) manageDirection(ctx context.Context, previousOpenVolume int64) (in
 
 func (b *bot) managePosition(ctx context.Context) error {
 	size, side, shouldPlace := b.CheckPosition()
-	b.log.WithFields(log.Fields{
-		"currentPrice":    b.Market().MarkPrice().String(),
-		"balance.General": cache.General(b.Balance(ctx)).String(),
-		"balance.Margin":  cache.Margin(b.Balance(ctx)).String(),
-		"balance.Bond":    cache.Bond(b.Balance(ctx)).String(),
-		"openVolume":      b.Market().OpenVolume(),
-		"size":            size,
-		"side":            side.String(),
-		"shouldPlace":     shouldPlace,
-	}).Debug("PositionManagement: Checking for position management")
+	b.log.With(
+		logging.String("currentPrice", b.Market().MarkPrice().String()),
+		logging.String("balance.General", cache.General(b.Balance(ctx)).String()),
+		logging.String("balance.Margin", cache.Margin(b.Balance(ctx)).String()),
+		logging.String("balance.Bond", cache.Bond(b.Balance(ctx)).String()),
+		logging.Int64("openVolume", b.Market().OpenVolume()),
+		logging.Uint64("size", size),
+		logging.String("side", side.String()),
+		logging.Bool("shouldPlace", shouldPlace),
+	).Debug("PositionManagement: Checking for position management")
 
 	if !shouldPlace {
 		return nil
@@ -113,7 +110,7 @@ func (b *bot) managePosition(ctx context.Context) error {
 		Reference:   "PosManagement",
 	}
 
-	if err := b.SubmitOrder(ctx, order, "PositionManagement", int64(b.config.StrategyDetails.LimitOrderDistributionParams.GttLength)); err != nil {
+	if err := b.SubmitOrder(ctx, order, "PositionManagement", int64(b.config.StrategyDetails.LimitOrderDistributionParams.GttLengthSeconds)); err != nil {
 		return fmt.Errorf("failed to place order: %w", err)
 	}
 

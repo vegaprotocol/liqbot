@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 
-	log "github.com/sirupsen/logrus"
-
 	"code.vegaprotocol.io/liqbot/bot/normal"
 	"code.vegaprotocol.io/liqbot/config"
 	"code.vegaprotocol.io/liqbot/market"
@@ -15,10 +13,12 @@ import (
 	"code.vegaprotocol.io/shared/libs/node"
 	btypes "code.vegaprotocol.io/shared/libs/types"
 	"code.vegaprotocol.io/shared/libs/wallet"
+	"code.vegaprotocol.io/vega/logging"
 )
 
 // New returns a new Bot instance.
 func New(
+	log *logging.Logger,
 	botConf config.BotConfig,
 	conf config.Config,
 	pricing types.PricingEngine,
@@ -26,7 +26,7 @@ func New(
 ) (types.Bot, error) {
 	switch botConf.Strategy {
 	case config.BotStrategyNormal:
-		bot, err := newNormalBot(botConf, conf, pricing, whale)
+		bot, err := newNormalBot(log, botConf, conf, pricing, whale)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create normal bot '%s': %w", botConf.Name, err)
 		}
@@ -37,6 +37,7 @@ func New(
 }
 
 func newNormalBot(
+	log *logging.Logger,
 	botConf config.BotConfig,
 	conf config.Config,
 	pricing types.PricingEngine,
@@ -53,18 +54,18 @@ func newNormalBot(
 
 	conf.Wallet.Name = botConf.Name
 	conf.Wallet.Passphrase = "supersecret"
-	botWallet, err := wallet.NewWalletV2Service(conf.Wallet)
+	botWallet, err := wallet.NewWalletV2Service(log, conf.Wallet)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create bot wallet: %w", err)
 	}
 
 	pubKey := botWallet.PublicKey()
 	pauseCh := make(chan btypes.PauseSignal)
-	accountStream := account.NewStream(botConf.Name, dataNode, pauseCh)
-	marketStream := market.NewStream(botConf.Name, pubKey, dataNode, pauseCh)
-	accountService := account.NewService(botConf.Name, pubKey, botConf.SettlementAssetID, accountStream, whale)
-	marketService := market.NewService(dataNode, botWallet, pricing, accountService, marketStream, botConf, conf.VegaAssetID)
-	bot := normal.New(botConf, conf.VegaAssetID, accountService, marketService, pauseCh)
+	accountStream := account.NewStream(log, botConf.Name, dataNode, pauseCh)
+	marketStream := market.NewStream(log, botConf.Name, pubKey, dataNode, pauseCh)
+	accountService := account.NewService(log, botConf.Name, pubKey, botConf.SettlementAssetID, accountStream, whale)
+	marketService := market.NewService(log, dataNode, botWallet, pricing, accountService, marketStream, botConf, conf.VegaAssetID)
+	bot := normal.New(log, botConf, conf.VegaAssetID, accountService, marketService, pauseCh)
 
 	return bot, nil
 }
