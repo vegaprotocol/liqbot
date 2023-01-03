@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"math/rand"
 	"os"
 	"os/signal"
@@ -39,7 +38,10 @@ func main() {
 	}
 
 	if configVersion {
-		fmt.Printf("version %v (%v)\n", Version, VersionHash)
+		log.With(
+			logging.String("version", Version),
+			logging.String("version_hash", VersionHash),
+		).Info("liqbot version")
 		return
 	}
 
@@ -55,9 +57,7 @@ func main() {
 		log.Fatal("Config checks failed", logging.Error(err))
 	}
 
-	if err := cfg.ConfigureLogging(log); err != nil {
-		log.Fatal("Failed to load config", logging.Error(err))
-	}
+	log = cfg.ConfigureLogging(log)
 
 	log.With(
 		logging.String("version", Version),

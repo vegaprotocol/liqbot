@@ -117,7 +117,7 @@ func (m *market) waitForProposalID() (string, error) {
 			}
 
 			if proposal.State != vega.Proposal_STATE_OPEN {
-				return true, fmt.Errorf("failed to propose market: %s; code: %s",
+				return true, fmt.Errorf("failed to propose market: %v; code: %s",
 					proposal.ErrorDetails, proposal.State.String())
 			}
 
@@ -159,7 +159,7 @@ func (m *market) waitForProposalEnacted(pID string) error {
 					continue
 				}
 			} else {
-				return true, fmt.Errorf("failed to enact market: %s; code: %s",
+				return true, fmt.Errorf("failed to enact market: %v; code: %s",
 					proposal.ErrorDetails, proposal.State.String())
 			}
 

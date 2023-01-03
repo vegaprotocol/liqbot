@@ -167,7 +167,7 @@ func (m *Service) CreateMarket(ctx context.Context) error {
 		logging.String("name", m.config.Name),
 	).Info("Ensuring balance for market creation")
 
-	if err := m.account.EnsureBalance(ctx, m.config.SettlementAssetID, cache.General, seedAmount, m.decimalPlaces, 1, "MarketCreation"); err != nil {
+	if err := m.account.EnsureBalance(ctx, m.config.SettlementAssetID, cache.General, seedAmount, m.decimalPlaces, 2, "MarketCreation"); err != nil {
 		return fmt.Errorf("failed to ensure balance: %w", err)
 	}
 
@@ -471,7 +471,7 @@ func (m *Service) SendLiquidityProvisionAmendment(ctx context.Context, commitmen
 		return fmt.Errorf("failed to submit LiquidityProvisionAmendment: %w", err)
 	}
 
-	m.log.With(logging.String("commitment", commitment.String())).Debug("Submitted LiquidityProvisionAmendment")
+	m.log.With(logging.String("commitment", commitmentAmount)).Debug("Submitted LiquidityProvisionAmendment")
 	return nil
 }
 

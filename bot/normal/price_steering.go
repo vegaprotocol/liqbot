@@ -95,7 +95,7 @@ func (b *bot) steerPrice(ctx context.Context) error {
 
 	expectedBalance := price.Mul(price, size)
 
-	if err := b.EnsureBalance(ctx, b.config.SettlementAssetID, cache.General, expectedBalance, b.decimalPlaces, 10, "PriceSteering"); err != nil {
+	if err := b.EnsureBalance(ctx, b.config.SettlementAssetID, cache.General, expectedBalance, b.decimalPlaces, b.config.StrategyDetails.TopUpScale, "PriceSteering"); err != nil {
 		return fmt.Errorf("failed to ensure balance: %w", err)
 	}
 

@@ -24,6 +24,9 @@ type Strategy struct {
 	// SeedOrderCount is the number of seed orders that tries to get the market out of auction
 	SeedOrderCount int `yaml:"seedOrderCount"`
 
+	// TopUpScale is the scale of the top-up amount.
+	TopUpScale uint64 `yaml:"topUpScale"`
+
 	// CommitmentAmount is the amount of stake for the LP
 	CommitmentAmount string `yaml:"commitmentAmount"`
 

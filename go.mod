@@ -1,10 +1,10 @@
 module code.vegaprotocol.io/liqbot
 
-go 1.18
+go 1.19
 
 require (
 	code.vegaprotocol.io/priceproxy v0.1.0
-	code.vegaprotocol.io/shared v0.0.0-20230102183548-eb73057be892
+	code.vegaprotocol.io/shared v0.0.0-20230103015225-6ae2a0f4fbc1
 	code.vegaprotocol.io/vega v0.63.2-0.20221207161357-3780ca754bc6
 	github.com/ethereum/go-ethereum v1.10.21 // indirect
 	github.com/golang/mock v1.6.1-0.20220512030613-73266f9366fc

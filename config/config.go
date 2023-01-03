@@ -70,17 +70,20 @@ func (cfg *Config) CheckConfig() error {
 }
 
 // ConfigureLogging configures logging.
-func (cfg *Config) ConfigureLogging(log *logging.Logger) error {
+func (cfg *Config) ConfigureLogging(log *logging.Logger) *logging.Logger {
 	logCfg := logging.NewDefaultConfig()
-	if cfg.Server.Env != "" {
-		logCfg.Environment = cfg.Server.Env
-		if logCfg.Environment != "prod" {
-			log.Logger.WithOptions(zap.AddCaller(), zap.AddCallerSkip(1))
-		}
-	}
 
 	if cfg.Server.LogEncoding != "" {
 		logCfg.Custom.Zap.Encoding = cfg.Server.LogEncoding
+	}
+
+	if cfg.Server.Env != "" {
+		logCfg.Environment = cfg.Server.Env
+	}
+
+	log = logging.NewLoggerFromConfig(logCfg)
+	if logCfg.Environment != "prod" {
+		log.Logger = log.Logger.WithOptions(zap.AddCaller(), zap.AddCallerSkip(1))
 	}
 
 	if loglevel, err := logging.ParseLevel(cfg.Server.LogLevel); err == nil {
@@ -89,9 +92,7 @@ func (cfg *Config) ConfigureLogging(log *logging.Logger) error {
 		log.SetLevel(logging.WarnLevel)
 	}
 
-	log = logging.NewLoggerFromConfig(logCfg)
-
-	return nil
+	return log
 }
 
 // ServerConfig describes the settings for running the liquidity bot.

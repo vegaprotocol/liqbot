@@ -11,7 +11,6 @@ import (
 	"code.vegaprotocol.io/shared/libs/errors"
 	"code.vegaprotocol.io/shared/libs/wallet"
 	wconfig "code.vegaprotocol.io/shared/libs/whale/config"
-	"code.vegaprotocol.io/vega/logging"
 )
 
 func TestCheckConfig(t *testing.T) {
@@ -59,21 +58,4 @@ func TestCheckConfig(t *testing.T) {
 	cfg.Bots = append(cfg.Bots, botConfig)
 	err = cfg.CheckConfig()
 	assert.NoError(t, err)
-}
-
-func TestConfigureLogging(t *testing.T) {
-	cfg := new(config.Config)
-	cfg.Server = &config.ServerConfig{}
-
-	var servercfg config.ServerConfig
-	log := logging.NewTestLogger()
-	err := cfg.ConfigureLogging(log)
-	assert.NoError(t, err)
-
-	servercfg.LogLevel = "info"
-	for _, lf := range []string{"json", "console"} {
-		servercfg.LogEncoding = lf
-		err = cfg.ConfigureLogging(log)
-		assert.NoError(t, err)
-	}
 }

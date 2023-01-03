@@ -3,7 +3,7 @@
 server:
   env: prod  # dev, prod
   listen: ":7800"
-  logformat: text  # json, text
+  logformat: console  # json, console
   loglevel: debug  # debug, info, warning, error
 
 callTimeoutMills: 10000
@@ -28,6 +28,7 @@ whale:
   ownerPrivateKeys:
     993ed98f4f770d91a796faab1738551193ba45c62341d20597df70fea6704ede: a37f4c2a678aefb5037bf415a826df1540b330b7e471aa54184877ba901b9ef0
     b4f2726571fbe8e33b442dc92ed2d7f0d810e21835b7371a7915a365f07ccd9b: a37f4c2a678aefb5037bf415a826df1540b330b7e471aa54184877ba901b9ef0
+  topUpScale: 10
   faucetURL:
   slack:
     appToken:
@@ -54,6 +55,7 @@ bots:
       ordersFraction: 0.25
       seedAmount: 1000000000000000000
       seedOrderSize: 400
+      topUpScale: 10
       commitmentAmount: 50000000000000
       fee: 0.01
 
