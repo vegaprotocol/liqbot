@@ -4,8 +4,8 @@ go 1.19
 
 require (
 	code.vegaprotocol.io/priceproxy v0.1.0
-	code.vegaprotocol.io/shared v0.0.0-20230103015225-6ae2a0f4fbc1
-	code.vegaprotocol.io/vega v0.63.2-0.20221207161357-3780ca754bc6
+	code.vegaprotocol.io/shared v0.0.0-20230103180939-6b85c5fe461f
+	code.vegaprotocol.io/vega v0.65.1
 	github.com/ethereum/go-ethereum v1.10.21 // indirect
 	github.com/golang/mock v1.6.1-0.20220512030613-73266f9366fc
 	github.com/hashicorp/go-multierror v1.1.1
@@ -25,7 +25,7 @@ require (
 	github.com/StackExchange/wmi v1.2.1 // indirect
 	github.com/adrg/xdg v0.4.0 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
-	github.com/btcsuite/btcd v0.22.1 // indirect
+	github.com/btcsuite/btcd v0.22.2 // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.2.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.1.3 // indirect
 	github.com/cespare/xxhash v1.1.0 // indirect
@@ -88,4 +88,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/shopspring/decimal => github.com/vegaprotocol/decimal v1.2.1-0.20210705145732-aaa563729a0a
+replace github.com/shopspring/decimal => github.com/vegaprotocol/decimal v1.3.1-uint256
