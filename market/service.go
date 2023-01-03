@@ -727,6 +727,7 @@ func (m *Service) getExampleMarket() *vega.NewMarket {
 					ProbabilityOfTrading: 0.1,
 				},
 			},
+			LpPriceRange: "25",
 		},
 	}
 }
