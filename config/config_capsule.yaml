@@ -17,6 +17,9 @@ pricing:
 wallet:
   nodeURL: localhost:3027
   storePath: /tmp/wallet/liqbot
+  name: liqbot
+  passphrase: liqbot-secret
+
 token:
   ethereumAPIAddress:   ws://localhost:8545
   erc20BridgeAddress:   0x9708FF7510D4A7B9541e1699d15b53Ecb1AFDc54

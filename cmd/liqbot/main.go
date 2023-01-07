@@ -34,7 +34,7 @@ func main() {
 	log := logging.NewDevLogger()
 
 	if configName == "" {
-		log.Fatal("config flag was not provided")
+		log.Fatal("config was not provided")
 	}
 
 	if configVersion {

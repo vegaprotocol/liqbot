@@ -15,7 +15,11 @@ pricing:
     host: prices.ops.vega.xyz
     path: /prices
 wallet:
-  url: http://127.0.0.1:1790
+  nodeURL: localhost:3027
+  storePath: /tmp/wallet/liqbot
+  name: liqbot
+  passphrase: liqbot-secret
+
 token:
   ethereumAPIAddress:   ws://127.0.0.1:8545
   erc20BridgeAddress:   0x9708FF7510D4A7B9541e1699d15b53Ecb1AFDc54
