@@ -99,7 +99,7 @@ func (b *bot) Start() error {
 	b.marketID = market.Id
 	b.decimalPlaces = market.DecimalPlaces
 
-	if err = b.marketService.Start(market.Id); err != nil {
+	if err = b.marketService.Start(ctx, market.Id); err != nil {
 		return fmt.Errorf("failed to start market service: %w", err)
 	}
 

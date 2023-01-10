@@ -48,12 +48,12 @@ func (a *account) Init(pubKey string, pauseCh chan types.PauseSignal) {
 	a.subscribeToAccountEvents()
 }
 
-func (a *account) GetBalances(assetID string) (BalanceStore, error) {
+func (a *account) GetBalances(ctx context.Context, assetID string) (BalanceStore, error) {
 	if store, ok := a.balanceStores.get(assetID); ok {
 		return store, nil
 	}
 
-	response, err := a.node.PartyAccounts(&dataapipb.PartyAccountsRequest{
+	response, err := a.node.PartyAccounts(ctx, &dataapipb.PartyAccountsRequest{
 		PartyId: a.walletPubKey,
 		Asset:   assetID,
 	})
@@ -274,7 +274,7 @@ func (a *account) deleteWaitingDeposit(assetID string) {
 	delete(a.waitingDeposits, assetID)
 }
 
-func (a *account) WaitForStakeLinking(pubKey string) error {
+func (a *account) WaitForStakeLinking(ctx context.Context, pubKey string) error {
 	req := &coreapipb.ObserveEventBusRequest{
 		Type: []eventspb.BusEventType{eventspb.BusEventType_BUS_EVENT_TYPE_STAKE_LINKING},
 	}

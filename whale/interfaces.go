@@ -10,12 +10,15 @@ import (
 )
 
 type dataNode interface {
-	AssetByID(req *dataapipb.AssetByIDRequest) (*dataapipb.AssetByIDResponse, error)
-	PartyAccounts(req *dataapipb.PartyAccountsRequest) (response *dataapipb.PartyAccountsResponse, err error)
+	AssetByID(ctx context.Context, req *dataapipb.AssetByIDRequest) (*dataapipb.AssetByIDResponse, error)
+	PartyAccounts(ctx context.Context, req *dataapipb.PartyAccountsRequest) (response *dataapipb.PartyAccountsResponse, err error)
 	MustDialConnection(ctx context.Context)
 }
 
 type walletClient interface {
+	CreateWallet(ctx context.Context, name, passphrase string) (string, error)
+	ListPublicKeys(ctx context.Context) ([]string, error)
+	GenerateKeyPair(ctx context.Context, passphrase string, meta []wtypes.Meta) (*wtypes.Key, error)
 	LoginWallet(ctx context.Context, name, passphrase string) error
 	SignTx(ctx context.Context, req *v1.SubmitTransactionRequest) error
 }

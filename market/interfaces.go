@@ -22,7 +22,7 @@ type PricingEngine interface {
 // TODO: this could be improved: pubKey could be specified in config.
 type marketStream interface {
 	Init(pubKey string, pauseCh chan types.PauseSignal) (data.MarketStore, error)
-	Subscribe(marketID string) error
+	Subscribe(ctx context.Context, marketID string) error
 	WaitForProposalID() (string, error)
 	WaitForProposalEnacted(pID string) error
 }
@@ -30,7 +30,7 @@ type marketStream interface {
 type tradingDataService interface {
 	MustDialConnection(ctx context.Context)
 	Target() string
-	Markets(req *dataapipb.MarketsRequest) (*dataapipb.MarketsResponse, error) // TODO: bot should probably not have to worry about finding markets
+	Markets(ctx context.Context, req *dataapipb.MarketsRequest) (*dataapipb.MarketsResponse, error) // TODO: bot should probably not have to worry about finding markets
 }
 
 type accountService interface {

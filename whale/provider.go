@@ -148,7 +148,7 @@ func (p *Provider) topUpAsync(ctx context.Context, receiverName, receiverAddress
 }
 
 func (p *Provider) deposit(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint) error {
-	response, err := p.node.AssetByID(&dataapipb.AssetByIDRequest{
+	response, err := p.node.AssetByID(ctx, &dataapipb.AssetByIDRequest{
 		Id: assetID,
 	})
 	if err != nil {
@@ -194,7 +194,7 @@ func (p *Provider) setPendingDeposit(assetID string, pending pendingDeposit) {
 }
 
 func (p *Provider) StakeAsync(ctx context.Context, receiverAddress, assetID string, amount *num.Uint) error {
-	response, err := p.node.AssetByID(&dataapipb.AssetByIDRequest{
+	response, err := p.node.AssetByID(ctx, &dataapipb.AssetByIDRequest{
 		Id: assetID,
 	})
 	if err != nil {

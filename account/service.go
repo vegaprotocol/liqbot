@@ -38,7 +38,7 @@ func (a *Service) Init(pubKey string, pauseCh chan types.PauseSignal) {
 }
 
 func (a *Service) EnsureBalance(ctx context.Context, assetID string, targetAmount *num.Uint, from string) error {
-	store, err := a.getStore(assetID)
+	store, err := a.getStore(ctx, assetID)
 	if err != nil {
 		return err
 	}
@@ -126,7 +126,7 @@ func (a *Service) EnsureStake(ctx context.Context, receiverName, receiverPubKey,
 		"targetAmount":   targetAmount.String(),
 	}).Debugf("%s: Waiting for staking...", from)
 
-	if err = a.accountStream.WaitForStakeLinking(receiverPubKey); err != nil {
+	if err = a.accountStream.WaitForStakeLinking(ctx, receiverPubKey); err != nil {
 		return fmt.Errorf("failed to finalise stake: %w", err)
 	}
 
@@ -137,8 +137,8 @@ func (a *Service) StakeAsync(ctx context.Context, receiverPubKey, assetID string
 	return a.coinProvider.StakeAsync(ctx, receiverPubKey, assetID, amount)
 }
 
-func (a *Service) Balance() types.Balance {
-	store, err := a.getStore(a.assetID)
+func (a *Service) Balance(ctx context.Context) types.Balance {
+	store, err := a.getStore(ctx, a.assetID)
 	if err != nil {
 		a.log.WithError(err).Error("failed to get balance store")
 		return types.Balance{}
@@ -146,12 +146,12 @@ func (a *Service) Balance() types.Balance {
 	return store.Balance()
 }
 
-func (a *Service) getStore(assetID string) (data.BalanceStore, error) {
+func (a *Service) getStore(ctx context.Context, assetID string) (data.BalanceStore, error) {
 	var err error
 
 	store, ok := a.stores[assetID]
 	if !ok {
-		store, err = a.accountStream.GetBalances(assetID)
+		store, err = a.accountStream.GetBalances(ctx, assetID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialise balances for '%s': %w", assetID, err)
 		}

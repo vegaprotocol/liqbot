@@ -46,14 +46,14 @@ func (m *market) Init(pubKey string, pauseCh chan types.PauseSignal) (MarketStor
 	return store, nil
 }
 
-func (m *market) Subscribe(marketID string) error {
+func (m *market) Subscribe(ctx context.Context, marketID string) error {
 	m.marketID = marketID
 
-	if err := m.initMarketData(); err != nil {
+	if err := m.initMarketData(ctx); err != nil {
 		return fmt.Errorf("failed to get market market: %w", err)
 	}
 
-	if err := m.initOpenVolume(); err != nil {
+	if err := m.initOpenVolume(ctx); err != nil {
 		return fmt.Errorf("failed to get open volume: %w", err)
 	}
 
@@ -201,8 +201,8 @@ func (m *market) subscribePositions() {
 	m.busEvProc.processEvents(context.Background(), "PositionData: "+m.name, req, proc)
 }
 
-func (m *market) initOpenVolume() error {
-	positions, err := m.getPositions()
+func (m *market) initOpenVolume(ctx context.Context) error {
+	positions, err := m.getPositions(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get position details: %w", err)
 	}
@@ -221,8 +221,8 @@ func (m *market) initOpenVolume() error {
 }
 
 // getPositions get this bot's positions.
-func (m *market) getPositions() ([]*vega.Position, error) {
-	response, err := m.node.PositionsByParty(&dataapipb.PositionsByPartyRequest{
+func (m *market) getPositions(ctx context.Context) ([]*vega.Position, error) {
+	response, err := m.node.PositionsByParty(ctx, &dataapipb.PositionsByPartyRequest{
 		PartyId:  m.walletPubKey,
 		MarketId: m.marketID,
 	})
@@ -234,8 +234,8 @@ func (m *market) getPositions() ([]*vega.Position, error) {
 }
 
 // initMarketData gets the latest info about the market.
-func (m *market) initMarketData() error {
-	response, err := m.node.MarketDataByID(&dataapipb.MarketDataByIDRequest{MarketId: m.marketID})
+func (m *market) initMarketData(ctx context.Context) error {
+	response, err := m.node.MarketDataByID(ctx, &dataapipb.MarketDataByIDRequest{MarketId: m.marketID})
 	if err != nil {
 		return fmt.Errorf("failed to get market market (ID:%s): %w", m.marketID, err)
 	}

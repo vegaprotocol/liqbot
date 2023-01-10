@@ -78,9 +78,9 @@ func (m *Service) Init(pubKey string, pauseCh chan types.PauseSignal) error {
 	return nil
 }
 
-func (m *Service) Start(marketID string) error {
+func (m *Service) Start(ctx context.Context, marketID string) error {
 	m.log.Info("Starting market service")
-	if err := m.marketStream.Subscribe(marketID); err != nil {
+	if err := m.marketStream.Subscribe(ctx, marketID); err != nil {
 		return fmt.Errorf("failed to subscribe to market stream: %w", err)
 	}
 	m.marketID = marketID
@@ -96,7 +96,7 @@ func (m *Service) Market() types.MarketData {
 }
 
 func (m *Service) SetupMarket(ctx context.Context) (*vega.Market, error) {
-	market, err := m.FindMarket()
+	market, err := m.FindMarket(ctx)
 	if err == nil {
 		m.log.WithField("market", market).Info("Found market")
 		return market, nil
@@ -108,7 +108,7 @@ func (m *Service) SetupMarket(ctx context.Context) (*vega.Market, error) {
 		return nil, fmt.Errorf("failed to create market: %w", err)
 	}
 
-	market, err = m.FindMarket()
+	market, err = m.FindMarket(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find market after creation: %w", err)
 	}
@@ -116,8 +116,8 @@ func (m *Service) SetupMarket(ctx context.Context) (*vega.Market, error) {
 	return market, nil
 }
 
-func (m *Service) FindMarket() (*vega.Market, error) {
-	marketsResponse, err := m.node.Markets(&v12.MarketsRequest{})
+func (m *Service) FindMarket(ctx context.Context) (*vega.Market, error) {
+	marketsResponse, err := m.node.Markets(ctx, &v12.MarketsRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get markets: %w", err)
 	}

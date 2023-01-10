@@ -174,8 +174,8 @@ func (b *bot) managePosition(ctx context.Context) error {
 	size, side, shouldPlace := b.checkPosition()
 	b.log.WithFields(log.Fields{
 		"currentPrice":   b.Market().MarkPrice().String(),
-		"balanceGeneral": b.Balance().General().String(),
-		"balanceMargin":  b.Balance().Margin().String(),
+		"balanceGeneral": b.Balance(ctx).General().String(),
+		"balanceMargin":  b.Balance(ctx).Margin().String(),
 		"openVolume":     b.Market().OpenVolume(),
 		"size":           size,
 		"side":           side.String(),
@@ -219,7 +219,7 @@ func (b *bot) sendLiquidityProvision(ctx context.Context, commitment *num.Uint, 
 
 	b.log.WithFields(log.Fields{
 		"commitment":   commitment.String(),
-		"balanceTotal": b.Balance().Total().String(),
+		"balanceTotal": b.Balance(ctx).Total().String(),
 	}).Debug("PositionManagement: Submitting LiquidityProvisionSubmission...")
 
 	if err := b.walletClient.SignTx(ctx, submitTxReq); err != nil {
@@ -228,7 +228,7 @@ func (b *bot) sendLiquidityProvision(ctx context.Context, commitment *num.Uint, 
 
 	b.log.WithFields(log.Fields{
 		"commitment":   commitment.String(),
-		"balanceTotal": b.Balance().Total().String(),
+		"balanceTotal": b.Balance(ctx).Total().String(),
 	}).Debug("PositionManagement: Submitted LiquidityProvisionSubmission")
 	return nil
 }
@@ -278,7 +278,7 @@ func (b *bot) sendLiquidityProvisionCancellation(ctx context.Context) error {
 
 	b.log.WithFields(log.Fields{
 		"commitment":   "0",
-		"balanceTotal": b.Balance().Total().String(),
+		"balanceTotal": b.Balance(ctx).Total().String(),
 	}).Debug("PositionManagement: Submitted LiquidityProvisionAmendment")
 
 	return nil
@@ -308,7 +308,7 @@ func (b *bot) provideLiquidity(ctx context.Context) error {
 	buyShape, sellShape, _ := b.getShape()
 	// At the cache of each loop, wait for positive general account balance. This is in case the network has
 	// been restarted.
-	if err := b.checkInitialMargin(buyShape, sellShape); err != nil {
+	if err := b.checkInitialMargin(ctx, buyShape, sellShape); err != nil {
 		return fmt.Errorf("failed initial margin check: %w", err)
 	}
 
@@ -349,9 +349,9 @@ func (b *bot) getShape() ([]*vega.LiquidityOrder, []*vega.LiquidityOrder, string
 	return buyShape, sellShape, shape
 }
 
-func (b *bot) checkInitialMargin(buyShape, sellShape []*vega.LiquidityOrder) error {
+func (b *bot) checkInitialMargin(ctx context.Context, buyShape, sellShape []*vega.LiquidityOrder) error {
 	// Turn the shapes into a set of orders scaled by commitment
-	obligation := b.Balance().Total()
+	obligation := b.Balance(ctx).Total()
 	buyOrders := b.calculateOrderSizes(obligation, buyShape)
 	sellOrders := b.calculateOrderSizes(obligation, sellShape)
 
@@ -362,7 +362,7 @@ func (b *bot) checkInitialMargin(buyShape, sellShape []*vega.LiquidityOrder) err
 	sellCost := b.calculateMarginCost(sellRisk, sellOrders)
 
 	shapeMarginCost := num.Max(buyCost, sellCost)
-	avail := mulFrac(b.Balance().General(), b.config.StrategyDetails.OrdersFraction, 15)
+	avail := mulFrac(b.Balance(ctx).General(), b.config.StrategyDetails.OrdersFraction, 15)
 
 	if !avail.LT(shapeMarginCost) {
 		return nil

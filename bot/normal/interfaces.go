@@ -31,7 +31,7 @@ type WalletClient interface {
 */
 type marketService interface {
 	Init(pubKey string, pauseCh chan types.PauseSignal) error
-	Start(marketID string) error
+	Start(ctx context.Context, marketID string) error
 	Market() types.MarketData
 	CanPlaceOrders() bool
 	SubmitOrder(ctx context.Context, order *vega.Order, from string, secondsFromNow int64) error
@@ -42,6 +42,6 @@ type marketService interface {
 
 type accountService interface {
 	Init(pubKey string, pauseCh chan types.PauseSignal)
-	Balance() types.Balance
+	Balance(ctx context.Context) types.Balance
 	EnsureBalance(ctx context.Context, assetID string, targetAmount *num.Uint, from string) error
 }

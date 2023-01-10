@@ -12,7 +12,7 @@ import (
 
 type accountStream interface {
 	Init(pubKey string, pauseCh chan types.PauseSignal)
-	GetBalances(assetID string) (data.BalanceStore, error)
-	WaitForStakeLinking(pubKey string) error
+	GetBalances(ctx context.Context, assetID string) (data.BalanceStore, error)
+	WaitForStakeLinking(ctx context.Context, pubKey string) error
 	WaitForTopUpToFinalise(ctx context.Context, evtType v1.BusEventType, walletPubKey, assetID string, amount *num.Uint, timeout time.Duration) error
 }
