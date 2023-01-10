@@ -16,9 +16,9 @@ type dataNode interface {
 }
 
 type walletClient interface {
-	CreateWallet(ctx context.Context, name, passphrase string) (string, error)
+	CreateWallet(ctx context.Context, name, passphrase string) error
 	ListPublicKeys(ctx context.Context) ([]string, error)
-	GenerateKeyPair(ctx context.Context, passphrase string, meta []wtypes.Meta) (*wtypes.Key, error)
+	GenerateKeyPair(ctx context.Context, passphrase string, meta []types.Meta) (*types.Key, error)
 	LoginWallet(ctx context.Context, name, passphrase string) error
 	SignTx(ctx context.Context, req *v1.SubmitTransactionRequest) error
 }

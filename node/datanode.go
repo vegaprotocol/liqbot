@@ -163,7 +163,7 @@ func (n *DataNode) ObserveEventBus(ctx context.Context) (vegaapipb.CoreService_O
 // === TradingDataService ===
 
 // PartyAccounts returns accounts for the given party.
-func (n *DataNode) PartyAccounts(req *dataapipb.PartyAccountsRequest) (*dataapipb.PartyAccountsResponse, error) {
+func (n *DataNode) PartyAccounts(ctx context.Context, req *dataapipb.PartyAccountsRequest) (*dataapipb.PartyAccountsResponse, error) {
 	msg := "gRPC call failed (data-node): PartyAccounts: %w"
 	if n == nil {
 		return nil, fmt.Errorf(msg, e.ErrNil)
@@ -174,7 +174,7 @@ func (n *DataNode) PartyAccounts(req *dataapipb.PartyAccountsRequest) (*dataapip
 	}
 
 	c := dataapipb.NewTradingDataServiceClient(n.conn)
-	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
+	ctx, cancel := context.WithTimeout(ctx, n.callTimeout)
 	defer cancel()
 
 	response, err := c.PartyAccounts(ctx, req)
@@ -186,7 +186,7 @@ func (n *DataNode) PartyAccounts(req *dataapipb.PartyAccountsRequest) (*dataapip
 }
 
 // MarketDataByID returns market data for the specified market.
-func (n *DataNode) MarketDataByID(req *dataapipb.MarketDataByIDRequest) (*dataapipb.MarketDataByIDResponse, error) {
+func (n *DataNode) MarketDataByID(ctx context.Context, req *dataapipb.MarketDataByIDRequest) (*dataapipb.MarketDataByIDResponse, error) {
 	msg := "gRPC call failed (data-node): MarketDataByID: %w"
 	if n == nil {
 		return nil, fmt.Errorf(msg, e.ErrNil)
@@ -197,7 +197,7 @@ func (n *DataNode) MarketDataByID(req *dataapipb.MarketDataByIDRequest) (*dataap
 	}
 
 	c := dataapipb.NewTradingDataServiceClient(n.conn)
-	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
+	ctx, cancel := context.WithTimeout(ctx, n.callTimeout)
 	defer cancel()
 
 	response, err := c.MarketDataByID(ctx, req)
@@ -209,7 +209,7 @@ func (n *DataNode) MarketDataByID(req *dataapipb.MarketDataByIDRequest) (*dataap
 }
 
 // Markets returns all markets.
-func (n *DataNode) Markets(req *dataapipb.MarketsRequest) (*dataapipb.MarketsResponse, error) {
+func (n *DataNode) Markets(ctx context.Context, req *dataapipb.MarketsRequest) (*dataapipb.MarketsResponse, error) {
 	msg := "gRPC call failed (data-node): Markets: %w"
 	if n == nil {
 		return nil, fmt.Errorf(msg, e.ErrNil)
@@ -220,7 +220,7 @@ func (n *DataNode) Markets(req *dataapipb.MarketsRequest) (*dataapipb.MarketsRes
 	}
 
 	c := dataapipb.NewTradingDataServiceClient(n.conn)
-	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
+	ctx, cancel := context.WithTimeout(ctx, n.callTimeout)
 	defer cancel()
 
 	response, err := c.Markets(ctx, req)
@@ -232,7 +232,7 @@ func (n *DataNode) Markets(req *dataapipb.MarketsRequest) (*dataapipb.MarketsRes
 }
 
 // PositionsByParty returns positions for the given party.
-func (n *DataNode) PositionsByParty(req *dataapipb.PositionsByPartyRequest) (*dataapipb.PositionsByPartyResponse, error) {
+func (n *DataNode) PositionsByParty(ctx context.Context, req *dataapipb.PositionsByPartyRequest) (*dataapipb.PositionsByPartyResponse, error) {
 	msg := "gRPC call failed (data-node): PositionsByParty: %w"
 	if n == nil {
 		return nil, fmt.Errorf(msg, e.ErrNil)
@@ -243,7 +243,7 @@ func (n *DataNode) PositionsByParty(req *dataapipb.PositionsByPartyRequest) (*da
 	}
 
 	c := dataapipb.NewTradingDataServiceClient(n.conn)
-	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
+	ctx, cancel := context.WithTimeout(ctx, n.callTimeout)
 	defer cancel()
 
 	response, err := c.PositionsByParty(ctx, req)
@@ -255,7 +255,7 @@ func (n *DataNode) PositionsByParty(req *dataapipb.PositionsByPartyRequest) (*da
 }
 
 // AssetByID returns the specified asset.
-func (n *DataNode) AssetByID(req *dataapipb.AssetByIDRequest) (*dataapipb.AssetByIDResponse, error) {
+func (n *DataNode) AssetByID(ctx context.Context, req *dataapipb.AssetByIDRequest) (*dataapipb.AssetByIDResponse, error) {
 	msg := "gRPC call failed (data-node): AssetByID: %w"
 	if n == nil {
 		return nil, fmt.Errorf(msg, e.ErrNil)
@@ -266,7 +266,7 @@ func (n *DataNode) AssetByID(req *dataapipb.AssetByIDRequest) (*dataapipb.AssetB
 	}
 
 	c := dataapipb.NewTradingDataServiceClient(n.conn)
-	ctx, cancel := context.WithTimeout(context.Background(), n.callTimeout)
+	ctx, cancel := context.WithTimeout(ctx, n.callTimeout)
 	defer cancel()
 
 	response, err := c.AssetByID(ctx, req)
