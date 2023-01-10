@@ -3,10 +3,8 @@ package types
 import (
 	"fmt"
 
+	"code.vegaprotocol.io/shared/libs/num"
 	"code.vegaprotocol.io/vega/protos/vega"
-
-	"code.vegaprotocol.io/liqbot/types/num"
-	"code.vegaprotocol.io/liqbot/util"
 )
 
 type MarketData struct {
@@ -85,22 +83,22 @@ func (md MarketData) OpenVolume() int64 {
 }
 
 func FromVegaMD(marketData *vega.MarketData) (*MarketData, error) {
-	staticMidPrice, err := util.ConvertUint256(marketData.StaticMidPrice)
+	staticMidPrice, err := num.ConvertUint256(marketData.StaticMidPrice)
 	if err != nil {
 		return nil, fmt.Errorf("invalid static mid price: %s", err)
 	}
 
-	markPrice, err := util.ConvertUint256(marketData.MarkPrice)
+	markPrice, err := num.ConvertUint256(marketData.MarkPrice)
 	if err != nil {
 		return nil, fmt.Errorf("invalid mark price: %s", err)
 	}
 
-	targetStake, err := util.ConvertUint256(marketData.TargetStake)
+	targetStake, err := num.ConvertUint256(marketData.TargetStake)
 	if err != nil {
 		return nil, fmt.Errorf("invalid target stake: %s", err)
 	}
 
-	suppliedStake, err := util.ConvertUint256(marketData.SuppliedStake)
+	suppliedStake, err := num.ConvertUint256(marketData.SuppliedStake)
 	if err != nil {
 		return nil, fmt.Errorf("invalid supplied stake: %s", err)
 	}

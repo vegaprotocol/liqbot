@@ -11,7 +11,7 @@ import (
 
 	"code.vegaprotocol.io/liqbot/config"
 	"code.vegaprotocol.io/liqbot/types"
-	"code.vegaprotocol.io/liqbot/types/num"
+	wtypes "code.vegaprotocol.io/shared/libs/wallet/types"
 	"code.vegaprotocol.io/vega/wallet/wallets"
 )
 
@@ -202,10 +202,11 @@ func (b *bot) setupWallet(ctx context.Context) (string, error) {
 
 	if err := b.walletClient.LoginWallet(ctx, b.config.Name, walletPassphrase); err != nil {
 		if strings.Contains(err.Error(), wallets.ErrWalletDoesNotExists.Error()) {
-			if err = b.walletClient.CreateWallet(ctx, b.config.Name, walletPassphrase); err != nil {
+			mnemonic, err := b.walletClient.CreateWallet(ctx, b.config.Name, walletPassphrase)
+			if err != nil {
 				return "", fmt.Errorf("failed to create wallet: %w", err)
 			}
-			b.log.Info("Created and logged into wallet")
+			b.log.WithFields(log.Fields{"mnemonic": mnemonic}).Info("Created and logged into wallet")
 		} else {
 			return "", fmt.Errorf("failed to log into wallet: %w", err)
 		}
@@ -221,7 +222,7 @@ func (b *bot) setupWallet(ctx context.Context) (string, error) {
 	var walletPubKey string
 
 	if len(publicKeys) == 0 {
-		key, err := b.walletClient.GenerateKeyPair(ctx, walletPassphrase, []types.Meta{})
+		key, err := b.walletClient.GenerateKeyPair(ctx, walletPassphrase, []wtypes.Meta{})
 		if err != nil {
 			return "", fmt.Errorf("failed to generate keypair: %w", err)
 		}

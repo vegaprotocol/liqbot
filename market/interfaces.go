@@ -5,16 +5,16 @@ import (
 
 	"code.vegaprotocol.io/liqbot/data"
 	"code.vegaprotocol.io/liqbot/types"
-	"code.vegaprotocol.io/liqbot/types/num"
 	ppconfig "code.vegaprotocol.io/priceproxy/config"
 	ppservice "code.vegaprotocol.io/priceproxy/service"
+	"code.vegaprotocol.io/shared/libs/num"
 	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v1"
 )
 
 // TODO: PricingEngine response data could be cached in the data service, along with other external data sources.
 // PricingEngine is the source of price information from the price proxy.
 //
-//go:generate go run github.com/golang/mock/mockgen -destination mocks/pricingengine_mock.go -package mocks code.vegaprotocol.io/liqbot/bot/normal PricingEngine
+//go:generate go run github.com/golang/mock/mockgen -destination mocks/pricingengine_mock.go -package mocks code.vegaprotocol.io/liqbot/market PricingEngine
 type PricingEngine interface {
 	GetPrice(pricecfg ppconfig.PriceConfig) (ppservice.PriceResponse, error)
 }

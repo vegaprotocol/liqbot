@@ -9,7 +9,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"code.vegaprotocol.io/liqbot/errors"
+	"code.vegaprotocol.io/shared/libs/errors"
 )
 
 // Config describes the top level config file format.
@@ -148,9 +148,6 @@ type BotConfig struct {
 
 	// InstrumentQuote is the quote asset of the instrument.
 	InstrumentQuote string `yaml:"instrumentQuote"`
-
-	// QuoteAssetID is the id of the quote asset.
-	QuoteAssetID string `yaml:"quoteAssetID"`
 
 	// Strategy specifies which algorithm the bot is to use.
 	Strategy string `yaml:"strategy"`

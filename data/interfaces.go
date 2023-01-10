@@ -10,7 +10,7 @@ import (
 
 // DataNode is a Vega Data node
 //
-//go:generate go run github.com/golang/mock/mockgen -destination mocks/datanode_mock.go -package mocks code.vegaprotocol.io/liqbot/market DataNode
+//go:generate go run github.com/golang/mock/mockgen -destination mocks/datanode_mock.go -package mocks code.vegaprotocol.io/liqbot/data DataNode
 type DataNode interface {
 	busStreamer
 	PartyAccounts(ctx context.Context, req *dataapipb.PartyAccountsRequest) (response *dataapipb.PartyAccountsResponse, err error)

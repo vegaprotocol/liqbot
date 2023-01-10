@@ -10,8 +10,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"code.vegaprotocol.io/liqbot/types/num"
-	"code.vegaprotocol.io/liqbot/util"
+	"code.vegaprotocol.io/shared/libs/num"
 	"code.vegaprotocol.io/vega/protos/vega"
 	commandspb "code.vegaprotocol.io/vega/protos/vega/commands/v1"
 	walletpb "code.vegaprotocol.io/vega/protos/vega/wallet/v1"
@@ -113,7 +112,7 @@ func (b *bot) getRequiredCommitment() (*num.Uint, error) {
 
 	if targetStake.IsZero() {
 		var err error
-		targetStake, err = util.ConvertUint256(b.config.StrategyDetails.CommitmentAmount)
+		targetStake, err = num.ConvertUint256(b.config.StrategyDetails.CommitmentAmount)
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert commitment amount: %w", err)
 		}

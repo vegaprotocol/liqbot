@@ -3,7 +3,7 @@ package types
 import (
 	"testing"
 
-	"code.vegaprotocol.io/liqbot/types/num"
+	"code.vegaprotocol.io/shared/libs/num"
 	vt "code.vegaprotocol.io/vega/core/types"
 )
 

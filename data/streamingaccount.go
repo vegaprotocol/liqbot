@@ -9,8 +9,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"code.vegaprotocol.io/liqbot/types"
-	"code.vegaprotocol.io/liqbot/types/num"
-	"code.vegaprotocol.io/liqbot/util"
+	"code.vegaprotocol.io/shared/libs/num"
 	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v1"
 	"code.vegaprotocol.io/vega/protos/vega"
 	coreapipb "code.vegaprotocol.io/vega/protos/vega/api/v1"
@@ -126,7 +125,7 @@ func (a *account) subscribeToAccountEvents() {
 }
 
 func (a *account) setBalanceByType(account *vega.Account, store BalanceStore) error {
-	balance, err := util.ConvertUint256(account.Balance)
+	balance, err := num.ConvertUint256(account.Balance)
 	if err != nil {
 		return fmt.Errorf("failed to convert account balance: %w", err)
 	}

@@ -8,7 +8,7 @@ import (
 
 	"code.vegaprotocol.io/liqbot/data"
 	"code.vegaprotocol.io/liqbot/types"
-	"code.vegaprotocol.io/liqbot/types/num"
+	"code.vegaprotocol.io/shared/libs/num"
 )
 
 type Service struct {

@@ -12,8 +12,7 @@ import (
 	"github.com/slack-go/slack"
 
 	"code.vegaprotocol.io/liqbot/config"
-	"code.vegaprotocol.io/liqbot/types/num"
-	"code.vegaprotocol.io/liqbot/util"
+	"code.vegaprotocol.io/shared/libs/num"
 	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v1"
 	"code.vegaprotocol.io/vega/protos/vega"
 	v1 "code.vegaprotocol.io/vega/protos/vega/events/v1"

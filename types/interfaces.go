@@ -7,7 +7,7 @@ import (
 	ppservice "code.vegaprotocol.io/priceproxy/service"
 	v1 "code.vegaprotocol.io/vega/protos/vega/events/v1"
 
-	"code.vegaprotocol.io/liqbot/types/num"
+	"code.vegaprotocol.io/shared/libs/num"
 )
 
 // Bot is the generic bot interface.

@@ -4,10 +4,10 @@ import (
 	"strings"
 	"testing"
 
-	"code.vegaprotocol.io/liqbot/config"
-	"code.vegaprotocol.io/liqbot/errors"
-
 	"github.com/stretchr/testify/assert"
+
+	"code.vegaprotocol.io/liqbot/config"
+	"code.vegaprotocol.io/shared/libs/errors"
 )
 
 func TestCheckConfig(t *testing.T) {

@@ -4,7 +4,8 @@ import (
 	"context"
 
 	"code.vegaprotocol.io/liqbot/types"
-	"code.vegaprotocol.io/liqbot/types/num"
+	"code.vegaprotocol.io/shared/libs/num"
+	wtypes "code.vegaprotocol.io/shared/libs/wallet/types"
 	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v1"
 	v1 "code.vegaprotocol.io/vega/protos/vega/wallet/v1"
 )
@@ -29,7 +30,7 @@ type erc20Service interface {
 }
 
 type faucetClient interface {
-	Mint(ctx context.Context, assetID string, amount *num.Uint) error
+	Mint(ctx context.Context, amount string, asset, party string) (bool, error)
 }
 
 type accountService interface {
