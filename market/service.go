@@ -438,14 +438,6 @@ func (m *Service) getExampleMarket() *vega.NewMarket {
 				},
 			},
 		},
-		/*
-			TODO: is this needed?
-			LiquidityCommitment: &vega.NewMarketCommitment{
-				Fee:              fmt.Sprint(m.config.StrategyDetails.Fee),
-				CommitmentAmount: m.config.StrategyDetails.CommitmentAmount,
-				Buys:             m.config.StrategyDetails.ShorteningShape.Buys.ToVegaLiquidityOrders(),
-				Sells:            m.config.StrategyDetails.LongeningShape.Sells.ToVegaLiquidityOrders(),
-			},*/
 	}
 }
 
@@ -454,7 +446,7 @@ func (m *Service) getExampleProduct() *vega.InstrumentConfiguration_Future {
 		Future: &vega.FutureProduct{
 			SettlementAsset: m.config.SettlementAssetID,
 			QuoteName:       fmt.Sprintf("%s%s", m.config.InstrumentBase, m.config.InstrumentQuote),
-			OracleSpecForSettlementPrice: &oraclesv1.OracleSpecConfiguration{
+			OracleSpecForSettlementData: &oraclesv1.OracleSpecConfiguration{
 				PubKeys: []string{"0xDEADBEEF"},
 				Filters: []*oraclesv1.Filter{
 					{
@@ -479,7 +471,7 @@ func (m *Service) getExampleProduct() *vega.InstrumentConfiguration_Future {
 				},
 			},
 			OracleSpecBinding: &vega.OracleSpecToFutureBinding{
-				SettlementPriceProperty:    "prices.ETH.value",
+				SettlementDataProperty:     "prices.ETH.value",
 				TradingTerminationProperty: "trading.termination",
 			},
 		},

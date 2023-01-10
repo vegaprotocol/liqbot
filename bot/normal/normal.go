@@ -11,6 +11,7 @@ import (
 
 	"code.vegaprotocol.io/liqbot/config"
 	"code.vegaprotocol.io/liqbot/types"
+	"code.vegaprotocol.io/shared/libs/num"
 	wtypes "code.vegaprotocol.io/shared/libs/wallet/types"
 	"code.vegaprotocol.io/vega/wallet/wallets"
 )
@@ -37,14 +38,6 @@ type bot struct {
 	botPaused         bool
 	mu                sync.Mutex
 }
-
-// TODO: there could be a service that would be in charge of managing the account, balance of the account, creating markets
-// and simplifying the process of placing orders.
-// The bot should only have to worry decision making about what orders to place and when, given the current market state.
-// The service should be responsible for the following:
-// - creating markets (if necessary)
-// - placing orders, as produced by the bot
-// - managing the account balance
 
 // New returns a new instance of bot.
 func New(

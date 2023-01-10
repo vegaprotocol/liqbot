@@ -248,7 +248,7 @@ func (p *Provider) depositERC20(ctx context.Context, asset *vega.Asset, amount *
 }
 
 func (p *Provider) depositBuiltin(ctx context.Context, assetID string, amount *num.Uint, builtin *vega.BuiltinAsset) error {
-	maxFaucet, err := util.ConvertUint256(builtin.MaxFaucetAmountMint)
+	maxFaucet, err := num.ConvertUint256(builtin.MaxFaucetAmountMint)
 	if err != nil {
 		return fmt.Errorf("failed to convert max faucet amount: %w", err)
 	}
@@ -258,8 +258,10 @@ func (p *Provider) depositBuiltin(ctx context.Context, assetID string, amount *n
 	// TODO: limit the time here!
 
 	for i := 0; i < times; i++ {
-		if err := p.faucet.Mint(ctx, assetID, maxFaucet); err != nil {
-			return fmt.Errorf("failed to deposit: %w", err)
+		if ok, err := p.faucet.Mint(ctx, maxFaucet.String(), assetID, p.walletPubKey); err != nil {
+			return fmt.Errorf("failed to mint: %w", err)
+		} else if !ok {
+			return fmt.Errorf("failed to mint")
 		}
 		time.Sleep(2 * time.Second) // TODO: configure
 	}

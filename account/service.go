@@ -85,7 +85,7 @@ func (a *Service) EnsureStake(ctx context.Context, receiverName, receiverPubKey,
 		return fmt.Errorf("receiver public key is empty")
 	}
 
-	store, err := a.getStore(assetID)
+	store, err := a.getStore(ctx, assetID)
 	if err != nil {
 		return err
 	}
