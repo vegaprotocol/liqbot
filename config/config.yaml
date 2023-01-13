@@ -3,52 +3,82 @@
 server:
   env: prod  # dev, prod
   listen: ":7800"
-  logformat: console  # json, console
+  logencoding: json  # console
   loglevel: debug  # debug, info, warning, error
 
+# timeout for sending requests to datanode
 callTimeoutMills: 10000
+# Vega Token asset
 vegaAssetID: b4f2726571fbe8e33b442dc92ed2d7f0d810e21835b7371a7915a365f07ccd9b
 
+# pricing engine URL
 pricing:
   address:
     scheme: https
     host: prices.ops.vega.xyz
     path: /prices
+
+# wallet used by the bots
 wallet:
+  # address of the node. Alternaively, the `networkFileURL` can be used to specify the node addresses
   nodeURL: localhost:3027
+  # path on local system where the wallets (and network config files) will be stored
   storePath: /tmp/wallet/liqbot
+  # name of the wallet
   name: liqbot
+  # password for the wallet
   passphrase: liqbot-secret
 
+# erc20 token service
 token:
-  ethereumAPIAddress:   ws://127.0.0.1:8545
+  # address of the Ethereum API
+  ethereumAPIAddress:   ws://localhost:8545
+  # address of the ERC20 token bridge contract - used for depositing
   erc20BridgeAddress:   0x9708FF7510D4A7B9541e1699d15b53Ecb1AFDc54
+  # address of the staking bridge contract
   stakingBridgeAddress: 0x9135f5afd6F055e731bca2348429482eE614CFfA
-  syncTimeoutSec: 5
+  # timeout for Ethereum transactions
+  syncTimeoutSec: 100
+
+# whale service - coin provider for the bots
 whale:
-  walletPubKey: abe253f5682703ac654c95ab8e2de4ecccdc000a2315610bc161dd194f32af0e
-  walletName: whale
-  walletPassphrase: pastazazube
+  # wallet for the whale service
+  wallet:
+    # wallet name
+    name: whale
+    # password for the wallet
+    passphrase: pastazazube
+    # address of the node. Alternaively, the `networkFileURL` can be used to specify the node addresses
+    nodeURL: localhost:3027
+    # path on local system where the wallets (and network config files) will be stored
+    storePath: /tmp/wallet/whale
+  # a map of asset ID to private key of the token owner or account with access to minting
   ownerPrivateKeys:
     993ed98f4f770d91a796faab1738551193ba45c62341d20597df70fea6704ede: a37f4c2a678aefb5037bf415a826df1540b330b7e471aa54184877ba901b9ef0
     b4f2726571fbe8e33b442dc92ed2d7f0d810e21835b7371a7915a365f07ccd9b: a37f4c2a678aefb5037bf415a826df1540b330b7e471aa54184877ba901b9ef0
+  # when ensuring that the whale service account has enough funds, in case it's insufficient, top up the ensuring amount multiplied by this `topUpScale`
+  # so we don't have to top up the account every time it's insufficient
   topUpScale: 10
-  faucetURL:
+  # URL of the faucet API
+  faucetURL: http://localhost:1790
+  # maximum rate for calling the faucet
+  faucetRateLimit: 2s
+  # slack client credentials (fallback if minting/depositing is not possible)
   slack:
-    appToken:
-    botToken:
+    appToken: # secret
+    botToken: # secret
     channelID:
     enabled: false
+
+# addresses of the nodes
 locations:
-  - localhost:3007
-  - localhost:3017
   - localhost:3027
+
+# bot configurations
 bots:
-  - name: w00
-    callTimeoutMills: 10000
+  - name: w01
     instrumentBase: BTC
     instrumentQuote: USD
-    quoteAssetID: 993ed98f4f770d91a796faab1738551193ba45c62341d20597df70fea6704ede # 0x3773A5c7aFF77e014cBF067dd31801b4C6dc4136
     settlementAssetID: 993ed98f4f770d91a796faab1738551193ba45c62341d20597df70fea6704ede
     strategy: normal
     strategyDetails:
@@ -57,12 +87,17 @@ bots:
       maxShort: 100
       posManagementFraction: 0.25
       ordersFraction: 0.25
+      # amount to be used for initial deposit and stake on the bot account
       seedAmount: 1000000000000000000
+      # size of the order for auction orders
       seedOrderSize: 400
+      # the maximum number of orders the bot will place in order to get the market out of auction
+      seedOrderCount: 100
+      # when ensuring that the bot account has enough funds, in case it's insufficient, top up the ensuring amount multiplied by this `topUpScale`
       topUpScale: 10
+      # the amount of the liquidity to be provided by the bot
       commitmentAmount: 50000000000000
       fee: 0.01
-
       shorteningShape:
         sells:
           - {reference: Ask, proportion: 10, offset: 80000}
