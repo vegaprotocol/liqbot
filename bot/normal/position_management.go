@@ -69,7 +69,7 @@ func (b *bot) manageDirection(ctx context.Context, previousOpenVolume int64) (in
 		logging.String("shape", shape),
 	).Debug(from + ": Checking for direction change")
 
-	// If we flipped then send the new LP order
+	// If we flipped then amend the Liquidity Provision
 	if !((openVolume > 0 && previousOpenVolume <= 0) || (openVolume < 0 && previousOpenVolume >= 0)) {
 		return previousOpenVolume, nil
 	}
@@ -87,9 +87,9 @@ func (b *bot) managePosition(ctx context.Context) error {
 	size, side, shouldPlace := b.CheckPosition()
 	b.log.With(
 		logging.String("currentPrice", b.Market().MarkPrice().String()),
-		logging.String("balance.General", cache.General(b.Balance(ctx)).String()),
-		logging.String("balance.Margin", cache.Margin(b.Balance(ctx)).String()),
-		logging.String("balance.Bond", cache.Bond(b.Balance(ctx)).String()),
+		logging.String("balance.General", cache.General(b.Balance(ctx, b.settlementAssetID)).String()),
+		logging.String("balance.Margin", cache.Margin(b.Balance(ctx, b.settlementAssetID)).String()),
+		logging.String("balance.Bond", cache.Bond(b.Balance(ctx, b.settlementAssetID)).String()),
 		logging.Int64("openVolume", b.Market().OpenVolume()),
 		logging.Uint64("size", size),
 		logging.String("side", side.String()),
@@ -110,7 +110,7 @@ func (b *bot) managePosition(ctx context.Context) error {
 		Reference:   "PosManagement",
 	}
 
-	if err := b.SubmitOrder(ctx, order, "PositionManagement", int64(b.config.StrategyDetails.LimitOrderDistributionParams.GttLengthSeconds)); err != nil {
+	if err := b.SubmitOrder(ctx, order, "PositionManagement", 0); err != nil {
 		return fmt.Errorf("failed to place order: %w", err)
 	}
 

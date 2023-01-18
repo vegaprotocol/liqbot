@@ -63,7 +63,7 @@ func newNormalBot(
 	pauseCh := make(chan btypes.PauseSignal)
 	accountStream := account.NewStream(log, botConf.Name, dataNode, pauseCh)
 	marketStream := market.NewStream(log, botConf.Name, pubKey, dataNode, pauseCh)
-	accountService := account.NewService(log, botConf.Name, pubKey, botConf.SettlementAssetID, accountStream, whale)
+	accountService := account.NewService(log, botConf.Name, pubKey, accountStream, whale)
 	marketService := market.NewService(log, dataNode, botWallet, pricing, accountService, marketStream, botConf, conf.VegaAssetID)
 	bot := normal.New(log, botConf, conf.VegaAssetID, accountService, marketService, pauseCh)
 

@@ -64,6 +64,10 @@ func (cfg *Config) CheckConfig() error {
 		if err := bot.StrategyDetails.validateStrategyConfig(); err != nil {
 			return fmt.Errorf("failed to validate strategy config for bot '%s': %s", bot.Name, err)
 		}
+
+		if bot.SettlementAssetID == "" {
+			return fmt.Errorf("missing settlement asset ID for bot '%s'", bot.Name)
+		}
 	}
 
 	return nil

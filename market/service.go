@@ -32,9 +32,9 @@ type Service struct {
 	config        config.BotConfig
 	log           *logging.Logger
 
-	decimalPlaces uint64
-	marketID      string
-	vegaAssetID   string
+	marketDecimalPlaces uint64
+	marketID            string
+	vegaAssetID         string
 }
 
 func NewService(
@@ -148,7 +148,7 @@ func (m *Service) findMarket(ctx context.Context) (*vega.Market, error) {
 		}
 
 		m.log = m.log.With(logging.MarketID(mkt.Id))
-		m.decimalPlaces = mkt.DecimalPlaces
+		m.marketDecimalPlaces = mkt.DecimalPlaces
 
 		return mkt, nil
 	}
@@ -159,36 +159,37 @@ func (m *Service) findMarket(ctx context.Context) (*vega.Market, error) {
 func (m *Service) CreateMarket(ctx context.Context) error {
 	m.log.Info("Minting, staking and depositing tokens")
 
-	seedAmount := m.config.StrategyDetails.SeedAmount.Get()
+	stakeAmount := m.config.StrategyDetails.StakeAmount.Get()
 
 	m.log.With(
-		logging.String("amount", seedAmount.String()),
+		logging.String("amount", stakeAmount.String()),
 		logging.String("asset", m.config.SettlementAssetID),
 		logging.String("name", m.config.Name),
 	).Info("Ensuring balance for market creation")
 
-	if err := m.account.EnsureBalance(ctx, m.config.SettlementAssetID, cache.General, seedAmount, m.decimalPlaces, 2, "MarketCreation"); err != nil {
+	// TODO: this is probably unnecessary
+	if err := m.account.EnsureBalance(ctx, m.config.SettlementAssetID, cache.General, stakeAmount, m.marketDecimalPlaces, 1, "MarketCreation"); err != nil {
 		return fmt.Errorf("failed to ensure balance: %w", err)
 	}
 
 	m.log.With(
-		logging.String("amount", seedAmount.String()),
+		logging.String("amount", stakeAmount.String()),
 		logging.String("asset", m.config.SettlementAssetID),
 		logging.String("name", m.config.Name),
 	).Info("Balance ensured")
 
 	m.log.With(
-		logging.String("amount", seedAmount.String()),
+		logging.String("amount", stakeAmount.String()),
 		logging.String("asset", m.vegaAssetID),
 		logging.String("name", m.config.Name),
 	).Info("Ensuring stake for market creation")
 
-	if err := m.account.EnsureStake(ctx, m.config.Name, m.wallet.PublicKey(), m.vegaAssetID, seedAmount, "MarketCreation"); err != nil {
+	if err := m.account.EnsureStake(ctx, m.config.Name, m.wallet.PublicKey(), m.vegaAssetID, stakeAmount, "MarketCreation"); err != nil {
 		return fmt.Errorf("failed to ensure stake: %w", err)
 	}
 
 	m.log.With(
-		logging.String("amount", seedAmount.String()),
+		logging.String("amount", stakeAmount.String()),
 		logging.String("asset", m.vegaAssetID),
 		logging.String("name", m.config.Name),
 	).Info("Successfully linked stake")
@@ -274,7 +275,7 @@ func (m *Service) ProvideLiquidity(ctx context.Context) error {
 		return nil
 	}
 
-	if err = m.account.EnsureBalance(ctx, m.config.SettlementAssetID, cache.GeneralAndBond, commitment, m.decimalPlaces, 2, "MarketCreation"); err != nil {
+	if err = m.account.EnsureBalance(ctx, m.config.SettlementAssetID, cache.GeneralAndBond, commitment, m.marketDecimalPlaces, 2, "MarketCreation"); err != nil {
 		return fmt.Errorf("failed to ensure balance: %w", err)
 	}
 
@@ -296,7 +297,7 @@ func (m *Service) ProvideLiquidity(ctx context.Context) error {
 
 func (m *Service) CheckInitialMargin(ctx context.Context, buyShape, sellShape []*vega.LiquidityOrder) error {
 	// Turn the shapes into a set of orders scaled by commitment
-	obligation := cache.GeneralAndBond(m.account.Balance(ctx))
+	obligation := cache.GeneralAndBond(m.account.Balance(ctx, m.config.SettlementAssetID))
 	buyOrders := m.calculateOrderSizes(obligation, buyShape)
 	sellOrders := m.calculateOrderSizes(obligation, sellShape)
 
@@ -307,7 +308,7 @@ func (m *Service) CheckInitialMargin(ctx context.Context, buyShape, sellShape []
 	sellCost := m.calculateMarginCost(sellRisk, sellOrders)
 
 	shapeMarginCost := num.Max(buyCost, sellCost)
-	avail := num.MulFrac(cache.General(m.account.Balance(ctx)), m.config.StrategyDetails.OrdersFraction, 15)
+	avail := num.MulFrac(cache.General(m.account.Balance(ctx, m.config.SettlementAssetID)), m.config.StrategyDetails.OrdersFraction, 15)
 
 	if !avail.LT(shapeMarginCost) {
 		return nil
@@ -487,7 +488,7 @@ func (m *Service) EnsureCommitmentAmount(ctx context.Context) error {
 
 	m.log.With(logging.String("newCommitment", requiredCommitment.String())).Debug("Supplied stake is less than target stake, increasing commitment amount...")
 
-	if err = m.account.EnsureBalance(ctx, m.config.SettlementAssetID, cache.GeneralAndBond, requiredCommitment, m.decimalPlaces, 2, "MarketService"); err != nil {
+	if err = m.account.EnsureBalance(ctx, m.config.SettlementAssetID, cache.GeneralAndBond, requiredCommitment, m.marketDecimalPlaces, 2, "MarketService"); err != nil {
 		return fmt.Errorf("failed to ensure balance: %w", err)
 	}
 
@@ -551,13 +552,6 @@ func (m *Service) CanPlaceOrders() bool {
 
 // TODO: make retryable.
 func (m *Service) SubmitOrder(ctx context.Context, order *vega.Order, from string, secondsFromNow int64) error {
-	price, overflow := num.UintFromString(order.Price, 10)
-	if overflow {
-		return fmt.Errorf("failed to parse price: overflow")
-	}
-
-	price.Mul(price, num.NewUint(order.Size))
-
 	cmd := &walletpb.SubmitTransactionRequest_OrderSubmission{
 		OrderSubmission: &commandspb.OrderSubmission{
 			MarketId:    order.MarketId,
@@ -611,10 +605,10 @@ func (m *Service) SeedOrders(ctx context.Context) error {
 	m.log.With(
 		logging.String("externalPrice", externalPrice.String()),
 		logging.String("totalCost", totalCost.String()),
-		logging.String("balance.General", cache.General(m.account.Balance(ctx)).String()),
+		logging.String("balance.General", cache.General(m.account.Balance(ctx, m.config.SettlementAssetID)).String()),
 	).Debug("Seeding auction orders")
 
-	if err := m.account.EnsureBalance(ctx, m.config.SettlementAssetID, cache.General, totalCost, m.decimalPlaces, 2, "MarketService"); err != nil {
+	if err := m.account.EnsureBalance(ctx, m.config.SettlementAssetID, cache.General, totalCost, m.marketDecimalPlaces, 2, "MarketService"); err != nil {
 		return fmt.Errorf("failed to ensure balance: %w", err)
 	}
 
@@ -686,7 +680,7 @@ func (m *Service) GetExternalPrice() (*num.Uint, error) {
 		return nil, fmt.Errorf("external price is zero")
 	}
 
-	externalPrice := externalPriceResponse.Price * math.Pow(10, float64(m.decimalPlaces))
+	externalPrice := externalPriceResponse.Price * math.Pow(10, float64(m.marketDecimalPlaces))
 	externalPriceNum := num.NewUint(uint64(externalPrice))
 	return externalPriceNum, nil
 }

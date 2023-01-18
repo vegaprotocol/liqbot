@@ -15,8 +15,8 @@ const (
 
 // Strategy describes parameters for the bot's strategy.
 type Strategy struct {
-	// SeedAmount is the amount of tokens to mint, deposit and stake
-	SeedAmount Uint `yaml:"seedAmount"`
+	// StakeAmount is the amount of tokens to stake
+	StakeAmount Uint `yaml:"stakeAmount"`
 
 	// SeedOrderSize is the size of the seed orders that tries to get the market out of auction
 	SeedOrderSize uint64 `yaml:"seedOrderSize"`

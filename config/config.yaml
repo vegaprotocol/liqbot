@@ -20,7 +20,7 @@ pricing:
 
 # wallet used by the bots
 wallet:
-  # address of the node. Alternaively, the `networkFileURL` can be used to specify the node addresses
+  # address of the node. Alternatively, the `networkFileURL` can be used to specify the node addresses
   nodeURL: localhost:3027
   # path on local system where the wallets (and network config files) will be stored
   storePath: /tmp/wallet/liqbot
@@ -48,7 +48,7 @@ whale:
     name: whale
     # password for the wallet
     passphrase: pastazazube
-    # address of the node. Alternaively, the `networkFileURL` can be used to specify the node addresses
+    # address of the node. Alternatively, the `networkFileURL` can be used to specify the node addresses
     nodeURL: localhost:3027
     # path on local system where the wallets (and network config files) will be stored
     storePath: /tmp/wallet/whale
@@ -76,7 +76,7 @@ locations:
 
 # bot configurations
 bots:
-  - name: w01
+  - name: w00
     instrumentBase: BTC
     instrumentQuote: USD
     settlementAssetID: 993ed98f4f770d91a796faab1738551193ba45c62341d20597df70fea6704ede
@@ -88,7 +88,7 @@ bots:
       posManagementFraction: 0.25
       ordersFraction: 0.25
       # amount to be used for initial deposit and stake on the bot account
-      seedAmount: 1000000000000000000
+      stakeAmount: 1000000000000000000
       # size of the order for auction orders
       seedOrderSize: 400
       # the maximum number of orders the bot will place in order to get the market out of auction
