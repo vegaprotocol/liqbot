@@ -74,7 +74,7 @@ func (cfg *Config) CheckConfig() error {
 }
 
 // ConfigureLogging configures logging.
-func (cfg *Config) ConfigureLogging(log *logging.Logger) *logging.Logger {
+func (cfg *Config) ConfigureLogging() *logging.Logger {
 	logCfg := logging.NewDefaultConfig()
 
 	if cfg.Server.LogEncoding != "" {
@@ -85,7 +85,7 @@ func (cfg *Config) ConfigureLogging(log *logging.Logger) *logging.Logger {
 		logCfg.Environment = cfg.Server.Env
 	}
 
-	log = logging.NewLoggerFromConfig(logCfg)
+	log := logging.NewLoggerFromConfig(logCfg)
 	if logCfg.Environment != "prod" {
 		log.Logger = log.Logger.WithOptions(zap.AddCaller(), zap.AddCallerSkip(1))
 	}

@@ -57,7 +57,7 @@ func main() {
 		log.Fatal("Config checks failed", logging.Error(err))
 	}
 
-	log = cfg.ConfigureLogging(log)
+	log = cfg.ConfigureLogging()
 
 	log.With(
 		logging.String("version", Version),

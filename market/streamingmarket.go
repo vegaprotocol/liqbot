@@ -46,7 +46,7 @@ func (m *market) Subscribe(ctx context.Context, marketID string) error {
 	m.marketID = marketID
 
 	if err := m.initMarketData(ctx); err != nil {
-		return fmt.Errorf("failed to get market market: %w", err)
+		return fmt.Errorf("failed to get market: %w", err)
 	}
 
 	if err := m.initOpenVolume(ctx); err != nil {
@@ -89,7 +89,7 @@ func (m *market) waitForLiquidityProvision(ctx context.Context, ref string) erro
 		return false, nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*450)
+	ctx, cancel := context.WithTimeout(ctx, time.Second*450)
 	defer cancel()
 
 	errCh := m.busEvProc.ProcessEvents(ctx, "Orders: "+m.name, req, proc)
@@ -300,7 +300,7 @@ func (m *market) getPositions(ctx context.Context) ([]*vega.Position, error) {
 func (m *market) initMarketData(ctx context.Context) error {
 	response, err := m.node.MarketDataByID(ctx, &dataapipb.GetLatestMarketDataRequest{MarketId: m.marketID})
 	if err != nil {
-		return fmt.Errorf("failed to get market market (ID:%s): %w", m.marketID, err)
+		return fmt.Errorf("failed to get market (ID:%s): %w", m.marketID, err)
 	}
 
 	md, err := cache.FromVegaMD(response)

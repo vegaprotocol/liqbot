@@ -546,6 +546,7 @@ func (m *Service) GetRequiredCommitment() (*num.Uint, error) {
 
 	return num.Zero().Add(targetStake, dx.Uint()), nil
 }
+
 func (m *Service) CanPlaceOrders() bool {
 	return m.Market().TradingMode() == vega.Market_TRADING_MODE_CONTINUOUS
 }

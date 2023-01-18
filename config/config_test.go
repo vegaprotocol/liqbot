@@ -57,5 +57,5 @@ func TestCheckConfig(t *testing.T) {
 	}
 	cfg.Bots = append(cfg.Bots, botConfig)
 	err = cfg.CheckConfig()
-	assert.NoError(t, err)
+	assert.EqualError(t, err, "missing settlement asset ID for bot 'test'")
 }
