@@ -6,41 +6,28 @@ import (
 	"math"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-
 	"code.vegaprotocol.io/liqbot/config"
-	"code.vegaprotocol.io/liqbot/types/num"
+	"code.vegaprotocol.io/shared/libs/cache"
+	"code.vegaprotocol.io/shared/libs/num"
+	"code.vegaprotocol.io/vega/logging"
 	"code.vegaprotocol.io/vega/protos/vega"
 )
 
 func (b *bot) runPriceSteering(ctx context.Context) {
-	defer b.log.Warning("PriceSteering: Stopped")
-
-	if !b.CanPlaceOrders() {
-		b.log.WithFields(log.Fields{
-			"PriceSteerOrderScale": b.config.StrategyDetails.PriceSteerOrderScale,
-		}).Debug("PriceSteering: Cannot place orders")
-
-		if err := b.SeedOrders(ctx, "PriceSteering"); err != nil {
-			b.log.WithFields(log.Fields{"error": err.Error()}).Error("PriceSteering: Failed to seed orders")
-			return
-		}
-	}
+	defer b.log.Warn("PriceSteering: Stopped")
 
 	sleepTime := 1000.0 / b.config.StrategyDetails.MarketPriceSteeringRatePerSecond
 
 	for {
 		select {
 		case <-b.pausePriceSteer:
-			b.log.Warning("PriceSteering: Paused")
+			b.log.Warn("PriceSteering: Paused")
 			<-b.pausePriceSteer
 			b.log.Info("Price steering resumed")
 		case <-b.stopPriceSteer:
 			return
 		case <-ctx.Done():
-			b.log.WithFields(log.Fields{
-				"error": ctx.Err(),
-			}).Warning("PriceSteering: Stopped by context")
+			b.log.Warn("PriceSteering: Stopped by context")
 			return
 		default:
 			if err := doze(time.Duration(sleepTime)*time.Millisecond, b.stopPriceSteer); err != nil {
@@ -49,10 +36,9 @@ func (b *bot) runPriceSteering(ctx context.Context) {
 
 			err := b.steerPrice(ctx)
 			if err != nil {
-				b.log.WithFields(log.Fields{
-					"error":     err.Error(),
-					"sleepTime": sleepTime,
-				}).Warning("PriceSteering: Error during price steering")
+				b.log.With(
+					logging.Float64("sleepTime", sleepTime)).
+					Warn("PriceSteering: Error during price steering", logging.Error(err))
 			}
 
 			sleepTime = b.moveSteerSleepTime(sleepTime, err != nil)
@@ -76,14 +62,14 @@ func (b *bot) steerPrice(ctx context.Context) error {
 		side = vega.Side_SIDE_SELL
 	}
 
-	b.log.WithFields(log.Fields{
-		"currentPrice":          staticMidPrice.String(),
-		"externalPrice":         externalPrice.String(),
-		"diff":                  currentDiff.String(),
-		"currentDiffFraction":   currentDiffFraction.String(),
-		"minPriceSteerFraction": minPriceSteerFraction.String(),
-		"shouldMove":            map[vega.Side]string{vega.Side_SIDE_BUY: "UP", vega.Side_SIDE_SELL: "DN"}[side],
-	}).Debug("PriceSteering: Steering info")
+	b.log.With(
+		logging.String("currentPrice", staticMidPrice.String()),
+		logging.String("externalPrice", externalPrice.String()),
+		logging.String("diff", currentDiff.String()),
+		logging.String("currentDiffFraction", currentDiffFraction.String()),
+		logging.String("minPriceSteerFraction", minPriceSteerFraction.String()),
+		logging.String("shouldMove", map[vega.Side]string{vega.Side_SIDE_BUY: "UP", vega.Side_SIDE_SELL: "DN"}[side]),
+	).Debug("PriceSteering: Steering info")
 
 	if !currentDiffFraction.GreaterThan(minPriceSteerFraction) {
 		b.log.Debug("PriceSteering: Current difference is not higher than minimum price steering fraction")
@@ -93,7 +79,7 @@ func (b *bot) steerPrice(ctx context.Context) error {
 	// find out what price and size of the order we should place
 	price, size, err := b.getRealisticOrderDetails(externalPrice)
 	if err != nil {
-		b.log.WithFields(log.Fields{"error": err.Error()}).Fatal("PriceSteering: Unable to get realistic order details for price steering")
+		b.log.Fatal("PriceSteering: Unable to get realistic order details for price steering", logging.Error(err))
 	}
 
 	order := &vega.Order{
@@ -104,11 +90,18 @@ func (b *bot) steerPrice(ctx context.Context) error {
 		TimeInForce: vega.Order_TIME_IN_FORCE_GTT,
 		Type:        vega.Order_TYPE_LIMIT,
 		Reference:   "PriceSteeringOrder",
+		// ExpiresAt:   time.Now().Add(10 * time.Minute).Unix(), TODO
+	}
+
+	expectedBalance := price.Mul(price, size)
+
+	if err := b.EnsureBalance(ctx, b.config.SettlementAssetID, cache.General, expectedBalance, b.decimalPlaces, b.config.StrategyDetails.TopUpScale, "PriceSteering"); err != nil {
+		return fmt.Errorf("failed to ensure balance: %w", err)
 	}
 
 	if err = b.SubmitOrder(
 		ctx, order, "PriceSteering",
-		int64(b.config.StrategyDetails.LimitOrderDistributionParams.GttLength)); err != nil {
+		int64(b.config.StrategyDetails.LimitOrderDistributionParams.GttLengthSeconds)); err != nil {
 		return fmt.Errorf("failed to submit order: %w", err)
 	}
 
@@ -132,7 +125,7 @@ func (b *bot) getRealisticOrderDetails(externalPrice *num.Uint) (*num.Uint, *num
 		return nil, nil, fmt.Errorf("method for generating price distributions not recognised")
 	}
 	// TODO: size?
-	size := mulFrac(num.NewUint(1), b.config.StrategyDetails.PriceSteerOrderScale, 15)
+	size := num.MulFrac(num.NewUint(1), b.config.StrategyDetails.PriceSteerOrderScale, 15)
 
 	return price, size, nil
 }

@@ -4,30 +4,26 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"sync"
 
-	log "github.com/sirupsen/logrus"
-
 	"code.vegaprotocol.io/liqbot/config"
-	"code.vegaprotocol.io/liqbot/types"
-	"code.vegaprotocol.io/liqbot/types/num"
-	"code.vegaprotocol.io/vega/wallet/wallets"
+	"code.vegaprotocol.io/shared/libs/types"
+	"code.vegaprotocol.io/vega/logging"
 )
 
 // bot represents one Normal liquidity bot.
 type bot struct {
-	walletClient WalletClient
 	marketService
 	accountService
 
 	config config.BotConfig
-	log    *log.Entry
+	log    *logging.Logger
 
 	stopPosMgmt     chan bool
 	stopPriceSteer  chan bool
 	pausePosMgmt    chan struct{}
 	pausePriceSteer chan struct{}
+	pauseChannel    chan types.PauseSignal
 
 	walletPubKey      string
 	marketID          string
@@ -38,37 +34,27 @@ type bot struct {
 	mu                sync.Mutex
 }
 
-// TODO: there could be a service that would be in charge of managing the account, balance of the account, creating markets
-// and simplifying the process of placing orders.
-// The bot should only have to worry decision making about what orders to place and when, given the current market state.
-// The service should be responsible for the following:
-// - creating markets (if necessary)
-// - placing orders, as produced by the bot
-// - managing the account balance
-
 // New returns a new instance of bot.
 func New(
+	log *logging.Logger,
 	botConf config.BotConfig,
 	vegaAssetID string,
-	wc WalletClient,
 	accountService accountService,
 	marketService marketService,
+	pauseChannel chan types.PauseSignal,
 ) *bot {
 	return &bot{
 		config:            botConf,
 		settlementAssetID: botConf.SettlementAssetID,
 		vegaAssetID:       vegaAssetID,
-		log: log.WithFields(log.Fields{
-			"bot": botConf.Name,
-		}),
-
-		stopPosMgmt:     make(chan bool),
-		stopPriceSteer:  make(chan bool),
-		pausePosMgmt:    make(chan struct{}),
-		pausePriceSteer: make(chan struct{}),
-		accountService:  accountService,
-		marketService:   marketService,
-		walletClient:    wc,
+		log:               log,
+		stopPosMgmt:       make(chan bool),
+		stopPriceSteer:    make(chan bool),
+		pausePosMgmt:      make(chan struct{}),
+		pausePriceSteer:   make(chan struct{}),
+		accountService:    accountService,
+		marketService:     marketService,
+		pauseChannel:      pauseChannel,
 	}
 }
 
@@ -76,20 +62,11 @@ func New(
 func (b *bot) Start() error {
 	ctx := context.Background()
 
-	walletPubKey, err := b.setupWallet(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to setup wallet: %w", err)
-	}
-
-	b.walletPubKey = walletPubKey
-
-	pauseCh := b.pauseChannel()
-
-	b.accountService.Init(walletPubKey, pauseCh)
-
-	if err = b.marketService.Init(walletPubKey, pauseCh); err != nil {
-		return fmt.Errorf("failed to init market service: %w", err)
-	}
+	go func() {
+		for p := range b.pauseChannel {
+			b.Pause(p)
+		}
+	}()
 
 	market, err := b.SetupMarket(ctx)
 	if err != nil {
@@ -99,30 +76,14 @@ func (b *bot) Start() error {
 	b.marketID = market.Id
 	b.decimalPlaces = market.DecimalPlaces
 
-	if err = b.marketService.Start(market.Id); err != nil {
-		return fmt.Errorf("failed to start market service: %w", err)
-	}
-
-	b.log.WithFields(log.Fields{
-		"id":                b.marketID,
-		"base/ticker":       b.config.InstrumentBase,
-		"quote":             b.config.InstrumentQuote,
-		"settlementAssetID": b.settlementAssetID,
-	}).Info("Market info")
+	b.log.With(
+		logging.String("id", b.marketID),
+		logging.String("base/ticker", b.config.InstrumentBase),
+		logging.String("quote", b.config.InstrumentQuote),
+		logging.String("settlementAssetID", b.settlementAssetID),
+	).Info("Market info")
 
 	ctx, cancel := context.WithCancel(ctx)
-
-	// TODO: what to use here?
-	targetAmount, overflow := num.UintFromString(b.config.StrategyDetails.CommitmentAmount, 10)
-	if overflow {
-		cancel()
-		return fmt.Errorf("failed to parse targetAmount: overflow")
-	}
-
-	if err = b.EnsureBalance(ctx, b.settlementAssetID, targetAmount, "Start"); err != nil {
-		cancel()
-		return fmt.Errorf("failed to ensure balance: %w", err)
-	}
 
 	go func() {
 		defer cancel()
@@ -137,14 +98,8 @@ func (b *bot) Start() error {
 	return nil
 }
 
-func (b *bot) pauseChannel() chan types.PauseSignal {
-	in := make(chan types.PauseSignal)
-	go func() {
-		for p := range in {
-			b.Pause(p)
-		}
-	}()
-	return in
+func (b *bot) PauseChannel() chan types.PauseSignal {
+	return b.pauseChannel
 }
 
 // Pause pauses the liquidity bot goroutine(s).
@@ -153,10 +108,10 @@ func (b *bot) Pause(p types.PauseSignal) {
 	defer b.mu.Unlock()
 
 	if p.Pause && !b.botPaused {
-		b.log.WithFields(log.Fields{"From": p.From}).Info("Pausing bot")
+		b.log.With(logging.String("From", p.From)).Info("Pausing bot")
 		b.botPaused = true
 	} else if !p.Pause && b.botPaused {
-		b.log.WithFields(log.Fields{"From": p.From}).Info("Resuming bot")
+		b.log.With(logging.String("From", p.From)).Info("Resuming bot")
 		b.botPaused = false
 	} else {
 		return
@@ -195,44 +150,4 @@ func (b *bot) GetTraderDetails() string {
 		"settlementVegaAssetID": b.settlementAssetID,
 	}, "", "  ")
 	return string(jsn)
-}
-
-func (b *bot) setupWallet(ctx context.Context) (string, error) {
-	walletPassphrase := "123"
-
-	if err := b.walletClient.LoginWallet(ctx, b.config.Name, walletPassphrase); err != nil {
-		if strings.Contains(err.Error(), wallets.ErrWalletDoesNotExists.Error()) {
-			if err = b.walletClient.CreateWallet(ctx, b.config.Name, walletPassphrase); err != nil {
-				return "", fmt.Errorf("failed to create wallet: %w", err)
-			}
-			b.log.Info("Created and logged into wallet")
-		} else {
-			return "", fmt.Errorf("failed to log into wallet: %w", err)
-		}
-	}
-
-	b.log.Info("Logged into wallet")
-
-	publicKeys, err := b.walletClient.ListPublicKeys(ctx)
-	if err != nil {
-		return "", fmt.Errorf("failed to list public keys: %w", err)
-	}
-
-	var walletPubKey string
-
-	if len(publicKeys) == 0 {
-		key, err := b.walletClient.GenerateKeyPair(ctx, walletPassphrase, []types.Meta{})
-		if err != nil {
-			return "", fmt.Errorf("failed to generate keypair: %w", err)
-		}
-		walletPubKey = key.Pub
-		b.log.WithFields(log.Fields{"pubKey": walletPubKey}).Debug("Created keypair")
-	} else {
-		walletPubKey = publicKeys[0]
-		b.log.WithFields(log.Fields{"pubKey": walletPubKey}).Debug("Using existing keypair")
-	}
-
-	b.log = b.log.WithFields(log.Fields{"pubkey": walletPubKey})
-
-	return walletPubKey, nil
 }

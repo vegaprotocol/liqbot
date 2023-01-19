@@ -6,7 +6,6 @@ import (
 
 	"github.com/hashicorp/go-multierror"
 
-	"code.vegaprotocol.io/liqbot/types"
 	"code.vegaprotocol.io/vega/protos/vega"
 )
 
@@ -16,19 +15,17 @@ const (
 
 // Strategy describes parameters for the bot's strategy.
 type Strategy struct {
-	// ExpectedMarkPrice (optional) specifies the expected mark price for a market that may not yet
-	// have a mark price. It is used to calculate margin cost of orders meeting liquidity
-	// requirement.
-	ExpectedMarkPrice Uint `yaml:"expectedMarkPrice"`
-
-	// AuctionVolume ...
-	AuctionVolume Uint `yaml:"auctionVolume"`
-
-	// SeedAmount is the amount of tokens to mint, deposit and stake
-	SeedAmount Uint `yaml:"seedAmount"`
+	// StakeAmount is the amount of tokens to stake
+	StakeAmount Uint `yaml:"stakeAmount"`
 
 	// SeedOrderSize is the size of the seed orders that tries to get the market out of auction
 	SeedOrderSize uint64 `yaml:"seedOrderSize"`
+
+	// SeedOrderCount is the number of seed orders that tries to get the market out of auction
+	SeedOrderCount int `yaml:"seedOrderCount"`
+
+	// TopUpScale is the scale of the top-up amount.
+	TopUpScale uint64 `yaml:"topUpScale"`
 
 	// CommitmentAmount is the amount of stake for the LP
 	CommitmentAmount string `yaml:"commitmentAmount"`
@@ -80,8 +77,7 @@ type Strategy struct {
 
 func (s Strategy) String() string {
 	return fmt.Sprintf(
-		`normal.Strategy{ExpectedMarkPrice=%d, 
-AuctionVolume=%d, 
+		`normal.Strategy{
 MaxLong=%d, 
 MaxShort=%d, 
 PosManagementFraction=%f, 
@@ -94,8 +90,6 @@ MinPriceSteerFraction=%f,
 PriceSteerOrderScale=%f, 
 LimitOrderDistributionParams=TBD(*LODParamsConfig), 
 TargetLNVol=%f}`,
-		s.ExpectedMarkPrice,
-		s.AuctionVolume,
 		s.MaxLong,
 		s.MaxShort,
 		s.PosManagementFraction,
@@ -132,7 +126,7 @@ func (s Strategy) validateStrategyConfig() error {
 // LimitOrderDistParams for configuring the way price steering orders are sent.
 type LimitOrderDistParams struct {
 	Method              SteeringMethod `yaml:"method"`
-	GttLength           uint64         `yaml:"gttLengthSeconds"`
+	GttLengthSeconds    uint64         `yaml:"gttLengthSeconds"`
 	TgtTimeHorizonHours float64        `yaml:"tgtTimeHorizonHours"`
 	NumTicksFromMid     uint64         `yaml:"numTicksFromMid"`
 	NumIdenticalBots    int            `yaml:"numIdenticalBots"`
@@ -142,13 +136,6 @@ type LimitOrderDistParams struct {
 type Shape struct {
 	Sells LiquidityOrders `yaml:"sells"`
 	Buys  LiquidityOrders `yaml:"buys"`
-}
-
-func (s Shape) ToVegaShape() types.Shape {
-	return types.Shape{
-		Sells: s.Sells.ToVegaLiquidityOrders(),
-		Buys:  s.Buys.ToVegaLiquidityOrders(),
-	}
 }
 
 type LiquidityOrders []LiquidityOrder

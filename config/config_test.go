@@ -4,10 +4,13 @@ import (
 	"strings"
 	"testing"
 
-	"code.vegaprotocol.io/liqbot/config"
-	"code.vegaprotocol.io/liqbot/errors"
-
 	"github.com/stretchr/testify/assert"
+
+	"code.vegaprotocol.io/liqbot/config"
+	tconfig "code.vegaprotocol.io/shared/libs/erc20/config"
+	"code.vegaprotocol.io/shared/libs/errors"
+	"code.vegaprotocol.io/shared/libs/wallet"
+	wconfig "code.vegaprotocol.io/shared/libs/whale/config"
 )
 
 func TestCheckConfig(t *testing.T) {
@@ -24,15 +27,15 @@ func TestCheckConfig(t *testing.T) {
 	err = cfg.CheckConfig()
 	assert.True(t, strings.HasPrefix(err.Error(), errors.ErrMissingEmptyConfigSection.Error()))
 
-	cfg.Wallet = &config.WalletConfig{}
+	cfg.Wallet = &wallet.Config{}
 	err = cfg.CheckConfig()
 	assert.True(t, strings.HasPrefix(err.Error(), errors.ErrMissingEmptyConfigSection.Error()))
 
-	cfg.Whale = &config.WhaleConfig{}
+	cfg.Whale = &wconfig.WhaleConfig{}
 	err = cfg.CheckConfig()
 	assert.True(t, strings.HasPrefix(err.Error(), errors.ErrMissingEmptyConfigSection.Error()))
 
-	cfg.Token = &config.TokenConfig{}
+	cfg.Token = &tconfig.TokenConfig{}
 	err = cfg.CheckConfig()
 	assert.True(t, strings.HasPrefix(err.Error(), errors.ErrMissingEmptyConfigSection.Error()))
 
@@ -54,21 +57,5 @@ func TestCheckConfig(t *testing.T) {
 	}
 	cfg.Bots = append(cfg.Bots, botConfig)
 	err = cfg.CheckConfig()
-	assert.NoError(t, err)
-}
-
-func TestConfigureLogging(t *testing.T) {
-	cfg := new(config.Config)
-	cfg.Server = &config.ServerConfig{}
-
-	var servercfg config.ServerConfig
-	err := cfg.ConfigureLogging()
-	assert.NoError(t, err)
-
-	servercfg.LogLevel = "info"
-	for _, lf := range []string{"json", "textcolour", "textnocolour", "fred"} {
-		servercfg.LogFormat = lf
-		err = cfg.ConfigureLogging()
-		assert.NoError(t, err)
-	}
+	assert.EqualError(t, err, "missing settlement asset ID for bot 'test'")
 }

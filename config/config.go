@@ -5,24 +5,27 @@ package config
 import (
 	"fmt"
 	"net/url"
-	"time"
 
-	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 
-	"code.vegaprotocol.io/liqbot/errors"
+	tconfig "code.vegaprotocol.io/shared/libs/erc20/config"
+	"code.vegaprotocol.io/shared/libs/errors"
+	"code.vegaprotocol.io/shared/libs/wallet"
+	wconfig "code.vegaprotocol.io/shared/libs/whale/config"
+	"code.vegaprotocol.io/vega/logging"
 )
 
 // Config describes the top level config file format.
 type Config struct {
 	Server *ServerConfig `yaml:"server"`
 
-	CallTimeoutMills int            `yaml:"callTimeoutMills"`
-	VegaAssetID      string         `yaml:"vegaAssetID"`
-	Pricing          *PricingConfig `yaml:"pricing"`
-	Wallet           *WalletConfig  `yaml:"wallet"`
-	Whale            *WhaleConfig   `yaml:"whale"`
-	Token            *TokenConfig   `yaml:"token"`
-	Locations        []string       `yaml:"locations"`
+	CallTimeoutMills int                  `yaml:"callTimeoutMills"`
+	VegaAssetID      string               `yaml:"vegaAssetID"`
+	Pricing          *PricingConfig       `yaml:"pricing"`
+	Wallet           *wallet.Config       `yaml:"wallet"`
+	Whale            *wconfig.WhaleConfig `yaml:"whale"`
+	Token            *tconfig.TokenConfig `yaml:"token"`
+	Locations        []string             `yaml:"locations"`
 
 	Bots []BotConfig `yaml:"bots"`
 }
@@ -61,79 +64,52 @@ func (cfg *Config) CheckConfig() error {
 		if err := bot.StrategyDetails.validateStrategyConfig(); err != nil {
 			return fmt.Errorf("failed to validate strategy config for bot '%s': %s", bot.Name, err)
 		}
+
+		if bot.SettlementAssetID == "" {
+			return fmt.Errorf("missing settlement asset ID for bot '%s'", bot.Name)
+		}
 	}
 
 	return nil
 }
 
 // ConfigureLogging configures logging.
-func (cfg *Config) ConfigureLogging() error {
-	if cfg.Server.Env != "prod" {
-		// https://github.com/sirupsen/logrus#logging-method-name
-		// This slows down logging (by a factor of 2).
-		log.SetReportCaller(true)
+func (cfg *Config) ConfigureLogging() *logging.Logger {
+	logCfg := logging.NewDefaultConfig()
+
+	if cfg.Server.LogEncoding != "" {
+		logCfg.Custom.Zap.Encoding = cfg.Server.LogEncoding
 	}
 
-	switch cfg.Server.LogFormat {
-	case "json":
-		log.SetFormatter(&log.JSONFormatter{
-			TimestampFormat: time.RFC3339Nano,
-		})
-	case "textcolour":
-		log.SetFormatter(&log.TextFormatter{
-			ForceColors:     true,
-			FullTimestamp:   true,
-			TimestampFormat: time.RFC3339Nano,
-		})
-	case "textnocolour":
-		log.SetFormatter(&log.TextFormatter{
-			DisableColors:   true,
-			FullTimestamp:   true,
-			TimestampFormat: time.RFC3339Nano,
-		})
-	default:
-		log.SetFormatter(&log.TextFormatter{
-			FullTimestamp:   true,
-			TimestampFormat: time.RFC3339Nano,
-		}) // with colour if TTY, without otherwise
+	if cfg.Server.Env != "" {
+		logCfg.Environment = cfg.Server.Env
 	}
 
-	if loglevel, err := log.ParseLevel(cfg.Server.LogLevel); err == nil {
+	log := logging.NewLoggerFromConfig(logCfg)
+	if logCfg.Environment != "prod" {
+		log.Logger = log.Logger.WithOptions(zap.AddCaller(), zap.AddCallerSkip(1))
+	}
+
+	if loglevel, err := logging.ParseLevel(cfg.Server.LogLevel); err == nil {
 		log.SetLevel(loglevel)
 	} else {
-		log.SetLevel(log.WarnLevel)
+		log.SetLevel(logging.WarnLevel)
 	}
-	return nil
+
+	return log
 }
 
 // ServerConfig describes the settings for running the liquidity bot.
 type ServerConfig struct {
-	Env       string
-	Listen    string
-	LogFormat string
-	LogLevel  string
+	Env         string
+	Listen      string
+	LogEncoding string
+	LogLevel    string
 }
 
 // PricingConfig describes the settings for contacting the price proxy.
 type PricingConfig struct {
 	Address *url.URL `yaml:"address"`
-}
-
-type WhaleConfig struct {
-	WalletPubKey     string            `yaml:"walletPubKey"`
-	WalletName       string            `yaml:"walletName"`
-	WalletPassphrase string            `yaml:"walletPassphrase"`
-	OwnerPrivateKeys map[string]string `yaml:"ownerPrivateKeys"`
-	FaucetURL        string            `yaml:"faucetURL"`
-	SyncTimeoutSec   int               `yaml:"syncTimeoutSec"`
-	SlackConfig      SlackConfig       `yaml:"slack"`
-}
-
-type SlackConfig struct {
-	AppToken  string `yaml:"appToken"`
-	BotToken  string `yaml:"botToken"`
-	ChannelID string `yaml:"channelID"`
-	Enabled   bool   `yaml:"enabled"`
 }
 
 // BotConfig specifies the configuration parameters for one bot, which talks to one market on one
@@ -149,9 +125,6 @@ type BotConfig struct {
 	// InstrumentQuote is the quote asset of the instrument.
 	InstrumentQuote string `yaml:"instrumentQuote"`
 
-	// QuoteAssetID is the id of the quote asset.
-	QuoteAssetID string `yaml:"quoteAssetID"`
-
 	// Strategy specifies which algorithm the bot is to use.
 	Strategy string `yaml:"strategy"`
 
@@ -160,16 +133,4 @@ type BotConfig struct {
 
 	// StrategyDetails contains the parameters needed by the strategy algorithm.
 	StrategyDetails Strategy `yaml:"strategyDetails"`
-}
-
-// WalletConfig describes the settings for running an internal wallet server.
-type WalletConfig struct {
-	URL string `yaml:"url"`
-}
-
-type TokenConfig struct {
-	EthereumAPIAddress   string `yaml:"ethereumAPIAddress"`
-	Erc20BridgeAddress   string `yaml:"erc20BridgeAddress"`
-	StakingBridgeAddress string `yaml:"stakingBridgeAddress"`
-	SyncTimeoutSec       int    `yaml:"syncTimeoutSec"`
 }

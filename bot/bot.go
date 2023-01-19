@@ -5,28 +5,28 @@ import (
 	"errors"
 	"fmt"
 
-	log "github.com/sirupsen/logrus"
-
-	"code.vegaprotocol.io/liqbot/account"
 	"code.vegaprotocol.io/liqbot/bot/normal"
 	"code.vegaprotocol.io/liqbot/config"
-	"code.vegaprotocol.io/liqbot/data"
 	"code.vegaprotocol.io/liqbot/market"
-	"code.vegaprotocol.io/liqbot/node"
 	"code.vegaprotocol.io/liqbot/types"
-	"code.vegaprotocol.io/liqbot/wallet"
+	"code.vegaprotocol.io/shared/libs/account"
+	"code.vegaprotocol.io/shared/libs/node"
+	btypes "code.vegaprotocol.io/shared/libs/types"
+	"code.vegaprotocol.io/shared/libs/wallet"
+	"code.vegaprotocol.io/vega/logging"
 )
 
 // New returns a new Bot instance.
 func New(
+	log *logging.Logger,
 	botConf config.BotConfig,
 	conf config.Config,
 	pricing types.PricingEngine,
-	whale types.CoinProvider,
+	whale account.CoinProvider,
 ) (types.Bot, error) {
 	switch botConf.Strategy {
 	case config.BotStrategyNormal:
-		bot, err := newNormalBot(botConf, conf, pricing, whale)
+		bot, err := newNormalBot(log, botConf, conf, pricing, whale)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create normal bot '%s': %w", botConf.Name, err)
 		}
@@ -37,10 +37,11 @@ func New(
 }
 
 func newNormalBot(
+	log *logging.Logger,
 	botConf config.BotConfig,
 	conf config.Config,
 	pricing types.PricingEngine,
-	whale types.CoinProvider,
+	whale account.CoinProvider,
 ) (types.Bot, error) {
 	dataNode := node.NewDataNode(
 		conf.Locations,
@@ -48,20 +49,23 @@ func newNormalBot(
 	)
 
 	log.Debug("Attempting to connect to Vega gRPC node...")
-	dataNode.MustDialConnection(context.Background()) // blocking
+	ctx := context.Background()
+	dataNode.MustDialConnection(ctx) // blocking
 
-	botWallet := wallet.NewClient(conf.Wallet.URL)
-	accountStream := data.NewAccountStream(botConf.Name, dataNode)
-	accountService := account.NewAccountService(botConf.Name, botConf.SettlementAssetID, accountStream, whale)
+	conf.Wallet.Name = botConf.Name
+	conf.Wallet.Passphrase = "supersecret"
+	botWallet, err := wallet.NewWalletV2Service(log, conf.Wallet)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create bot wallet: %w", err)
+	}
 
-	marketStream := data.NewMarketStream(botConf.Name, dataNode)
-	marketService := market.NewService(botConf.Name, marketStream, dataNode, botWallet, pricing, accountService, botConf, conf.VegaAssetID)
+	pubKey := botWallet.PublicKey()
+	pauseCh := make(chan btypes.PauseSignal)
+	accountStream := account.NewStream(log, botConf.Name, dataNode, pauseCh)
+	marketStream := market.NewStream(log, botConf.Name, pubKey, dataNode, pauseCh)
+	accountService := account.NewService(log, botConf.Name, pubKey, accountStream, whale)
+	marketService := market.NewService(log, dataNode, botWallet, pricing, accountService, marketStream, botConf, conf.VegaAssetID)
+	bot := normal.New(log, botConf, conf.VegaAssetID, accountService, marketService, pauseCh)
 
-	return normal.New(
-		botConf,
-		conf.VegaAssetID,
-		botWallet,
-		accountService,
-		marketService,
-	), nil
+	return bot, nil
 }
