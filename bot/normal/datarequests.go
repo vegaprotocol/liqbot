@@ -71,7 +71,7 @@ func (b *Bot) getAccount(typ vega.AccountType) (*num.Uint, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(response.Accounts.Edges) == 0 || response.Accounts.Edges[0].Account == nil {
+	if len(response.Accounts.Edges) == 0 || response.Accounts.Edges[0].Node == nil {
 		b.log.WithFields(log.Fields{
 			"type": typ,
 		}).Debug("zero accounts for party")
@@ -81,7 +81,7 @@ func (b *Bot) getAccount(typ vega.AccountType) (*num.Uint, error) {
 		return nil, fmt.Errorf("too many accounts for party: %d", len(response.Accounts.Edges))
 	}
 
-	return convertUint256(response.Accounts.Edges[0].Account.Balance)
+	return convertUint256(response.Accounts.Edges[0].Node.Balance)
 }
 
 // getAccountGeneral get this bot's general account balance.
