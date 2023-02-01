@@ -64,7 +64,7 @@ func newNormalBot(
 	accountStream := account.NewStream(log, botConf.Name, dataNode, pauseCh)
 	marketStream := market.NewStream(log, botConf.Name, pubKey, dataNode, pauseCh)
 	accountService := account.NewService(log, botConf.Name, pubKey, accountStream, whale)
-	marketService := market.NewService(log, dataNode, botWallet, pricing, accountService, marketStream, botConf, conf.VegaAssetID)
+	marketService := market.NewService(log, dataNode, botWallet, pricing, accountService, marketStream, botConf, pubKey, conf.VegaAssetID)
 	bot := normal.New(log, botConf, conf.VegaAssetID, accountService, marketService, pauseCh)
 
 	return bot, nil

@@ -33,6 +33,7 @@ type Service struct {
 	log           *logging.Logger
 
 	marketDecimalPlaces uint64
+	pubKey              string
 	marketID            string
 	vegaAssetID         string
 }
@@ -45,6 +46,7 @@ func NewService(
 	account accountService,
 	marketStream marketStream,
 	config config.BotConfig,
+	pubKey,
 	vegaAssetID string,
 ) *Service {
 	return &Service{
@@ -54,6 +56,7 @@ func NewService(
 		pricingEngine: pe,
 		account:       account,
 		config:        config,
+		pubKey:        pubKey,
 		vegaAssetID:   vegaAssetID,
 		log:           log.Named("MarketService"),
 	}
@@ -750,7 +753,7 @@ func (m *Service) getExampleProduct() *vega.InstrumentConfiguration_Future {
 									{
 										Signer: &oraclesv1.Signer_PubKey{
 											PubKey: &oraclesv1.PubKey{
-												Key: "0xDEADBEEF",
+												Key: m.pubKey,
 											},
 										},
 									},
@@ -778,7 +781,7 @@ func (m *Service) getExampleProduct() *vega.InstrumentConfiguration_Future {
 									{
 										Signer: &oraclesv1.Signer_PubKey{
 											PubKey: &oraclesv1.PubKey{
-												Key: "0xDEADBEEF",
+												Key: m.pubKey,
 											},
 										},
 									},
