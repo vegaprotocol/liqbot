@@ -253,7 +253,7 @@ func (m *Service) ProvideLiquidity(ctx context.Context) error {
 
 func (m *Service) CheckInitialMargin(ctx context.Context, buyShape, sellShape []*vega.LiquidityOrder) error {
 	// Turn the shapes into a set of orders scaled by commitment
-	obligation := cache.GeneralAndBond(m.account.Balance(ctx, m.config.SettlementAssetID))
+	obligation := cache.GeneralAndBond(m.account.Balance(ctx, m.settlementAsset.Id))
 	buyOrders := m.calculateOrderSizes(obligation, buyShape)
 	sellOrders := m.calculateOrderSizes(obligation, sellShape)
 
@@ -264,7 +264,7 @@ func (m *Service) CheckInitialMargin(ctx context.Context, buyShape, sellShape []
 	sellCost := m.calculateMarginCost(sellRisk, sellOrders)
 
 	shapeMarginCost := num.Max(buyCost, sellCost)
-	avail := num.MulFrac(cache.General(m.account.Balance(ctx, m.config.SettlementAssetID)), m.config.StrategyDetails.OrdersFraction, 15)
+	avail := num.MulFrac(cache.General(m.account.Balance(ctx, m.settlementAsset.Id)), m.config.StrategyDetails.OrdersFraction, 15)
 
 	if !avail.LT(shapeMarginCost) {
 		return nil
@@ -562,7 +562,7 @@ func (m *Service) SeedOrders(ctx context.Context) error {
 	m.log.With(
 		logging.String("externalPrice", externalPrice.String()),
 		logging.String("totalCost", totalCost.String()),
-		logging.String("balance.General", cache.General(m.account.Balance(ctx, m.config.SettlementAssetID)).String()),
+		logging.String("balance.General", cache.General(m.account.Balance(ctx, m.settlementAsset.Id)).String()),
 	).Debug("Seeding auction orders")
 
 	if err := m.account.EnsureBalance(ctx, m.settlementAsset, cache.General, totalCost, m.marketDecimalPlaces, 2, "MarketService"); err != nil {

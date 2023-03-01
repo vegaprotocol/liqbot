@@ -79,7 +79,7 @@ func (b *bot) steerPrice(ctx context.Context) error {
 	// find out what price and size of the order we should place
 	price, size, err := b.getRealisticOrderDetails(externalPrice)
 	if err != nil {
-		b.log.Fatal("PriceSteering: Unable to get realistic order details for price steering", logging.Error(err))
+		return fmt.Errorf("PriceSteering: Unable to get realistic order details for price steering: %w", err)
 	}
 
 	order := &vega.Order{
@@ -133,7 +133,7 @@ func (b *bot) getRealisticOrderDetails(externalPrice *num.Uint) (*num.Uint, *num
 func (b *bot) getDiscreteThreeLevelPrice(externalPrice *num.Uint) (*num.Uint, error) {
 	// this converts something like BTCUSD 3912312345 (five decimal places)
 	// to 39123.12345 float.
-	if b.decimalPlaces == uint64(len(externalPrice.String())) {
+	if uint64(len(externalPrice.String())) < b.decimalPlaces {
 		return nil, fmt.Errorf("external price has fewer digits than the market decimal places")
 	}
 
