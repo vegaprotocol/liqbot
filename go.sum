@@ -1,7 +1,7 @@
 code.vegaprotocol.io/priceproxy v0.1.0 h1:PibvUIcTXS/MOIJKJwGXhJbDwg9ZPLItcIlfMvt1YO4=
 code.vegaprotocol.io/priceproxy v0.1.0/go.mod h1:W/CpimpwdplSLOnO1gEz2+VLQIV5I9FsDOST+1NDJ5A=
-code.vegaprotocol.io/shared v0.0.0-20230118150809-e8c5b9cceca4 h1:meu+4ObRSlDDYD8CLWoCgp7IM2C381JN9oBa0Lj5j4U=
-code.vegaprotocol.io/shared v0.0.0-20230118150809-e8c5b9cceca4/go.mod h1:2BDmtSsLVsgQRm03psa7YOAtQ0u1kQZMZFDnsuJnVrk=
+code.vegaprotocol.io/shared v0.0.0-20230301025744-93c25405b29f h1:KNmArIzBotY6Y1pkVlkdXtghE93iawlov/RWy6PIRXw=
+code.vegaprotocol.io/shared v0.0.0-20230301025744-93c25405b29f/go.mod h1:2BDmtSsLVsgQRm03psa7YOAtQ0u1kQZMZFDnsuJnVrk=
 code.vegaprotocol.io/vega v0.66.2-0.20230112212708-7bd93a8ea2a0 h1:8sC+YJRc6YG0ezbxYEkE3R1Q/+rrwkpZSluOCwQmZrE=
 code.vegaprotocol.io/vega v0.66.2-0.20230112212708-7bd93a8ea2a0/go.mod h1:Y5hTb3sE5JuB2WUOeSHsQl3p7aF3nuv2+HS1svgn6NM=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=

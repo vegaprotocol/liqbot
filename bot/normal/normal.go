@@ -9,6 +9,7 @@ import (
 	"code.vegaprotocol.io/liqbot/config"
 	"code.vegaprotocol.io/shared/libs/types"
 	"code.vegaprotocol.io/vega/logging"
+	"code.vegaprotocol.io/vega/protos/vega"
 )
 
 // bot represents one Normal liquidity bot.
@@ -25,13 +26,13 @@ type bot struct {
 	pausePriceSteer chan struct{}
 	pauseChannel    chan types.PauseSignal
 
-	walletPubKey      string
-	marketID          string
-	decimalPlaces     uint64
-	settlementAssetID string
-	vegaAssetID       string
-	botPaused         bool
-	mu                sync.Mutex
+	walletPubKey    string
+	marketID        string
+	decimalPlaces   uint64
+	settlementAsset *vega.Asset
+	vegaAssetID     string
+	botPaused       bool
+	mu              sync.Mutex
 }
 
 // New returns a new instance of bot.
@@ -39,22 +40,23 @@ func New(
 	log *logging.Logger,
 	botConf config.BotConfig,
 	vegaAssetID string,
+	settlementAsset *vega.Asset,
 	accountService accountService,
 	marketService marketService,
 	pauseChannel chan types.PauseSignal,
 ) *bot {
 	return &bot{
-		config:            botConf,
-		settlementAssetID: botConf.SettlementAssetID,
-		vegaAssetID:       vegaAssetID,
-		log:               log,
-		stopPosMgmt:       make(chan bool),
-		stopPriceSteer:    make(chan bool),
-		pausePosMgmt:      make(chan struct{}),
-		pausePriceSteer:   make(chan struct{}),
-		accountService:    accountService,
-		marketService:     marketService,
-		pauseChannel:      pauseChannel,
+		config:          botConf,
+		settlementAsset: settlementAsset,
+		vegaAssetID:     vegaAssetID,
+		log:             log,
+		stopPosMgmt:     make(chan bool),
+		stopPriceSteer:  make(chan bool),
+		pausePosMgmt:    make(chan struct{}),
+		pausePriceSteer: make(chan struct{}),
+		accountService:  accountService,
+		marketService:   marketService,
+		pauseChannel:    pauseChannel,
 	}
 }
 
@@ -80,7 +82,7 @@ func (b *bot) Start() error {
 		logging.String("id", b.marketID),
 		logging.String("base/ticker", b.config.InstrumentBase),
 		logging.String("quote", b.config.InstrumentQuote),
-		logging.String("settlementAssetID", b.settlementAssetID),
+		logging.String("settlementAssetID", b.settlementAsset.Id),
 	).Info("Market info")
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -147,7 +149,7 @@ func (b *bot) GetTraderDetails() string {
 	jsn, _ := json.MarshalIndent(map[string]string{
 		"name":                  b.config.Name,
 		"pubKey":                b.walletPubKey,
-		"settlementVegaAssetID": b.settlementAssetID,
+		"settlementVegaAssetID": b.settlementAsset.Id,
 	}, "", "  ")
 	return string(jsn)
 }

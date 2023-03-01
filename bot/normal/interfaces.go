@@ -23,5 +23,5 @@ type marketService interface {
 
 type accountService interface {
 	Balance(ctx context.Context, assetID string) cache.Balance
-	EnsureBalance(ctx context.Context, assetID string, balanceFn func(cache.Balance) *num.Uint, targetAmount *num.Uint, dp, scale uint64, from string) error
+	EnsureBalance(ctx context.Context, asset *vega.Asset, balanceFn func(cache.Balance) *num.Uint, targetAmount *num.Uint, dp, scale uint64, from string) error
 }

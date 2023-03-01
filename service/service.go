@@ -112,10 +112,10 @@ func getWhale(log *logging.Logger, config config.Config) (*whale.Service, error)
 	}
 
 	streamWhale := account.NewStream(log, "provider-whale", dataNode, nil)
-	provider := whale.NewProvider(log, dataNode, tokenService, streamWhale, config.Whale)
+	provider := whale.NewProvider(log, tokenService, streamWhale, config.Whale)
 	pubKey := whaleWallet.PublicKey()
 	accountService := account.NewService(log, "whale", pubKey, streamWhale, provider)
-	return whale.NewService(log, dataNode, whaleWallet, accountService, streamWhale, faucetService, config.Whale), nil
+	return whale.NewService(log, whaleWallet, accountService, streamWhale, faucetService, config.Whale), nil
 }
 
 func (s *Service) addRoutes() {

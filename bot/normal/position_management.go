@@ -87,9 +87,9 @@ func (b *bot) managePosition(ctx context.Context) error {
 	size, side, shouldPlace := b.CheckPosition()
 	b.log.With(
 		logging.String("currentPrice", b.Market().MarkPrice().String()),
-		logging.String("balance.General", cache.General(b.Balance(ctx, b.settlementAssetID)).String()),
-		logging.String("balance.Margin", cache.Margin(b.Balance(ctx, b.settlementAssetID)).String()),
-		logging.String("balance.Bond", cache.Bond(b.Balance(ctx, b.settlementAssetID)).String()),
+		logging.String("balance.General", cache.General(b.Balance(ctx, b.settlementAsset.Id)).String()),
+		logging.String("balance.Margin", cache.Margin(b.Balance(ctx, b.settlementAsset.Id)).String()),
+		logging.String("balance.Bond", cache.Bond(b.Balance(ctx, b.settlementAsset.Id)).String()),
 		logging.Int64("openVolume", b.Market().OpenVolume()),
 		logging.Uint64("size", size),
 		logging.String("side", side.String()),

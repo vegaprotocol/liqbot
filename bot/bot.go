@@ -10,10 +10,12 @@ import (
 	"code.vegaprotocol.io/liqbot/market"
 	"code.vegaprotocol.io/liqbot/types"
 	"code.vegaprotocol.io/shared/libs/account"
+	market2 "code.vegaprotocol.io/shared/libs/market"
 	"code.vegaprotocol.io/shared/libs/node"
 	btypes "code.vegaprotocol.io/shared/libs/types"
 	"code.vegaprotocol.io/shared/libs/wallet"
 	"code.vegaprotocol.io/vega/logging"
+	v2 "code.vegaprotocol.io/vega/protos/data-node/api/v2"
 )
 
 // New returns a new Bot instance.
@@ -59,13 +61,27 @@ func newNormalBot(
 		return nil, fmt.Errorf("failed to create bot wallet: %w", err)
 	}
 
-	pubKey := botWallet.PublicKey()
+	settlementAsset, err := dataNode.AssetByID(ctx, &v2.GetAssetRequest{
+		AssetId: botConf.SettlementAssetID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get settlement asset: %w", err)
+	}
+
+	vegaAsset, err := dataNode.AssetByID(ctx, &v2.GetAssetRequest{
+		AssetId: conf.VegaAssetID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Vega asset: %w", err)
+	}
+
 	pauseCh := make(chan btypes.PauseSignal)
 	accountStream := account.NewStream(log, botConf.Name, dataNode, pauseCh)
-	marketStream := market.NewStream(log, botConf.Name, pubKey, dataNode, pauseCh)
+	pubKey := botWallet.PublicKey()
+	marketStream := market2.NewStream(log, botConf.Name, dataNode, pauseCh)
 	accountService := account.NewService(log, botConf.Name, pubKey, accountStream, whale)
-	marketService := market.NewService(log, dataNode, botWallet, pricing, accountService, marketStream, botConf, pubKey, conf.VegaAssetID)
-	bot := normal.New(log, botConf, conf.VegaAssetID, accountService, marketService, pauseCh)
+	marketService := market.NewService(log, botWallet, pricing, accountService, marketStream, botConf, pubKey, settlementAsset, vegaAsset)
+	bot := normal.New(log, botConf, conf.VegaAssetID, settlementAsset, accountService, marketService, pauseCh)
 
 	return bot, nil
 }
