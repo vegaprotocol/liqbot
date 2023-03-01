@@ -131,15 +131,9 @@ func (b *bot) getRealisticOrderDetails(externalPrice *num.Uint) (*num.Uint, *num
 }
 
 func (b *bot) getDiscreteThreeLevelPrice(externalPrice *num.Uint) (*num.Uint, error) {
-	// this converts something like BTCUSD 3912312345 (five decimal places)
-	// to 39123.12345 float.
-	if uint64(len(externalPrice.String())) < b.decimalPlaces {
-		return nil, fmt.Errorf("external price has fewer digits than the market decimal places")
-	}
-
 	decimalPlaces := float64(b.decimalPlaces)
 
-	m0 := num.Zero().Div(externalPrice, num.NewUint(uint64(math.Pow(10, decimalPlaces))))
+	m0 := externalPrice.ToDecimal().Div(num.NewDecimalFromFloat(math.Pow(10, decimalPlaces)))
 	if m0.IsZero() {
 		return nil, fmt.Errorf("external price is zero")
 	}
@@ -149,7 +143,8 @@ func (b *bot) getDiscreteThreeLevelPrice(externalPrice *num.Uint) (*num.Uint, er
 	n := 3600 * numOrdersPerSec / b.config.StrategyDetails.LimitOrderDistributionParams.TgtTimeHorizonHours
 	tgtTimeHorizonYrFrac := b.config.StrategyDetails.LimitOrderDistributionParams.TgtTimeHorizonHours / 24.0 / 365.25
 
-	priceFloat, err := generatePriceUsingDiscreteThreeLevel(m0.Float64(), delta, b.config.StrategyDetails.TargetLNVol, tgtTimeHorizonYrFrac, n)
+	m0f, _ := m0.Float64()
+	priceFloat, err := generatePriceUsingDiscreteThreeLevel(m0f, delta, b.config.StrategyDetails.TargetLNVol, tgtTimeHorizonYrFrac, n)
 	if err != nil {
 		return nil, fmt.Errorf("error generating price: %w", err)
 	}
