@@ -72,7 +72,7 @@ jobs:
         if: |
           env.LINKED_ISSUE_ID != '' &&
            contains(github.event.pull_request.labels.*.name, env.EXCLUDE_LABEL) != true
-        uses: actions/github-script@v6.1.1
+        uses: actions/github-script@v6.4.1
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
@@ -82,7 +82,7 @@ jobs:
         if: |
           steps.bot-pr.outcome == 'success' || env.LINKED_ISSUE_ID == '' &&
            contains(github.event.pull_request.labels.*.name, env.EXCLUDE_LABEL) == true
-        uses: actions/github-script@v6.1.1
+        uses: actions/github-script@v6.4.1
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
@@ -90,7 +90,7 @@ jobs:
       - name: "Fail if no linked issue or exclusion label"
         id: exclude-linked-error
         if: steps.linked.outcome == 'skipped' && steps.exclude-linked.outcome == 'skipped'
-        uses: actions/github-script@v6.1.1
+        uses: actions/github-script@v6.4.1
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
@@ -99,7 +99,7 @@ jobs:
       - name: "Fail if linked issue AND exclusion label"
         id: linked-and-nochangelog
         if: steps.linked.outcome == 'success' && steps.exclude-linked.outcome == 'success'
-        uses: actions/github-script@v6.1.1
+        uses: actions/github-script@v6.4.1
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
