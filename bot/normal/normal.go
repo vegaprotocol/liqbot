@@ -151,6 +151,20 @@ func New(config config.BotConfig, pe PricingEngine, ws *wallets.Handler) (b *Bot
 	return
 }
 
+func validMetadata(tags []string, metadata string) bool {
+	if len(tags) < 1 {
+		return false
+	}
+
+	for _, tag := range tags {
+		if tag == metadata {
+			return true
+		}
+	}
+
+	return false
+}
+
 // Start starts the liquidity bot goroutine(s).
 func (b *Bot) Start() error {
 	_, err := b.setupWallet()
@@ -198,23 +212,46 @@ func (b *Bot) Start() error {
 					}
 				}
 			}
-			if base == b.config.InstrumentBase && quote == b.config.InstrumentQuote {
-				future := mkt.TradableInstrument.Instrument.GetFuture()
-				if future != nil {
-					b.settlementAssetID = future.SettlementAsset
-					b.market = mkt
-					break
+			if base != b.config.InstrumentBase || quote != b.config.InstrumentQuote {
+				continue
+			}
+
+			future := mkt.TradableInstrument.Instrument.GetFuture()
+			if future == nil {
+				continue
+			}
+
+			if len(b.config.MetadataFilters) > 0 {
+				// We want additional metadata to filter markets, but market does not have any
+				if mkt.TradableInstrument.Instrument.Metadata == nil {
+					continue
+				}
+
+				filtersMatch := false
+				for _, filter := range b.config.MetadataFilters {
+					// Market has no expected metadata
+					if validMetadata(mkt.TradableInstrument.Instrument.Metadata.Tags, filter) {
+						filtersMatch = true
+					}
+				}
+
+				if !filtersMatch {
+					continue
 				}
 			}
+
+			b.settlementAssetID = future.SettlementAsset
+			b.market = mkt
 		}
 	}
 	if b.market == nil {
-		return fmt.Errorf("failed to find futures markets: base/ticker=%s, quote=%s", b.config.InstrumentBase, b.config.InstrumentQuote)
+		return fmt.Errorf("failed to find futures markets: base/ticker=%s, quote=%s, metadata_filters=%#v", b.config.InstrumentBase, b.config.InstrumentQuote, b.config.MetadataFilters)
 	}
 	b.log.WithFields(log.Fields{
 		"id":                b.market.Id,
 		"base/ticker":       b.config.InstrumentBase,
 		"quote":             b.config.InstrumentQuote,
+		"metadata_filters":  b.config.MetadataFilters,
 		"settlementAssetID": b.settlementAssetID,
 	}).Info("Fetched market info")
 
