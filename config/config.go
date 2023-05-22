@@ -52,6 +52,9 @@ type BotConfig struct {
 
 	// StrategyDetails contains the parameters needed by the strategy algorithm.
 	StrategyDetails Strategy `yaml:"strategyDetails"`
+
+	// Additional metadata filters for the selecting markets
+	MetadataFilters []string `yaml:"metadataFilters"`
 }
 
 // Strategy describes parameters for the bot's strategy.
