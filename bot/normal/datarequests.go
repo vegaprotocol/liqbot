@@ -66,6 +66,7 @@ func (b *Bot) getAccount(typ vega.AccountType) (*num.Uint, error) {
 			PartyIds:     []string{b.walletPubKey},
 			AssetId:      b.settlementAssetID,
 			AccountTypes: []vega.AccountType{typ},
+			MarketIds:    []string{b.market.Id},
 		},
 	})
 	if err != nil {
