@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"code.vegaprotocol.io/liqbot/types/num"
+	"golang.org/x/exp/slices"
 
 	dataapipbv2 "code.vegaprotocol.io/vega/protos/data-node/api/v2"
 	"code.vegaprotocol.io/vega/protos/vega"
@@ -61,12 +62,30 @@ func convertUint256(valueStr string) (value *num.Uint, err error) {
 }
 
 func (b *Bot) getAccount(typ vega.AccountType) (*num.Uint, error) {
+	accountForMarkets := []vega.AccountType{
+		vega.AccountType_ACCOUNT_TYPE_REWARD_MAKER_RECEIVED_FEES,
+		vega.AccountType_ACCOUNT_TYPE_REWARD_MAKER_PAID_FEES,
+		vega.AccountType_ACCOUNT_TYPE_INSURANCE,
+		vega.AccountType_ACCOUNT_TYPE_SETTLEMENT,
+		vega.AccountType_ACCOUNT_TYPE_REWARD_LP_RECEIVED_FEES,
+		vega.AccountType_ACCOUNT_TYPE_FEES_LIQUIDITY,
+		vega.AccountType_ACCOUNT_TYPE_FEES_MAKER,
+		vega.AccountType_ACCOUNT_TYPE_REWARD_MAKER_PAID_FEES,
+		vega.AccountType_ACCOUNT_TYPE_MARGIN,
+		vega.AccountType_ACCOUNT_TYPE_BOND,
+	}
+
+	var marketFilter []string
+	if slices.Contains(accountForMarkets, typ) {
+		marketFilter = []string{b.market.Id}
+	}
+
 	response, err := b.node.ListAccounts(&dataapipbv2.ListAccountsRequest{
 		Filter: &dataapipbv2.AccountFilter{
 			PartyIds:     []string{b.walletPubKey},
 			AssetId:      b.settlementAssetID,
 			AccountTypes: []vega.AccountType{typ},
-			MarketIds:    []string{b.market.Id},
+			MarketIds:    marketFilter,
 		},
 	})
 	if err != nil {
