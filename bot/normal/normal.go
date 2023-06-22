@@ -617,7 +617,7 @@ func (b *Bot) checkInitialMargin() error {
 		b.log.WithFields(log.Fields{
 			"available":      avail,
 			"cost":           shapeMarginCost,
-			"missing":        num.Zero().Sub(avail, shapeMarginCost),
+			"missing":        num.Zero().Sub(shapeMarginCost, avail),
 			"missingPercent": missingPercent,
 		}).Error("Not enough collateral to safely keep orders up given current price, risk parameters and supplied default shapes.")
 		return errors.New("not enough collateral")
