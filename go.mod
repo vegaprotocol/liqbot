@@ -7,7 +7,7 @@ require (
 	code.vegaprotocol.io/shared v0.0.0-20230118150809-e8c5b9cceca4
 	code.vegaprotocol.io/vega v0.66.2-0.20230112212708-7bd93a8ea2a0
 	github.com/ethereum/go-ethereum v1.10.21 // indirect
-	github.com/golang/mock v1.6.1-0.20220512030613-73266f9366fc
+	github.com/golang/mock v1.7.0-rc.1.0.20230627194818-674a1c4a938e
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/jinzhu/configor v1.2.1
 	github.com/julienschmidt/httprouter v1.3.0
