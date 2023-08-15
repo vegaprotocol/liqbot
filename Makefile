@@ -42,24 +42,24 @@ install:
 .PHONY: release-ubuntu-latest
 release-ubuntu-latest:
 	@mkdir -p build
-	@env GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build -v -o build/${REPO_NAME}-linux-amd64 $(GO_FLAGS) ./cmd/${REPO_NAME}
+	@env GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -v -o build/${REPO_NAME}-linux-amd64 $(GO_FLAGS) ./cmd/${REPO_NAME}
 	@cd build && zip ${REPO_NAME}-linux-amd64.zip ${REPO_NAME}-linux-amd64
 
 .PHONY: release-macos-latest
 release-macos-latest:
 	@mkdir -p build
-	@env GOOS=darwin GOARCH=amd64 CGO_ENABLED=1 go build -v -o build/${REPO_NAME}-darwin-amd64 $(GO_FLAGS) ./cmd/${REPO_NAME}
+	@env GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -v -o build/${REPO_NAME}-darwin-amd64 $(GO_FLAGS) ./cmd/${REPO_NAME}
 	@cd build && zip ${REPO_NAME}-darwin-amd64.zip ${REPO_NAME}-darwin-amd64
 
 .PHONY: release-windows-latest
 release-windows-latest:
-	@env GOOS=windows GOARCH=amd64 CGO_ENABLED=1 go build -v -o build/${REPO_NAME}-amd64.exe $(GO_FLAGS) ./cmd/${REPO_NAME}
+	@env GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -v -o build/${REPO_NAME}-amd64.exe $(GO_FLAGS) ./cmd/${REPO_NAME}
 	@cd build && 7z a -tzip ${REPO_NAME}-windows-amd64.zip ${REPO_NAME}-amd64.exe
 
 
 .PHONY: build
 build: ## install the binary in GOPATH/bin
-	@env GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build -v -o bin/${REPO_NAME} ./cmd/${REPO_NAME}
+	@env GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -v -o bin/${REPO_NAME} ./cmd/${REPO_NAME}
 
 .PHONY: lint
 lint:
@@ -72,7 +72,7 @@ mocks: ## Make mocks
 
 .PHONY: race
 race: ## Run data race detector
-	@env CGO_ENABLED=1 go test -race ./...
+	@env CGO_ENABLED=0 go test -race ./...
 
 .PHONY: retest
 retest: ## Force re-run of all tests
