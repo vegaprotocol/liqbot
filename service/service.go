@@ -85,7 +85,7 @@ func NewService(config config.Config, pe PricingEngine, ws *wallets.Handler) (s 
 		// 	CustomHome: config.Wallet.RootPath,
 		// }
 		// ConfigPath(filepath.Join(ConsoleConfigHome.String(), "config.toml"))
-		stor, err := store.InitialiseStore(config.Wallet.RootPath)
+		stor, err := store.InitialiseStore(config.Wallet.RootPath, false)
 		if err != nil {
 			return nil, err
 		}

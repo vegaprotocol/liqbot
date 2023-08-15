@@ -217,7 +217,8 @@ func (b *Bot) Start() error {
 			}
 
 			future := mkt.TradableInstrument.Instrument.GetFuture()
-			if future == nil {
+			perpetual := mkt.TradableInstrument.Instrument.GetPerpetual()
+			if future == nil && perpetual == nil {
 				continue
 			}
 
@@ -240,7 +241,12 @@ func (b *Bot) Start() error {
 				}
 			}
 
-			b.settlementAssetID = future.SettlementAsset
+			if future != nil {
+				b.settlementAssetID = future.SettlementAsset
+			} else if perpetual != nil {
+				b.settlementAssetID = perpetual.SettlementAsset
+			}
+
 			b.market = mkt
 		}
 	}
