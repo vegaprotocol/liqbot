@@ -14,8 +14,8 @@ require (
 	github.com/shopspring/decimal v1.3.1 // indirect
 	github.com/sirupsen/logrus v1.9.0 // indirect
 	github.com/slack-go/slack v0.11.4 // indirect
-	github.com/stretchr/testify v1.8.0
-	go.uber.org/zap v1.23.0
+	github.com/stretchr/testify v1.8.1
+	go.uber.org/zap v1.27.0
 	gonum.org/v1/gonum v0.12.0
 )
 
@@ -68,7 +68,7 @@ require (
 	github.com/vegaprotocol/go-slip10 v0.1.0 // indirect
 	go.etcd.io/bbolt v1.3.6 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
-	go.uber.org/multierr v1.8.0 // indirect
+	go.uber.org/multierr v1.10.0 // indirect
 	golang.org/x/crypto v0.1.0 // indirect
 	golang.org/x/exp v0.0.0-20220722155223-a9213eeb770e // indirect
 	golang.org/x/net v0.1.0 // indirect
