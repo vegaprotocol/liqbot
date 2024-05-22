@@ -1,6 +1,6 @@
 # FILE IS AUTOMATICALLY MANAGED BY github.com/vegaprotocol/terraform//github
 ARG GO_VERSION=1.19
-ARG ALPINE_VERSION=3.16
+ARG ALPINE_VERSION=3.20
 FROM golang:${GO_VERSION}-alpine${ALPINE_VERSION} AS builder
 RUN mkdir /build
 WORKDIR /build
