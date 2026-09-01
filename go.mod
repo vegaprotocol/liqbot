@@ -1,6 +1,6 @@
 module code.vegaprotocol.io/liqbot
 
-go 1.19
+go 1.24.0
 
 require (
 	code.vegaprotocol.io/priceproxy v0.1.0
@@ -16,7 +16,7 @@ require (
 	github.com/slack-go/slack v0.11.4 // indirect
 	github.com/stretchr/testify v1.8.0
 	go.uber.org/zap v1.23.0
-	gonum.org/v1/gonum v0.12.0
+	gonum.org/v1/gonum v0.17.0
 )
 
 require (
@@ -69,13 +69,13 @@ require (
 	go.etcd.io/bbolt v1.3.6 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
-	golang.org/x/crypto v0.1.0 // indirect
+	golang.org/x/crypto v0.33.0 // indirect
 	golang.org/x/exp v0.0.0-20220722155223-a9213eeb770e // indirect
-	golang.org/x/net v0.1.0 // indirect
-	golang.org/x/sys v0.1.0 // indirect
-	golang.org/x/text v0.4.0 // indirect
+	golang.org/x/net v0.35.0 // indirect
+	golang.org/x/sys v0.30.0 // indirect
+	golang.org/x/text v0.23.0 // indirect
 	golang.org/x/time v0.0.0-20220609170525-579cf78fd858 // indirect
-	golang.org/x/tools v0.2.0 // indirect
+	golang.org/x/tools v0.30.0 // indirect
 	google.golang.org/genproto v0.0.0-20221014213838-99cd37c6964a // indirect
 	google.golang.org/grpc v1.50.1 // indirect
 	google.golang.org/protobuf v1.28.2-0.20220831092852-f930b1dc76e8 // indirect
