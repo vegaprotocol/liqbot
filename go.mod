@@ -9,7 +9,7 @@ require (
 	github.com/ethereum/go-ethereum v1.10.21 // indirect
 	github.com/golang/mock v1.6.1-0.20220512030613-73266f9366fc
 	github.com/hashicorp/go-multierror v1.1.1
-	github.com/jinzhu/configor v1.2.1
+	github.com/jinzhu/configor v1.2.2
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/shopspring/decimal v1.3.1 // indirect
 	github.com/sirupsen/logrus v1.9.0 // indirect
